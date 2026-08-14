@@ -1,0 +1,20 @@
+{
+  "name": "social-games-app",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "api",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=api",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
+    "build": "npm run build --workspaces",
+    "deploy:api": "npm run deploy --workspace=api",
+    "pages:build": "npm install && npm run build --workspace=frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

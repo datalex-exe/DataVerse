@@ -1,0 +1,25 @@
+name = "dataverse-api"
+main = "src/index.ts"
+compatibility_date = "2024-07-29"
+compatibility_flags = ["nodejs_compat"]
+
+# KV Namespace for Sessions
+[[kv_namespaces]]
+binding = "SESSION_KV"
+id = "b32f0abac8fe458f8f57a0ccff80d915"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "dataverse-db"
+database_id = "8d3aeaaa-ae66-4ccc-92c5-bc45f59b94fc"
+
+# Durable Objects for Real-time Chat & Games
+[durable_objects]
+bindings = [
+  { name = "CHAT_ROOM", class_name = "ChatRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatRoom"]
