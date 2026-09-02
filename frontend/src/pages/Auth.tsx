@@ -58,8 +58,12 @@ export const Auth: React.FC = () => {
         
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-lg shadow-brand-500/20 mb-4 bg-gradient-to-br from-brand-500 to-brand-700 border border-brand-400/20 flex items-center justify-center">
-            <span className="text-xl font-black text-white tracking-tight">DV</span>
+          <div className="w-16 h-16 mb-4 flex items-center justify-center">
+            <img 
+              src="/logo.png?v=2" 
+              alt="DataVerse Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <h1 className="text-3xl font-black tracking-tight text-white">
             DataVerse

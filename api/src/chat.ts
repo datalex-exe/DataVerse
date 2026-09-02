@@ -25,10 +25,25 @@ interface GameState {
 export class ChatRoom {
   state: DurableObjectState;
   env: Bindings;
+  cachedGame: GameState | null = null;
 
   constructor(state: DurableObjectState, env: Bindings) {
     this.state = state;
     this.env = env;
+  }
+
+  async getGame(): Promise<GameState> {
+    if (this.cachedGame) return this.cachedGame;
+    const game = (await this.state.storage.get<GameState>('game_state')) || this.getDefaultGame();
+    this.cachedGame = game;
+    return game;
+  }
+
+  async putGame(game: GameState, skipStorage = false): Promise<void> {
+    this.cachedGame = game;
+    if (!skipStorage) {
+      await this.state.storage.put('game_state', game);
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -158,6 +173,31 @@ export class ChatRoom {
           return new Response(JSON.stringify({ error: err.message }), { status: 500 });
         }
       }
+      if (url.pathname.endsWith('/broadcast_chat_deleted')) {
+        try {
+          const { conversationId, deletedByUserId } = await request.json<any>();
+          const sockets = this.state.getWebSockets();
+          // Only notify the user who deleted the chat — not all participants
+          for (const socket of sockets) {
+            const [socketUserId] = this.state.getTags(socket);
+            if (socketUserId === deletedByUserId) {
+              socket.send(JSON.stringify({
+                type: 'chat_deleted',
+                conversationId,
+                deletedByUserId
+              }));
+              try {
+                socket.close(1001, 'Chat deleted by you');
+              } catch { /* ignore */ }
+            }
+          }
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        }
+      }
 
       return new Response('Expected Upgrade: websocket', { status: 400 });
     }
@@ -267,7 +307,7 @@ export class ChatRoom {
 
       // CASE B: RETRIEVE GAME STATE (On component mount)
       if (data.type === 'get_game_state') {
-        const game = (await this.state.storage.get<GameState>('game_state')) || this.getDefaultGame();
+        const game = await this.getGame();
         ws.send(JSON.stringify({ type: 'game_state', game }));
         return;
       }
@@ -308,11 +348,9 @@ export class ChatRoom {
           ];
           game.chessFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
           game.chessHistory = [];
-        } else if (gameType === 'rps') {
-          game.rpsPlayerMoves = {};
         }
 
-        await this.state.storage.put('game_state', game);
+        await this.putGame(game);
         this.broadcastGame(sockets, game);
 
         // Save system notification to D1
@@ -324,7 +362,7 @@ export class ChatRoom {
 
       // CASE D: MAKE A MOVE
       if (data.type === 'game_move') {
-        const game = await this.state.storage.get<GameState>('game_state');
+        const game = await this.getGame();
         if (!game || game.status !== 'playing' || !game.board) return;
 
         // Validate turn
@@ -351,7 +389,7 @@ export class ChatRoom {
           game.turn = game.turn === game.playerX ? game.playerO : game.playerX;
         }
 
-        await this.state.storage.put('game_state', game);
+        await this.putGame(game);
         this.broadcastGame(sockets, game);
 
         // System notification on game over
@@ -366,7 +404,7 @@ export class ChatRoom {
 
       // CASE E: GAME RESET (Play again)
       if (data.type === 'game_reset') {
-        const game = await this.state.storage.get<GameState>('game_state');
+        const game = await this.getGame();
         if (!game) return;
 
         const gameType = game.gameType || 'tic-tac-toe';
@@ -403,7 +441,7 @@ export class ChatRoom {
           newGame.rpsPlayerMoves = {};
         }
 
-        await this.state.storage.put('game_state', newGame);
+        await this.putGame(newGame);
         this.broadcastGame(sockets, newGame);
 
         const gameName = this.getGameName(gameType);
@@ -411,10 +449,11 @@ export class ChatRoom {
         return;
       }
 
-      // CASE F: GENERIC GAME STATE UPDATE (ForChess, RPS, Spin-wheel turns)
+      // CASE F: GENERIC GAME STATE UPDATE (For Chess, RPS, Spin-wheel turns, Air Hockey)
       if (data.type === 'game_update') {
         const updatedGame = data.game;
-        await this.state.storage.put('game_state', updatedGame);
+
+        await this.putGame(updatedGame);
         this.broadcastGame(sockets, updatedGame);
 
         // System notification on custom game wins
@@ -432,7 +471,7 @@ export class ChatRoom {
       // CASE G: GAME CLOSE (Quit back to idle)
       if (data.type === 'game_close') {
         const idleGame = this.getDefaultGame();
-        await this.state.storage.put('game_state', idleGame);
+        await this.putGame(idleGame);
         this.broadcastGame(sockets, idleGame);
 
         const sender = await this.env.DB.prepare('SELECT display_name FROM users WHERE id = ?').bind(userId).first<any>();

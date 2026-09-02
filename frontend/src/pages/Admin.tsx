@@ -14,7 +14,8 @@ import {
   X,
   Bell,
   AlertTriangle,
-  Search
+  Search,
+  Archive
 } from 'lucide-react';
 
 interface SystemUser {
@@ -57,6 +58,7 @@ interface SystemConvo {
   created_at: number;
   members: ConvoMember[];
   last_message: ConvoLastMsg | null;
+  is_deleted?: boolean;
 }
 
 interface AuditMessage {
@@ -67,6 +69,7 @@ interface AuditMessage {
   username: string;
   display_name: string | null;
   avatar_url: string | null;
+  is_deleted?: number;
 }
 
 export const Admin: React.FC = () => {
@@ -85,9 +88,11 @@ export const Admin: React.FC = () => {
   const [notifText, setNotifText] = useState<string>('');
   const [sendingNotif, setSendingNotif] = useState<boolean>(false);
   const [notifSuccess, setNotifSuccess] = useState<boolean>(false);
+  const [senderType, setSenderType] = useState<'admin' | 'system'>('admin');
 
   const [selectedUserForRestrict, setSelectedUserForRestrict] = useState<string>('');
   const [restrictDuration, setRestrictDuration] = useState<number>(60);
+  const [restrictSenderType, setRestrictSenderType] = useState<'admin' | 'system'>('admin');
   const [applyingRestriction, setApplyingRestriction] = useState<boolean>(false);
   const [restrictSuccess, setRestrictSuccess] = useState<boolean>(false);
 
@@ -137,6 +142,58 @@ export const Admin: React.FC = () => {
     } catch (err) {
       console.error(err);
       setError('Network error loading conversations');
+    }
+  };
+
+  const handleRemoveChatFromAdmin = async (convoId: string) => {
+    if (!token) return;
+    if (!window.confirm('Are you sure you want to remove this chat from the Admin Console? The database records (messages, photos, and videos) will not be deleted, but this chat will be hidden from this list.')) return;
+
+    try {
+      const res = await fetch(`/api/conversations/global/${convoId}/hide`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setConvos(prev => prev.filter(c => c.id !== convoId));
+        alert('Chat removed from the Admin Console list (database records preserved).');
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to remove chat');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error removing chat');
+    }
+  };
+
+  const handleRedactMessageText = async (messageId: string) => {
+    if (!token) return;
+    if (!window.confirm('Are you sure you want to clear/redact this message text from your view? The underlying data remains intact in the database, and this does not affect what other participants see.')) return;
+
+    try {
+      const res = await fetch(`/api/conversations/messages/${messageId}/redact`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (res.ok) {
+        setAuditMessages(prev => prev.map(m => {
+          if (m.id === messageId) {
+            return { ...m, body: '[Redacted Text]' };
+          }
+          return m;
+        }));
+        alert('Message text cleared from your view successfully.');
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to clear text');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error clearing message text');
     }
   };
 
@@ -198,7 +255,8 @@ export const Admin: React.FC = () => {
         },
         body: JSON.stringify({
           targetUserId: selectedUserForNotif,
-          text: notifText.trim()
+          text: notifText.trim(),
+          senderType
         })
       });
 
@@ -230,7 +288,10 @@ export const Admin: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ minutes })
+        body: JSON.stringify({ 
+          minutes,
+          senderType: restrictSenderType
+        })
       });
 
       if (res.ok) {
@@ -274,7 +335,7 @@ export const Admin: React.FC = () => {
     setAuditMessages([]);
 
     try {
-      const res = await fetch(`/api/conversations/${convo.id}/messages`, {
+      const res = await fetch(`/api/conversations/global/${convo.id}/messages`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -400,9 +461,9 @@ export const Admin: React.FC = () => {
 
   const getCleanLabel = (convo: SystemConvo) => {
     if (convo.is_group) return `Group Chat (ID: ${convo.id.substring(0, 8)})`;
-    const otherMembers = convo.members.filter(m => m.username !== currentUser?.username);
-    if (otherMembers.length === 0) return 'Self Chat';
-    return `${otherMembers[0].display_name || otherMembers[0].username} & ${currentUser?.display_name || currentUser?.username}`;
+    if (convo.members.length === 0) return 'Empty Chat';
+    if (convo.members.length === 1) return `${convo.members[0].display_name || convo.members[0].username} (Self)`;
+    return convo.members.map(m => m.display_name || m.username).join(' & ');
   };
 
   if (currentUser?.is_admin !== true && currentUser?.is_top_admin !== true) {
@@ -776,24 +837,38 @@ export const Admin: React.FC = () => {
                     className="glass-card p-5 rounded-3xl border border-white/5 bg-[#060608]/40 hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
                     <div>
-                      <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest bg-slate-950 border border-slate-900 px-2 py-0.5 rounded-full select-none">
                           {c.is_group ? 'Group' : 'DM'}
                         </span>
                         <h4 className="text-xs font-extrabold text-white">{getCleanLabel(c)}</h4>
+                        {c.is_deleted && (
+                          <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/10 select-none">
+                            Deleted by User
+                          </span>
+                        )}
                       </div>
                       <p className="text-[10px] text-slate-500 truncate max-w-md">
                         {c.last_message ? `Last message: "${c.last_message.body}"` : 'No messages yet.'}
                       </p>
                     </div>
 
-                    <button
-                      onClick={() => loadAuditHistory(c)}
-                      className="w-full sm:w-auto py-2.5 px-5 bg-brand-650 hover:bg-brand-550 text-white text-[10px] font-black rounded-xl uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-brand-500/5 transition-all"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      Audit Chat History
-                    </button>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={() => loadAuditHistory(c)}
+                        className="flex-1 sm:flex-none py-2.5 px-4 bg-brand-650 hover:bg-brand-550 text-white text-[10px] font-black rounded-xl uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-brand-500/5 transition-all"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        Audit
+                      </button>
+                      <button
+                        onClick={() => handleRemoveChatFromAdmin(c.id)}
+                        className="py-2.5 px-3 bg-amber-500/10 hover:bg-amber-600 text-amber-500 hover:text-black border border-amber-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all active:scale-[0.97] flex items-center justify-center"
+                        title="Hide / Clear Audit Logs"
+                      >
+                        <Archive className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -833,6 +908,18 @@ export const Admin: React.FC = () => {
                       }).map(u => (
                         <option key={u.id} value={u.id}>@{u.username} ({u.display_name || 'No Display Name'})</option>
                       ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-500 tracking-wide">Sender Identity</label>
+                    <select
+                      value={senderType}
+                      onChange={(e) => setSenderType(e.target.value as 'admin' | 'system')}
+                      className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
+                    >
+                      <option value="admin">👤 From Admin Identity (Show Username & Avatar)</option>
+                      <option value="system">🤖 From System Identity (Anonymous, Show Site Logo)</option>
                     </select>
                   </div>
                   
@@ -915,6 +1002,20 @@ export const Admin: React.FC = () => {
                         <option value={0}>❌ Remove Restrictions</option>
                       </select>
                     </div>
+
+                    {restrictDuration > 0 && (
+                      <div className="space-y-1.5 animate-fade-in">
+                        <label className="text-[9px] font-black text-slate-500 tracking-wide">Sender Identity</label>
+                        <select
+                          value={restrictSenderType}
+                          onChange={(e) => setRestrictSenderType(e.target.value as 'admin' | 'system')}
+                          className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
+                        >
+                          <option value="admin">👤 From Admin Identity (Show Username & Avatar)</option>
+                          <option value="system">🤖 From System Identity (Anonymous, Show Site Logo)</option>
+                        </select>
+                      </div>
+                    )}
 
                     <button
                       onClick={() => handleApplyRestriction(selectedUserForRestrict, restrictDuration)}
@@ -1253,14 +1354,34 @@ export const Admin: React.FC = () => {
                       </div>
 
                       {/* Msg text bubble */}
-                      <div className="bg-slate-950/50 border border-white/[0.02] p-3 rounded-2xl flex-1">
+                      <div className={`p-3 rounded-2xl flex-1 transition-all ${
+                        m.is_deleted === 1
+                          ? 'bg-red-950/10 border border-red-500/20 shadow-md shadow-red-500/[0.01]'
+                          : 'bg-slate-950/50 border border-white/[0.02]'
+                      }`}>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-extrabold text-white flex items-center gap-1">
+                          <span className="text-[10px] font-extrabold text-white flex items-center gap-1.5">
                             {isSystem ? 'System Broadcast' : m.display_name || m.username}
+                            {m.is_deleted === 1 && (
+                              <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/10">
+                                Deleted
+                              </span>
+                            )}
                           </span>
-                          <span className="text-[8px] text-slate-655 font-bold">
-                            {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[8px] text-slate-655 font-bold">
+                              {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {!secureMedia && m.body !== '[Redacted Text]' && (
+                              <button
+                                onClick={() => handleRedactMessageText(m.id)}
+                                className="text-[8px] font-bold text-amber-500/60 hover:text-amber-400 hover:bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/20 transition-all select-none uppercase tracking-wide"
+                                title="Clear text for this admin view"
+                              >
+                                Clear Text
+                              </button>
+                            )}
+                          </div>
                         </div>
                         
                         {secureMedia ? (

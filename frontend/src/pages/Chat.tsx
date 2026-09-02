@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
+import { compressImage } from '../utils/compress';
 import { 
   Search, 
   Send, 
@@ -31,7 +32,10 @@ import {
   Club,
   Target,
   Grid,
-  RotateCw
+  RotateCw,
+  CornerUpLeft,
+  Maximize2,
+  MoreVertical
 } from 'lucide-react';
 
 interface Member {
@@ -57,6 +61,7 @@ interface Conversation {
   created_at: number;
   last_message: LastMessage | null;
   members: Member[];
+  unread_count?: number;
 }
 
 interface Message {
@@ -149,12 +154,148 @@ const AudioPlayer: React.FC<{ url: string; allowSave: boolean }> = ({ url, allow
   );
 };
 
-interface ChatProps {
-  onToggleBottomNav?: (hide: boolean) => void;
-  onNavigate?: (view: string, targetUsername?: string) => void;
+interface ChatInputProps {
+  onSend: (text: string) => void;
+  openCamera: (mode: 'photo' | 'video') => void;
+  uploadingMedia: boolean;
+  handleSelectMedia: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  startRecording: () => void;
+  replyingToMessage: Message | null;
+  onCancelReply: () => void;
 }
 
-export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => {
+const ChatInput: React.FC<ChatInputProps> = ({
+  onSend,
+  openCamera,
+  uploadingMedia,
+  handleSelectMedia,
+  startRecording,
+  replyingToMessage,
+  onCancelReply
+}) => {
+  const [text, setText] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim() || uploadingMedia) return;
+    onSend(text.trim());
+    setText('');
+  };
+
+  const getReplyBodyText = (msg: Message) => {
+    try {
+      const parsed = JSON.parse(msg.body);
+      if (parsed.type === 'secure_media') {
+        return `🔒 [Secure ${parsed.media_type || 'Media'}]`;
+      }
+      if (parsed.type === 'reply') {
+        return parsed.text || '';
+      }
+      return msg.body;
+    } catch {
+      return msg.body;
+    }
+  };
+
+  return (
+    <div className="flex flex-col w-full gap-2">
+      {/* Replying to Message Preview Box */}
+      {replyingToMessage && (
+        <div className="flex items-center justify-between bg-slate-900/50 border border-white/[0.04] rounded-xl px-3 py-2 text-xs animate-fade-in select-none">
+          <div className="flex flex-col min-w-0 flex-1 border-l-2 border-brand-500 pl-2">
+            <span className="text-[10px] font-black text-brand-400 font-extrabold">
+              Replying to @{replyingToMessage.username}
+            </span>
+            <span className="text-slate-400 truncate text-[11px] mt-0.5">
+              {getReplyBodyText(replyingToMessage)}
+            </span>
+          </div>
+          <button 
+            type="button" 
+            onClick={onCancelReply} 
+            className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors ml-2"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex gap-2 items-center w-full max-w-full overflow-hidden">
+        {/* Camera capture button */}
+        <button
+          type="button"
+          onClick={() => openCamera('photo')}
+          className="p-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
+          title="Take photo or record video"
+          disabled={uploadingMedia}
+        >
+          <Camera className="w-4 h-4" />
+        </button>
+
+        {/* File selector icon trigger */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="p-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
+          title="Send secure photo/video/file"
+          disabled={uploadingMedia}
+        >
+          {uploadingMedia ? (
+            <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+          ) : (
+            <ImageIcon className="w-4 h-4" />
+          )}
+        </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleSelectMedia}
+          className="absolute w-0 h-0 opacity-0 pointer-events-none"
+        />
+
+        {/* Microphone icon trigger */}
+        <button
+          type="button"
+          onClick={startRecording}
+          className="p-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
+          title="Record voice note"
+          disabled={uploadingMedia}
+        >
+          <Mic className="w-4 h-4" />
+        </button>
+
+        <input
+          type="text"
+          placeholder="Type a message..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="flex-1 min-w-0 w-full bg-slate-950 border border-slate-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl px-4 py-2.5 text-base md:text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all"
+          disabled={uploadingMedia}
+          autoComplete="off"
+          autoCapitalize="sentences"
+        />
+
+        <button 
+          type="submit"
+          onMouseDown={(e) => e.preventDefault()}
+          disabled={!text.trim() || uploadingMedia}
+          className="p-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl transition-all shadow-md shadow-brand-500/10 active:scale-[0.98] disabled:opacity-50 disabled:scale-100 flex items-center justify-center"
+        >
+          <Send className="w-3.5 h-3.5" />
+        </button>
+      </form>
+    </div>
+  );
+};
+
+interface ChatProps {
+  onToggleBottomNav?: (hide: boolean) => void;
+  onNavigate?: (view: string, param?: string) => void;
+  targetConvoId?: string;
+}
+
+export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targetConvoId }) => {
   const { user, token } = useAuth();
   
   // Conversations list states
@@ -163,15 +304,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
   
   // Active conversation states
   const [activeConvo, setActiveConvo] = useState<Conversation | null>(null);
+  const [activeFullscreenVideo, setActiveFullscreenVideo] = useState<{ url: string; allowSave: boolean } | null>(null);
+  const modalOpenTimeRef = useRef<number>(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
-  const [newMessage, setNewMessage] = useState<string>('');
 
 
 
   // Secure Media State
   const [revealedMessages, setRevealedMessages] = useState<Record<string, boolean>>({});
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState<boolean>(false);
 
   // Camera modal state
@@ -185,6 +326,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const cameraRecorderRef = useRef<MediaRecorder | null>(null);
   const cameraChunksRef = useRef<Blob[]>([]);
+  const fetchedIdsRef = useRef<Set<string>>(new Set());
 
   // Audio Recording States
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -221,8 +363,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
   const [forwardingMessageBody, setForwardingMessageBody] = useState<string | null>(null);
   const [showForwardModal, setShowForwardModal] = useState<boolean>(false);
 
+  // Replying state
+  const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+
   // Game Selector states
   const [showGameSelectorModal, setShowGameSelectorModal] = useState<boolean>(false);
+
+  // Three-dot header menu
+  const [showHeaderMenu, setShowHeaderMenu] = useState<boolean>(false);
+  const headerMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Chess Game State
   const [selectedSquare, setSelectedSquare] = useState<number | null>(null);
@@ -356,59 +505,42 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingForwardRef = useRef<string | null>(null);
 
-  // Toggle mobile bottom navigation bar when inside active conversation to optimize viewport height
+  // Close three-dot header menu on outside click
   useEffect(() => {
-    if (onToggleBottomNav) {
-      onToggleBottomNav(!!activeConvo);
-    }
-    return () => {
-      if (onToggleBottomNav) {
-        onToggleBottomNav(false);
+    const handleClickOutside = (e: MouseEvent) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+        setShowHeaderMenu(false);
       }
     };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Toggle mobile bottom navigation bar
+  useEffect(() => {
+    if (onToggleBottomNav) onToggleBottomNav(!!activeConvo);
+    return () => { if (onToggleBottomNav) onToggleBottomNav(false); };
   }, [activeConvo, onToggleBottomNav]);
 
-  // PrintScreen / Blur screenshot protection listeners
+  // PrintScreen / Blur screenshot protection
   useEffect(() => {
     const isAdmin = user?.is_admin || user?.is_top_admin;
-    if (isAdmin) return; // Admins bypass screen blurs
-
-    const handleBlur = () => {
-      // Re-blur all protected media instantly when screen loses focus
-      setRevealedMessages({});
-    };
-
+    if (isAdmin) return;
+    const handleBlur = () => { setRevealedMessages({}); };
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Detect PrintScreen or standard browser capture shortcuts
-      if (e.key === 'PrintScreen' || (e.key === 'p' && (e.ctrlKey || e.metaKey))) {
-        setRevealedMessages({});
-      }
+      if (e.key === 'PrintScreen' || (e.key === 'p' && (e.ctrlKey || e.metaKey))) setRevealedMessages({});
     };
-
     window.addEventListener('blur', handleBlur);
     window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
+    return () => { window.removeEventListener('blur', handleBlur); window.removeEventListener('keydown', handleKeyDown); };
   }, [user]);
 
   // Memory Game Sync Initializer
   useEffect(() => {
     if (gameState && gameState.gameType === 'memory-match' && !gameState.memoryCards && user && user.id === gameState.playerX) {
-      const symbols = ['🦄', '🐱', '🦊', '🐶', '🐷', '🐸', '🐵', '🦁', '🦄', '🐱', '🦊', '🐶', '🐷', '🐸', '🐵', '🦁'];
-      const shuffled = symbols
-        .map((s, idx) => ({ id: idx, symbol: s, isFlipped: false, isMatched: false }))
-        .sort(() => Math.random() - 0.5);
-
-      const updated = {
-        ...gameState,
-        memoryCards: shuffled,
-        memorySelected: [],
-        memoryScores: { [gameState.playerX]: 0, [gameState.playerO || '']: 0 },
-        turn: gameState.playerX
-      };
+      const symbols = ['🦄','🐱','🦊','🐶','🐷','🐸','🐵','🦁','🦄','🐱','🦊','🐶','🐷','🐸','🐵','🦁'];
+      const shuffled = symbols.map((s, idx) => ({ id: idx, symbol: s, isFlipped: false, isMatched: false })).sort(() => Math.random() - 0.5);
+      const updated = { ...gameState, memoryCards: shuffled, memorySelected: [], memoryScores: { [gameState.playerX]: 0, [gameState.playerO || '']: 0 }, turn: gameState.playerX };
       setGameState(updated);
       sendGameUpdate(updated);
     }
@@ -416,26 +548,74 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
   }, [gameState, user]);
 
   // Fetch conversations
-  const fetchConversations = async () => {
+  const fetchConversations = async (showLoading = false) => {
     if (!token) return;
+    if (showLoading) setLoadingConvos(true);
     try {
-      const res = await fetch('/api/conversations', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetch('/api/conversations', { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        setConversations(data.conversations || []);
+        const convos = data.conversations || [];
+        setConversations(convos);
+        const unreadCount = convos.filter((c: any) => c.unread_count && c.unread_count > 0).length;
+        window.dispatchEvent(new CustomEvent('unread-chats-update-value', { detail: unreadCount }));
       }
     } catch (err) {
       console.error('Error fetching conversations:', err);
     } finally {
-      setLoadingConvos(false);
+      if (showLoading) setLoadingConvos(false);
     }
   };
 
   useEffect(() => {
-    fetchConversations();
+    if (!token) return;
+    fetchConversations(true);
+    const interval = setInterval(() => fetchConversations(false), 5000);
+    return () => clearInterval(interval);
   }, [token]);
+
+  // Synchronize activeConvo with targetConvoId prop
+  useEffect(() => {
+    if (!token || loadingConvos) return;
+    
+    if (targetConvoId) {
+      const found = conversations.find(c => c.id === targetConvoId);
+      if (found) {
+        // Always update activeConvo with fresh data from conversations list
+        if (!activeConvo || activeConvo.id !== found.id) {
+          setActiveConvo(found);
+        } else {
+          // Update members/metadata even if already active
+          setActiveConvo(prev => prev ? { ...prev, ...found } : found);
+        }
+      } else if (targetConvoId.startsWith('room_')) {
+        const roomName = targetConvoId.replace('room_', '').replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (!activeConvo || activeConvo.id !== targetConvoId) {
+          setActiveConvo({
+            id: targetConvoId,
+            is_group: true,
+            group_name: roomName,
+            creator_id: null,
+            created_at: Date.now(),
+            last_message: null,
+            members: []
+          });
+        }
+      } else {
+        // Conversation not found in list — try fetching once, but DON'T clear activeConvo
+        // if it already matches the targetConvoId (race condition on page load)
+        if (!fetchedIdsRef.current.has(targetConvoId)) {
+          fetchedIdsRef.current.add(targetConvoId);
+          fetchConversations(false);
+        }
+        // NOTE: We intentionally do NOT call setActiveConvo(null) here anymore.
+        // The activeConvo is only cleared when the user explicitly navigates away
+        // (targetConvoId becomes null/undefined) or when the delete button is pressed.
+      }
+    } else {
+      if (activeConvo !== null) setActiveConvo(null);
+    }
+  }, [targetConvoId, conversations, loadingConvos, token]);
 
   // Debounced search
   useEffect(() => {
@@ -472,22 +652,11 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
       return;
     }
 
-    const loadMessagesAndConnect = async () => {
-      setLoadingMessages(true);
-      
-      try {
-        const res = await fetch(`/api/conversations/${activeConvo.id}/messages`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setMessages(data.messages || []);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoadingMessages(false);
-      }
+    let reconnectTimeout: number | null = null;
+    let isCleanup = false;
+
+    const connectWebSocket = () => {
+      if (isCleanup) return;
 
       if (wsRef.current) {
         wsRef.current.close();
@@ -495,7 +664,6 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/${activeConvo.id}?userId=${user.id}`;
-      
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -507,18 +675,14 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
           pendingForwardRef.current = null;
           try {
             const parsed = JSON.parse(body);
-            // Reset permissions when forwarding to keep it secure
             parsed.allow_save = true;
             parsed.allow_forward = true;
             ws.send(JSON.stringify({
               type: 'chat',
               body: JSON.stringify(parsed)
             }));
-          } catch {
-            ws.send(JSON.stringify({
-              type: 'chat',
-              body: body
-            }));
+          } catch (err) {
+            console.error('Failed to parse forwarded message:', err);
           }
         }
       };
@@ -527,22 +691,33 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
         try {
           const data = JSON.parse(event.data);
           
-          if (data.type === 'game_state') {
-            setGameState(data.game);
-            if (data.game.status !== 'idle') {
-              setShowGameBoard(true);
-            }
+          if (data.type === 'error') {
+            alert(data.error);
             return;
           }
 
-          // Handle secure media access permissions changes in real-time
-          if (data.type === 'message_access_update') {
-            setMessages(prev => prev.map(m => {
-              if (m.id === data.messageId) {
-                return { ...m, body: data.body };
-              }
-              return m;
-            }));
+          if (data.type === 'game_state') {
+            setGameState(data.game);
+            return;
+          }
+
+          // Handle game invite in real-time
+          if (data.type === 'game_invite') {
+            setConversations(prevConvos => {
+              return prevConvos.map(convo => {
+                if (convo.id === data.conversationId) {
+                  return {
+                    ...convo,
+                    last_message: {
+                      body: `🎮 Game Invite: ${data.gameType}`,
+                      created_at: Date.now(),
+                      sender_id: data.senderId
+                    }
+                  };
+                }
+                return convo;
+              });
+            });
             return;
           }
 
@@ -551,7 +726,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
             if (activeConvo && activeConvo.id === data.conversationId) {
               if (data.kickedUserId === user.id) {
                 alert('You have been kicked from this group.');
-                setActiveConvo(null);
+                onNavigate?.('messages');
               } else {
                 setActiveConvo(prev => {
                   if (!prev) return null;
@@ -579,22 +754,33 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
             return;
           }
 
+          // Handle chat deletion in real-time (only for the user who deleted it)
+          if (data.type === 'chat_deleted') {
+            if (data.deletedByUserId && data.deletedByUserId !== user?.id) {
+              // Another participant's deletion - don't affect our sidebar at all
+              return;
+            }
+            if (activeConvo && activeConvo.id === data.conversationId) {
+              onNavigate?.('messages');
+            }
+            setConversations(prevConvos => prevConvos.filter(convo => convo.id !== data.conversationId));
+            return;
+          }
+
           // Handle nickname updates in real-time
           if (data.type === 'nickname_update') {
-            if (activeConvo && activeConvo.id === data.conversationId) {
-              setActiveConvo(prev => {
-                if (!prev) return null;
-                return {
-                  ...prev,
-                  members: prev.members.map(m => {
-                    if (m.id === data.userId) {
-                      return { ...m, nickname: data.nickname };
-                    }
-                    return m;
-                  })
-                };
-              });
-            }
+            setActiveConvo(prev => {
+              if (!prev || prev.id !== data.conversationId) return prev;
+              return {
+                ...prev,
+                members: prev.members.map(m => {
+                  if (m.id === data.userId) {
+                    return { ...m, nickname: data.nickname };
+                  }
+                  return m;
+                })
+              };
+            });
             setConversations(prevConvos => {
               return prevConvos.map(convo => {
                 if (convo.id === data.conversationId) {
@@ -620,7 +806,6 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
             setConversations(prevConvos => {
               return prevConvos.map(convo => {
                 if (convo.id === data.conversationId) {
-                  // If the unsend message was the last message, we refresh its text to (Message unsent)
                   if (convo.last_message) {
                     return {
                       ...convo,
@@ -637,11 +822,30 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
             return;
           }
 
-          if (data.type === 'message' && data.message.conversation_id === activeConvo.id) {
+          if (data.type === 'message' && activeConvo && data.message.conversation_id === activeConvo.id) {
             setMessages(prev => {
+              // Already have the real message — skip
               if (prev.some(m => m.id === data.message.id)) return prev;
+              // Swap out the optimistic placeholder sent by this user
+              const optimisticIdx = prev.findIndex(
+                m => m.id.startsWith('optimistic-') &&
+                  m.sender_id === data.message.sender_id &&
+                  m.body === data.message.body
+              );
+              if (optimisticIdx !== -1) {
+                const next = [...prev];
+                next[optimisticIdx] = data.message;
+                return next;
+              }
               return [...prev, data.message];
             });
+
+            if (data.message.sender_id !== user?.id) {
+              fetch(`/api/conversations/${activeConvo.id}/read`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+              }).catch(err => console.error('Failed to mark incoming message as read:', err));
+            }
 
             setConversations(prevConvos => {
               return prevConvos.map(convo => {
@@ -670,21 +874,52 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
 
       ws.onclose = () => {
         console.log('Chat WebSocket closed:', activeConvo.id);
+        if (!isCleanup) {
+          reconnectTimeout = window.setTimeout(() => {
+            console.log('Attempting to reconnect WebSocket...');
+            connectWebSocket();
+          }, 3000);
+        }
       };
 
       wsRef.current = ws;
     };
 
+    const loadMessagesAndConnect = async () => {
+      setLoadingMessages(true);
+      setMessages([]);
+      
+      try {
+        const res = await fetch(`/api/conversations/${activeConvo.id}/messages`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMessages(data.messages || []);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingMessages(false);
+      }
+
+      connectWebSocket();
+    };
+
     loadMessagesAndConnect();
 
     return () => {
+      isCleanup = true;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
       if (wsRef.current) {
         wsRef.current.close();
       }
     };
-  }, [activeConvo, token, user]);
+  }, [activeConvo?.id, token, user, onNavigate]);
 
-  useEffect(() => {
+  React.useLayoutEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
@@ -754,14 +989,21 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
   };
 
   // Secure Media Upload & Send helper
-  const uploadAndSendSecureMedia = async (blob: Blob, mediaType: 'voice' | 'image' | 'video', contentType: string) => {
+  const uploadAndSendSecureMedia = async (blob: Blob, mediaType: 'voice' | 'image' | 'video' | 'file', contentType: string) => {
     if (!token || !user || !wsRef.current) return;
     setUploadingMedia(true);
+
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB request limit
+    if (blob.size > MAX_FILE_SIZE) {
+      alert(`File size (${(blob.size / 1024 / 1024).toFixed(1)}MB) exceeds the 100MB system limit. Please select or record a smaller file.`);
+      setUploadingMedia(false);
+      return;
+    }
 
     try {
       // Strip codec params before building key: 'video/webm;codecs=vp9' -> 'webm'
       const baseContentType = contentType.split(';')[0].trim();
-      const fileExt = baseContentType.split('/')[1] || 'bin';
+      const fileExt = (blob as File).name ? (blob as File).name.split('.').pop() : (baseContentType.split('/')[1] || 'bin');
       const r2Key = `secure/${user.id}-${Date.now()}.${fileExt}`;
 
       // 1. Upload to R2
@@ -775,7 +1017,14 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
       });
 
       if (!uploadRes.ok) {
-        throw new Error('R2 secure media upload failed');
+        let errMsg = 'Secure media upload failed';
+        try {
+          const errData = await uploadRes.json();
+          if (errData.error) {
+            errMsg = `${errMsg}: ${errData.error}`;
+          }
+        } catch {}
+        throw new Error(errMsg);
       }
 
       // 2. Format JSON secure message payload
@@ -784,7 +1033,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
         media_type: mediaType,
         url: r2Key,
         allow_save: true,
-        allow_forward: true
+        allow_forward: true,
+        file_name: (blob as File).name || `file.${fileExt}`
       });
 
       // 3. Send over WebSocket
@@ -800,20 +1050,26 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
     }
   };
 
-  // Select photo / video from device
+  // Select photo / video / file from device
   const handleSelectMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      let type: 'image' | 'video' | null = null;
+      let type: 'image' | 'video' | 'file' = 'file';
       if (file.type.startsWith('image/')) type = 'image';
       else if (file.type.startsWith('video/')) type = 'video';
 
-      if (!type) {
-        alert('Unsupported file type.');
-        return;
+      if (type === 'image') {
+        try {
+          const compressedBlob = await compressImage(file, 1080, 0.8);
+          const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+          await uploadAndSendSecureMedia(compressedFile, 'image', 'image/jpeg');
+        } catch (err) {
+          console.error('Image compression failed, sending original:', err);
+          await uploadAndSendSecureMedia(file, 'image', file.type);
+        }
+      } else {
+        await uploadAndSendSecureMedia(file, type, file.type);
       }
-
-      await uploadAndSendSecureMedia(file, type, file.type);
     }
   };
 
@@ -871,10 +1127,52 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
     }
   };
 
+  const handleInitiateReply = (msg: Message) => {
+    setReplyingToMessage(msg);
+  };
+
+  const parseReplyBody = (rawBody: string) => {
+    if (rawBody.startsWith('{') && rawBody.endsWith('}')) {
+      try {
+        const obj = JSON.parse(rawBody);
+        if (obj && obj.type === 'reply') {
+          return obj;
+        }
+      } catch {}
+    }
+    return null;
+  };
+
+  const getReplyPreviewText = (body: string) => {
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed.type === 'secure_media') {
+        return `🔒 [Secure ${parsed.media_type || 'Media'}]`;
+      }
+      if (parsed.type === 'reply') {
+        return parsed.text || '';
+      }
+      return body;
+    } catch {
+      return body;
+    }
+  };
+
+  const handleScrollToMessage = (messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-brand-500/10', 'transition-all', 'duration-500');
+      setTimeout(() => {
+        el.classList.remove('bg-brand-500/10');
+      }, 1500);
+    }
+  };
+
   const handleSelectForwardTarget = (targetConvo: Conversation) => {
     if (!forwardingMessageBody) return;
     pendingForwardRef.current = forwardingMessageBody;
-    setActiveConvo(targetConvo);
+    onNavigate?.('messages', targetConvo.id);
     setShowForwardModal(false);
     setForwardingMessageBody(null);
   };
@@ -899,20 +1197,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
         const data = await res.json();
         await fetchConversations();
         
-        const targetConvo: Conversation = {
-          id: data.conversationId,
-          is_group: false,
-          group_name: null,
-          creator_id: null,
-          created_at: Date.now(),
-          last_message: null,
-          members: [
-            { id: user!.id, username: user!.username, display_name: user!.display_name, avatar_url: user!.avatar_url, nickname: null },
-            { id: targetUser.id, username: targetUser.username, display_name: targetUser.display_name, avatar_url: targetUser.avatar_url, nickname: null }
-          ]
-        };
-
-        setActiveConvo(targetConvo);
+        onNavigate?.('messages', data.conversationId);
         setIsSearchMode(false);
         setSearchQuery('');
       }
@@ -969,19 +1254,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
         // Refresh conversations list
         await fetchConversations();
         // Open the new group directly
-        const newGroup: Conversation = {
-          id: data.conversationId,
-          is_group: true,
-          group_name: groupName.trim(),
-          creator_id: user!.id,
-          created_at: Date.now(),
-          last_message: null,
-          members: [
-            { id: user!.id, username: user!.username, display_name: user!.display_name, avatar_url: user!.avatar_url, nickname: null },
-            ...groupSelectedMembers.map((m: any) => ({ ...m, nickname: m.nickname ?? null }))
-          ]
-        };
-        setActiveConvo(newGroup);
+        onNavigate?.('messages', data.conversationId);
         // Reset modal state
         setShowCreateGroup(false);
         setGroupName('');
@@ -1008,7 +1281,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        setActiveConvo(null);
+        onNavigate?.('messages');
         await fetchConversations();
       } else {
         const err = await res.json();
@@ -1016,6 +1289,33 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeleteChat = async () => {
+    if (!activeConvo || !token) return;
+    const msg = activeConvo.is_group
+      ? 'Are you sure you want to delete this group chat? This will remove all members and messages from the database forever.'
+      : 'Are you sure you want to delete this chat? All messages will be permanently removed from the database.';
+    
+    if (!confirm(msg)) return;
+
+    try {
+      const res = await fetch(`/api/conversations/${activeConvo.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        onNavigate?.('messages');
+        await fetchConversations();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to delete chat');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error deleting chat');
     }
   };
 
@@ -1080,15 +1380,65 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
   };
 
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+  const handleSendMessage = (bodyText: string) => {
+    if (!bodyText.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!user || !activeConvo) return;
 
-    wsRef.current.send(JSON.stringify({
-      type: 'chat',
-      body: newMessage.trim()
-    }));
-    setNewMessage('');
+    const now = Date.now();
+    const optimisticId = `optimistic-${now}-${Math.random()}`;
+
+    if (replyingToMessage) {
+      const replyPayload = JSON.stringify({
+        type: 'reply',
+        reply_to: {
+          id: replyingToMessage.id,
+          body: replyingToMessage.body,
+          sender_id: replyingToMessage.sender_id,
+          username: replyingToMessage.username
+        },
+        text: bodyText.trim()
+      });
+
+      // Optimistically show message immediately
+      const optimisticMsg: Message = {
+        id: optimisticId,
+        conversation_id: activeConvo.id,
+        sender_id: user.id,
+        body: replyPayload,
+        created_at: now,
+        username: user.username,
+        display_name: user.display_name || null,
+        avatar_url: user.avatar_url || null,
+        is_verified: user.is_verified
+      };
+      setMessages(prev => [...prev, optimisticMsg]);
+
+      wsRef.current.send(JSON.stringify({
+        type: 'chat',
+        body: replyPayload
+      }));
+
+      setReplyingToMessage(null);
+    } else {
+      // Optimistically show message immediately
+      const optimisticMsg: Message = {
+        id: optimisticId,
+        conversation_id: activeConvo.id,
+        sender_id: user.id,
+        body: bodyText.trim(),
+        created_at: now,
+        username: user.username,
+        display_name: user.display_name || null,
+        avatar_url: user.avatar_url || null,
+        is_verified: user.is_verified
+      };
+      setMessages(prev => [...prev, optimisticMsg]);
+
+      wsRef.current.send(JSON.stringify({
+        type: 'chat',
+        body: bodyText.trim()
+      }));
+    }
   };
 
   // ─── Camera helpers ──────────────────────────────────────────────────────
@@ -1255,14 +1605,134 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
 
   // Chess sandbox handlers
   const pieceUnicode: Record<string, string> = {
-    'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+    'K': '♚', 'Q': '♛', 'R': '♜', 'B': '♝', 'N': '♞', 'P': '♟',
     'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟',
+  };
+
+  const isValidChessMove = (fromIdx: number, toIdx: number, piece: string, board: (string | null)[]): boolean => {
+    if (fromIdx === toIdx) return false;
+    
+    const fromRow = Math.floor(fromIdx / 8);
+    const fromCol = fromIdx % 8;
+    const toRow = Math.floor(toIdx / 8);
+    const toCol = toIdx % 8;
+    
+    const rowDiff = toRow - fromRow;
+    const colDiff = toCol - fromCol;
+    
+    const targetPiece = board[toIdx];
+    if (targetPiece) {
+      const isPieceUpper = piece === piece.toUpperCase();
+      const isTargetUpper = targetPiece === targetPiece.toUpperCase();
+      if (isPieceUpper === isTargetUpper) {
+        return false; // Can't capture own piece
+      }
+    }
+    
+    const pieceType = piece.toLowerCase();
+    
+    if (pieceType === 'p') {
+      const direction = piece === 'P' ? -1 : 1;
+      const startRow = piece === 'P' ? 6 : 1;
+      
+      // Moving 1 square forward
+      if (colDiff === 0 && rowDiff === direction) {
+        return targetPiece === null;
+      }
+      
+      // Moving 2 squares forward from starting position
+      if (colDiff === 0 && rowDiff === 2 * direction && fromRow === startRow) {
+        const intermediateIdx = fromIdx + direction * 8;
+        return targetPiece === null && board[intermediateIdx] === null;
+      }
+      
+      // Capturing diagonally
+      if (Math.abs(colDiff) === 1 && rowDiff === direction) {
+        return targetPiece !== null;
+      }
+      
+      return false;
+    }
+    
+    if (pieceType === 'r') {
+      if (rowDiff !== 0 && colDiff !== 0) return false;
+      
+      const rowStep = rowDiff === 0 ? 0 : (rowDiff > 0 ? 1 : -1);
+      const colStep = colDiff === 0 ? 0 : (colDiff > 0 ? 1 : -1);
+      
+      let currRow = fromRow + rowStep;
+      let currCol = fromCol + colStep;
+      
+      while (currRow !== toRow || currCol !== toCol) {
+        const currIdx = currRow * 8 + currCol;
+        if (board[currIdx] !== null) return false; // Path blocked
+        currRow += rowStep;
+        currCol += colStep;
+      }
+      
+      return true;
+    }
+    
+    if (pieceType === 'b') {
+      if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
+      
+      const rowStep = rowDiff > 0 ? 1 : -1;
+      const colStep = colDiff > 0 ? 1 : -1;
+      
+      let currRow = fromRow + rowStep;
+      let currCol = fromCol + colStep;
+      
+      while (currRow !== toRow || currCol !== toCol) {
+        const currIdx = currRow * 8 + currCol;
+        if (board[currIdx] !== null) return false; // Path blocked
+        currRow += rowStep;
+        currCol += colStep;
+      }
+      
+      return true;
+    }
+    
+    if (pieceType === 'q') {
+      const isRookMove = rowDiff === 0 || colDiff === 0;
+      const isBishopMove = Math.abs(rowDiff) === Math.abs(colDiff);
+      
+      if (!isRookMove && !isBishopMove) return false;
+      
+      const rowStep = rowDiff === 0 ? 0 : (rowDiff > 0 ? 1 : -1);
+      const colStep = colDiff === 0 ? 0 : (colDiff > 0 ? 1 : -1);
+      
+      let currRow = fromRow + rowStep;
+      let currCol = fromCol + colStep;
+      
+      while (currRow !== toRow || currCol !== toCol) {
+        const currIdx = currRow * 8 + currCol;
+        if (board[currIdx] !== null) return false; // Path blocked
+        currRow += rowStep;
+        currCol += colStep;
+      }
+      
+      return true;
+    }
+    
+    if (pieceType === 'n') {
+      const absR = Math.abs(rowDiff);
+      const absC = Math.abs(colDiff);
+      return (absR === 2 && absC === 1) || (absR === 1 && absC === 2);
+    }
+    
+    if (pieceType === 'k') {
+      return Math.abs(rowDiff) <= 1 && Math.abs(colDiff) <= 1;
+    }
+    
+    return false;
   };
 
   const handleChessSquareClick = (squareIdx: number) => {
     if (!gameState) return;
-    const isWhiteTurn = gameState.turn === gameState.playerX;
-    const isMe = user?.id === gameState.turn;
+    const isWhiteTurn = gameState.turn === gameState.playerX || !gameState.turn;
+    const isMe = (isWhiteTurn && user?.id === gameState.playerX) ||
+                 (!isWhiteTurn && user?.id === gameState.playerO) ||
+                 (user?.id === gameState.playerX && !gameState.playerO);
     if (!isMe) return; // Not my turn
 
     const isMyPiece = (piece: string | null) => {
@@ -1291,18 +1761,27 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
       const nextBoard = [...(gameState.chessBoard || Array(64).fill(null))];
       const movingPiece = nextBoard[selectedSquare];
       
+      if (!movingPiece || !isValidChessMove(selectedSquare, squareIdx, movingPiece, nextBoard)) {
+        if (isMyPiece(clickedPiece)) {
+          setSelectedSquare(squareIdx);
+        } else {
+          setSelectedSquare(null);
+        }
+        return;
+      }
+      
       let status = gameState.status;
       let winner = gameState.winner;
-      let turn = gameState.turn;
       const targetPiece = nextBoard[squareIdx];
       
       // Sandbox rules - capture King to win!
+      let turn = gameState.turn;
       if (targetPiece && targetPiece.toLowerCase() === 'k') {
         status = 'won';
         winner = user?.id || null;
         turn = null;
       } else {
-        turn = gameState.turn === gameState.playerX ? gameState.playerO : gameState.playerX;
+        turn = isWhiteTurn ? gameState.playerO : gameState.playerX;
       }
 
       nextBoard[selectedSquare] = null;
@@ -2288,11 +2767,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
     if (!gameState) return null;
     const board = gameState.chessBoard || Array(64).fill(null);
     const isDarkSquare = (row: number, col: number) => (row + col) % 2 === 1;
+    
+    // Flip the board when it is the Black player's (playerO) turn
+    const shouldFlip = gameState.turn === gameState.playerO;
 
     const squares = [];
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
-        const idx = row * 8 + col;
+        // Map visual row/col to rotated 1D index if flipped
+        const idx = shouldFlip ? (63 - (row * 8 + col)) : (row * 8 + col);
         const isDark = isDarkSquare(row, col);
         const piece = board[idx];
         const isSelected = selectedSquare === idx;
@@ -2310,12 +2793,20 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                 : 'bg-slate-800/15 hover:bg-slate-800/30 text-white'
             }`}
           >
-            {piece ? pieceUnicode[piece] : ''}
+            {piece ? (
+              <span className={`${piece === piece.toUpperCase() ? 'text-slate-100 drop-shadow-[0_1.5px_2px_rgba(0,0,0,0.85)]' : 'text-slate-950 drop-shadow-[0_0.75px_0.75px_rgba(255,255,255,0.75)]'} text-3xl md:text-4xl font-extrabold select-none`}>
+                {pieceUnicode[piece]}
+              </span>
+            ) : ''}
             {col === 0 && (
-              <span className="absolute top-0.5 left-1 text-[7px] font-black text-slate-650/80">{8 - row}</span>
+              <span className="absolute top-0.5 left-1 text-[7px] font-black text-slate-650/80">
+                {shouldFlip ? row + 1 : 8 - row}
+              </span>
             )}
             {row === 7 && (
-              <span className="absolute bottom-0.5 right-1 text-[7px] font-black text-slate-655/80">{String.fromCharCode(97 + col)}</span>
+              <span className="absolute bottom-0.5 right-1 text-[7px] font-black text-slate-655/80">
+                {String.fromCharCode(97 + (shouldFlip ? 7 - col : col))}
+              </span>
             )}
           </button>
         );
@@ -3190,8 +3681,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                 placeholder="Search username to chat..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-900 focus:border-brand-500 rounded-xl py-2 pl-9 pr-3 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-all"
+                className="w-full bg-slate-950 border border-slate-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl py-2 pl-9 pr-3 text-base md:text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all"
                 autoFocus
+                autoComplete="off"
               />
             </div>
 
@@ -3235,7 +3727,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
         )}
 
         {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin select-none">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin select-none overscroll-contain">
           {loadingConvos ? (
             <div className="flex flex-col items-center py-10 text-slate-600 gap-2">
               <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
@@ -3251,14 +3743,28 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
               const partner = getChatPartner(convo);
               const isActive = activeConvo?.id === convo.id;
               
-              // Parse last message to check if secure media
+              // Parse last message to check if secure media or reply
               let lastMsgText = 'No messages yet';
               if (convo.last_message) {
                 const secure = parseMessageBody(convo.last_message.body);
                 if (secure) {
                   lastMsgText = `🔒 Sent a secure ${secure.media_type}`;
                 } else {
-                  lastMsgText = convo.last_message.body;
+                  const isReply = convo.last_message.body.startsWith('{') && convo.last_message.body.endsWith('}');
+                  if (isReply) {
+                    try {
+                      const parsed = JSON.parse(convo.last_message.body);
+                      if (parsed && parsed.type === 'reply') {
+                        lastMsgText = parsed.text || '';
+                      } else {
+                        lastMsgText = convo.last_message.body;
+                      }
+                    } catch {
+                      lastMsgText = convo.last_message.body;
+                    }
+                  } else {
+                    lastMsgText = convo.last_message.body;
+                  }
                 }
               }
 
@@ -3266,14 +3772,38 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                 ? (convo.group_name || 'Group Chat')
                 : (partner.display_name || partner.username);
 
+              const hasUnread = !!(convo.unread_count && convo.unread_count > 0);
               return (
                 <div
                   key={convo.id}
-                  onClick={() => { setActiveConvo(convo); setIsSearchMode(false); }}
+                  onClick={async () => { 
+                    onNavigate?.('messages', convo.id);
+                    setIsSearchMode(false); 
+                    if (hasUnread) {
+                      // Optimistically clear unread count in state and dispatch event
+                      setConversations(prev => {
+                        const updated = prev.map(c => c.id === convo.id ? { ...c, unread_count: 0 } : c);
+                        const nextUnreadCount = updated.filter(c => c.unread_count && c.unread_count > 0).length;
+                        window.dispatchEvent(new CustomEvent('unread-chats-update-value', { detail: nextUnreadCount }));
+                        return updated;
+                      });
+                      // Notify backend
+                      try {
+                        await fetch(`/api/conversations/${convo.id}/read`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                      } catch (err) {
+                        console.error('Failed to mark conversation as read:', err);
+                      }
+                    }
+                  }}
                   className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all ${
                     isActive 
                       ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                      : 'hover:bg-slate-900/30 border border-transparent hover:border-white/[0.02]'
+                      : hasUnread
+                        ? 'bg-slate-900/50 border border-brand-500/20 shadow-sm'
+                        : 'hover:bg-slate-900/30 border border-transparent hover:border-white/[0.02]'
                   }`}
                 >
                   {/* Avatar */}
@@ -3294,7 +3824,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center mb-0.5">
-                      <h4 className={`text-xs font-bold truncate flex items-center gap-1.5 ${isActive ? 'text-white' : 'text-slate-200'}`}>
+                      <h4 className={`text-xs truncate flex items-center gap-1.5 ${
+                        isActive 
+                          ? 'text-white font-bold' 
+                          : hasUnread 
+                            ? 'text-white font-extrabold' 
+                            : 'text-slate-200 font-bold'
+                      }`}>
                         {convoTitle}
                         {!convo.is_group && !!partner.is_verified && <VerifiedBadge />}
                         {convo.is_group && (
@@ -3303,16 +3839,33 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                           }`}>Group</span>
                         )}
                       </h4>
-                      {convo.last_message && (
-                        <span className={`text-[9px] font-bold flex-shrink-0 ml-1 ${isActive ? 'text-brand-200' : 'text-slate-550'}`}>
-                          {formatTime(convo.last_message.created_at)}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {hasUnread && !isActive && (
+                          <span className="flex items-center justify-center min-w-[16px] h-4 text-[9px] font-black text-white bg-brand-500 rounded-full px-1 shadow animate-pulse">
+                            {convo.unread_count}
+                          </span>
+                        )}
+                        {convo.last_message && (
+                          <span className={`text-[9px] flex-shrink-0 ml-1 ${
+                            isActive 
+                              ? 'text-brand-200 font-bold' 
+                              : hasUnread
+                                ? 'text-brand-400 font-black'
+                                : 'text-slate-550 font-bold'
+                          }`}>
+                            {formatTime(convo.last_message.created_at)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className={`text-[11px] truncate ${isActive ? 'text-brand-100' : 'text-slate-500'}`}>
-                      {convo.is_group && convo.last_message && convo.last_message.sender_id !== 'system' && convo.last_message.sender_id !== user?.id
-                        ? lastMsgText
-                        : lastMsgText}
+                    <p className={`text-[11px] truncate ${
+                      isActive 
+                        ? 'text-brand-100 font-medium' 
+                        : hasUnread
+                          ? 'text-slate-200 font-semibold' 
+                          : 'text-slate-500 font-medium'
+                    }`}>
+                      {lastMsgText}
                     </p>
                   </div>
                 </div>
@@ -3331,7 +3884,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
             <div className="p-4 border-b border-white/[0.04] bg-slate-950/20 flex items-center justify-between select-none">
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => setActiveConvo(null)}
+                  onClick={() => onNavigate?.('messages')}
                   className="p-1 md:hidden hover:bg-slate-900 rounded-lg text-slate-400"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -3391,39 +3944,69 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                 </div>
               </div>
 
-              {/* Header Right: Game (1v1 only) + Leave Group */}
-              <div className="flex items-center gap-2">
-                {!activeConvo.is_group && (
-                  <button
-                    onClick={() => {
-                      if (gameState && gameState.status !== 'idle') {
-                        setShowGameBoard(!showGameBoard);
-                      } else {
-                        handleInviteGame();
-                      }
-                    }}
-                    className={`p-2 rounded-xl transition-all border flex items-center gap-1.5 text-[10px] font-bold uppercase ${
-                      gameState && gameState.status !== 'idle'
-                        ? 'bg-brand-500/10 border-brand-500/30 text-brand-400 hover:bg-brand-500/20 shadow-sm shadow-brand-500/10'
-                        : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
-                    }`}
-                    title="Play or toggle game"
-                  >
-                    <Gamepad2 className="w-4 h-4 animate-pulse" />
-                    {gameState && gameState.status !== 'idle' 
-                      ? (showGameBoard ? 'Go to Chat' : 'Resume Game') 
-                      : 'Play Game'}
-                  </button>
-                )}
-                {activeConvo.is_group && (
-                  <button
-                    onClick={handleLeaveGroup}
-                    className="p-2 rounded-xl transition-all border border-red-900/40 bg-red-500/5 hover:bg-red-500/10 text-red-500/70 hover:text-red-400 flex items-center gap-1.5 text-[10px] font-bold uppercase"
-                    title="Leave group"
-                  >
-                    <LeaveIcon className="w-4 h-4" />
-                    Leave
-                  </button>
+              {/* Header Right: Three-dot menu */}
+              <div className="relative" ref={headerMenuRef}>
+                <button
+                  onClick={() => setShowHeaderMenu(prev => !prev)}
+                  className="p-2 rounded-xl transition-all border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-slate-400 hover:text-white"
+                  title="More options"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {showHeaderMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-[#0e0e16] border border-white/[0.06] rounded-2xl shadow-2xl z-50 overflow-hidden animate-scale-up">
+                    {/* Play Game — 1:1 DM only */}
+                    {!activeConvo.is_group && (
+                      <button
+                        onClick={() => {
+                          setShowHeaderMenu(false);
+                          if (gameState && gameState.status !== 'idle') {
+                            setShowGameBoard(!showGameBoard);
+                          } else {
+                            handleInviteGame();
+                          }
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-slate-300 hover:bg-white/[0.04] hover:text-white transition-all"
+                      >
+                        <Gamepad2 className={`w-4 h-4 ${gameState && gameState.status !== 'idle' ? 'text-brand-400 animate-pulse' : 'text-slate-400'}`} />
+                        {gameState && gameState.status !== 'idle'
+                          ? (showGameBoard ? 'Go to Chat' : 'Resume Game')
+                          : 'Play Game'}
+                      </button>
+                    )}
+
+                    {/* Delete Chat — 1:1 DM only */}
+                    {!activeConvo.is_group && (
+                      <button
+                        onClick={() => { setShowHeaderMenu(false); handleDeleteChat(); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+                      >
+                        <Trash className="w-4 h-4" />
+                        Delete Chat
+                      </button>
+                    )}
+
+                    {/* Group actions */}
+                    {activeConvo.is_group && activeConvo.creator_id === user?.id && (
+                      <button
+                        onClick={() => { setShowHeaderMenu(false); handleDeleteChat(); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+                      >
+                        <Trash className="w-4 h-4" />
+                        Delete Group
+                      </button>
+                    )}
+                    {activeConvo.is_group && (
+                      <button
+                        onClick={() => { setShowHeaderMenu(false); handleLeaveGroup(); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+                      >
+                        <LeaveIcon className="w-4 h-4" />
+                        Leave Group
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -3491,7 +4074,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
               <>
 
             {/* Messages Bubbles Flow */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-[#030303] to-[#07070c]/20 scrollbar-thin">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-[#030303] to-[#07070c]/20 scrollbar-thin overscroll-contain will-change-transform transform-gpu">
               {loadingMessages ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
@@ -3520,7 +4103,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                   const secureMedia = parseMessageBody(msg.body);
 
                   return (
-                    <div key={msg.id} className={`flex flex-col gap-1.5 max-w-[85%] ${isMe ? 'ml-auto items-end' : 'items-start'}`}>
+                    <div key={msg.id} id={`msg-${msg.id}`} className={`flex flex-col gap-1.5 max-w-[85%] ${isMe ? 'ml-auto items-end' : 'items-start'}`}>
                       
                       {/* Group Chat: sender name label */}
                       {activeConvo?.is_group && !isMe && (() => {
@@ -3581,7 +4164,60 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                                   {/* Hold-to-reveal gesture blocker overlay (For Receiver only if protected) */}
                                   {!isMe && !secureMedia.allow_save && !isAdmin && (
                                     <div 
-                                      className={`absolute inset-0 bg-black/45 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-opacity ${
+                                      className={`absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-opacity ${
+                                        revealedMessages[msg.id] ? 'opacity-0 pointer-events-none' : 'opacity-100'
+                                      }`}
+                                      onMouseDown={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: true }))}
+                                      onMouseUp={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: false }))}
+                                      onMouseLeave={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: false }))}
+                                      onTouchStart={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: true }))}
+                                      onTouchEnd={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: false }))}
+                                    >
+                                      <Lock className="w-5 h-5 text-brand-400 mb-1 animate-pulse" />
+                                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Hold to View</span>
+                                      <span className="text-[8px] text-slate-500 mt-1 select-none font-medium">Screenshots blocked</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : secureMedia.media_type === 'video' ? (
+                                // Video secure media
+                                <div onClick={() => { if (secureMedia.allow_save || revealedMessages[msg.id] || isAdmin) { setActiveFullscreenVideo({ url: `/api/media/file/${secureMedia.url}`, allowSave: !!(secureMedia.allow_save || isAdmin) }); modalOpenTimeRef.current = Date.now(); } }} 
+                                  className="relative rounded-2xl overflow-hidden border border-white/[0.04] bg-[#020202] w-56 sm:w-64 max-w-xs shadow-md select-none cursor-pointer"
+                                  onContextMenu={(e) => !(secureMedia.allow_save || isAdmin) && e.preventDefault()}
+                                >
+                                  <video playsInline 
+                                    src={`/api/media/file/${secureMedia.url}`} 
+                                    className={`w-full max-h-60 object-cover transition-all duration-300 ${
+                                      !isMe && !secureMedia.allow_save && !revealedMessages[msg.id] && !isAdmin
+                                        ? 'blur-xl scale-95 pointer-events-none'
+                                        : ''
+                                    }`}
+                                    controls={secureMedia.allow_save || revealedMessages[msg.id] || isAdmin}
+                                    controlsList={secureMedia.allow_save || isAdmin ? "" : "nodownload"}
+                                  />
+                                   {/* Custom Maximize Button */}
+                                   {(secureMedia.allow_save || revealedMessages[msg.id] || isAdmin) && (
+                                     <button
+                                       type="button"
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         setActiveFullscreenVideo({
+                                           url: `/api/media/file/${secureMedia.url}`,
+                                           allowSave: !!(secureMedia.allow_save || isAdmin)
+                                         });
+                                         modalOpenTimeRef.current = Date.now();
+                                       }}
+                                       className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/85 text-white rounded-lg transition-all z-20 shadow border border-white/10 active:scale-95 flex items-center justify-center"
+                                       title="Open in Fullscreen"
+                                     >
+                                       <Maximize2 className="w-3.5 h-3.5" />
+                                     </button>
+                                   )}
+                                  
+                                  {/* Hold-to-reveal gesture blocker overlay */}
+                                  {!isMe && !secureMedia.allow_save && !isAdmin && (
+                                    <div 
+                                      className={`absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-opacity ${
                                         revealedMessages[msg.id] ? 'opacity-0 pointer-events-none' : 'opacity-100'
                                       }`}
                                       onMouseDown={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: true }))}
@@ -3597,92 +4233,99 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                                   )}
                                 </div>
                               ) : (
-                                // Video secure media
-                                <div 
-                                  className="relative rounded-2xl overflow-hidden border border-white/[0.04] bg-[#020202] w-56 sm:w-64 max-w-xs shadow-md select-none"
-                                  onContextMenu={(e) => !(secureMedia.allow_save || isAdmin) && e.preventDefault()}
-                                >
-                                  <video 
-                                    src={`/api/media/file/${secureMedia.url}`} 
-                                    className={`w-full max-h-60 object-cover transition-all duration-300 ${
-                                      !isMe && !secureMedia.allow_save && !revealedMessages[msg.id] && !isAdmin
-                                        ? 'blur-xl scale-95 pointer-events-none'
-                                        : ''
-                                    }`}
-                                    controls={secureMedia.allow_save || revealedMessages[msg.id] || isAdmin}
-                                    controlsList={secureMedia.allow_save || isAdmin ? "" : "nodownload"}
-                                  />
-                                  
-                                  {/* Hold-to-reveal gesture blocker overlay */}
-                                  {!isMe && !secureMedia.allow_save && !isAdmin && (
-                                    <div 
-                                      className={`absolute inset-0 bg-black/45 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-opacity ${
-                                        revealedMessages[msg.id] ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                                      }`}
-                                      onMouseDown={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: true }))}
-                                      onMouseUp={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: false }))}
-                                      onMouseLeave={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: false }))}
-                                      onTouchStart={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: true }))}
-                                      onTouchEnd={() => setRevealedMessages(prev => ({ ...prev, [msg.id]: false }))}
+                                // File secure media card
+                                <div className="flex items-center gap-3 bg-slate-950/60 p-3 rounded-2xl border border-white/[0.04] max-w-xs shadow-md select-none">
+                                  <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0">
+                                    <Send className="w-5 h-5 transform rotate-[-25deg] translate-y-[-1px] text-brand-400" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-white truncate" title={secureMedia.file_name || 'Attached File'}>
+                                      {secureMedia.file_name || 'Attached File'}
+                                    </p>
+                                    <a
+                                      href={`/api/media/file/${secureMedia.url}`}
+                                      download={secureMedia.file_name || 'file'}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[10px] font-black text-brand-400 hover:text-brand-350 uppercase tracking-wider block mt-1 hover:underline cursor-pointer"
                                     >
-                                      <Lock className="w-5 h-5 text-brand-400 mb-1 animate-pulse" />
-                                      <span className="text-[10px] font-black text-white uppercase tracking-widest">Hold to View</span>
-                                      <span className="text-[8px] text-slate-500 mt-1 select-none font-medium">Screenshots blocked</span>
-                                    </div>
-                                  )}
+                                      Download File
+                                    </a>
+                                  </div>
                                 </div>
                               )}
                             </div>
-                          ) : (
-                            // Standard Text Message
-                            <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
-                              isMe 
-                                ? 'bg-brand-600 text-white rounded-tr-none' 
-                                : 'bg-slate-900/60 border border-white/[0.02] text-slate-200 rounded-tl-none'
-                            }`}>
-                              {msg.body.startsWith('[Shared Post] ') ? (() => {
-                                const parts = msg.body.substring(14).split(' | post_id: ');
-                                const textPart = parts[0];
-                                const username = textPart.split(':')[0].replace('@', '').trim();
-                                const caption = textPart.substring(textPart.indexOf(':') + 1).trim();
-
-                                return (
-                                  <div className="bg-[#0b0c10]/95 border border-white/[0.04] p-3 rounded-2xl space-y-2.5 max-w-[200px] shadow-lg animate-fade-in select-none text-left">
-                                    <div className="flex items-center gap-1.5">
-                                      <div className="w-5 h-5 rounded-full bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-[8px] font-black text-brand-400">
-                                        DV
-                                      </div>
-                                      <span className="text-[9px] font-black text-slate-400 tracking-wide uppercase">Shared Post</span>
-                                    </div>
-                                    <div className="space-y-0.5">
-                                      <span className="text-[10px] font-extrabold text-white block">@{username}</span>
-                                      <p className="text-[10px] text-slate-350 line-clamp-2 leading-relaxed italic">"{caption || 'Photo'}"</p>
-                                    </div>
-                                    <button
-                                      onClick={() => {
-                                        const postId = parts[1]?.trim();
-                                        if (postId) {
-                                          window.history.pushState({}, document.title, `/?post=${postId}`);
-                                          if (onNavigate) {
-                                            onNavigate('feed_redirect');
-                                          }
-                                        } else {
-                                          if (onNavigate) {
-                                            onNavigate('profile', username);
-                                          }
-                                        }
-                                      }}
-                                      className="w-full py-1 bg-brand-500 hover:bg-brand-400 text-white text-[8px] font-black rounded-lg transition-all uppercase tracking-wider text-center cursor-pointer active:scale-95"
-                                    >
-                                      View Post
-                                    </button>
+                          ) : (() => {
+                            const replyObj = parseReplyBody(msg.body);
+                            return (
+                              // Standard Text Message (or Reply)
+                              <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
+                                isMe 
+                                  ? 'bg-brand-600 text-white rounded-tr-none' 
+                                  : 'bg-slate-900/60 border border-white/[0.02] text-slate-200 rounded-tl-none'
+                              }`}>
+                                {replyObj && (
+                                  <div 
+                                    onClick={() => handleScrollToMessage(replyObj.reply_to.id)}
+                                    className="mb-1.5 bg-white/[0.03] hover:bg-white/[0.06] border-l-2 border-brand-500 rounded-r-lg px-2.5 py-1.5 text-[10px] cursor-pointer transition-colors max-w-full overflow-hidden text-left"
+                                  >
+                                    <span className="font-extrabold text-brand-400 block mb-0.5">
+                                      @{replyObj.reply_to.username}
+                                    </span>
+                                    <span className="text-slate-400 truncate block text-[10px]">
+                                      {getReplyPreviewText(replyObj.reply_to.body)}
+                                    </span>
                                   </div>
-                                );
-                              })() : (
-                                <p>{msg.body}</p>
-                              )}
-                            </div>
-                          )}
+                                )}
+
+                                {replyObj ? (
+                                  <p>{replyObj.text}</p>
+                                ) : msg.body.startsWith('[Shared Post] ') ? (() => {
+                                  const parts = msg.body.substring(14).split(' | post_id: ');
+                                  const textPart = parts[0];
+                                  const username = textPart.split(':')[0].replace('@', '').trim();
+                                  const caption = textPart.substring(textPart.indexOf(':') + 1).trim();
+
+                                  return (
+                                    <div className="bg-[#0b0c10]/95 border border-white/[0.04] p-3 rounded-2xl space-y-2.5 max-w-[200px] shadow-lg animate-fade-in select-none text-left">
+                                      <div className="flex items-center gap-1.5">
+                                        <img 
+                                          src="/logo.png" 
+                                          alt="DV" 
+                                          className="w-5 h-5 object-contain flex-shrink-0"
+                                        />
+                                        <span className="text-[9px] font-black text-slate-400 tracking-wide uppercase">Shared Post</span>
+                                      </div>
+                                      <div className="space-y-0.5">
+                                        <span className="text-[10px] font-extrabold text-white block">@{username}</span>
+                                        <p className="text-[10px] text-slate-350 line-clamp-2 leading-relaxed italic">"{caption || 'Photo'}"</p>
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          const postId = parts[1]?.trim();
+                                          if (postId) {
+                                            window.history.pushState({}, document.title, `/?post=${postId}`);
+                                            if (onNavigate) {
+                                              onNavigate('feed_redirect');
+                                            }
+                                          } else {
+                                            if (onNavigate) {
+                                              onNavigate('profile', username);
+                                            }
+                                          }
+                                        }}
+                                        className="w-full py-1 bg-brand-500 hover:bg-brand-400 text-white text-[8px] font-black rounded-lg transition-all uppercase tracking-wider text-center cursor-pointer active:scale-95"
+                                      >
+                                        View Post
+                                      </button>
+                                    </div>
+                                  );
+                                })() : (
+                                  <p>{msg.body}</p>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                         </div>
 
@@ -3752,6 +4395,17 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                             Forward
                           </button>
                         )}
+
+                        {/* Reply Action */}
+                        <button
+                          type="button"
+                          onClick={() => handleInitiateReply(msg)}
+                          className="text-slate-550 hover:text-white flex items-center gap-0.5 transition-colors pl-2 border-l border-white/[0.04]"
+                          title="Reply to message"
+                        >
+                          <CornerUpLeft className="w-3 h-3" />
+                          Reply
+                        </button>
                       </div>
 
                     </div>
@@ -3791,71 +4445,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
                   </div>
                 </div>
               ) : (
-                // Normal Input state with Media selectors
-                <form onSubmit={handleSendMessage} className="flex gap-2 items-center w-full max-w-full overflow-hidden">
-                  
-                  {/* Camera capture button */}
-                  <button
-                    type="button"
-                    onClick={() => openCamera('photo')}
-                    className="p-2.5 bg-slate-950 border border-slate-900 hover:border-slate-800 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
-                    title="Take photo or record video"
-                    disabled={uploadingMedia}
-                  >
-                    <Camera className="w-4 h-4" />
-                  </button>
-
-                  {/* File selector icon trigger */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2.5 bg-slate-950 border border-slate-900 hover:border-slate-800 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
-                    title="Send secure photo/video"
-                    disabled={uploadingMedia}
-                  >
-                    {uploadingMedia ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
-                    ) : (
-                      <ImageIcon className="w-4 h-4" />
-                    )}
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*,video/*"
-                    onChange={handleSelectMedia}
-                    className="absolute w-0 h-0 opacity-0 pointer-events-none"
-                  />
-
-                  {/* Microphone icon trigger */}
-                  <button
-                    type="button"
-                    onClick={startRecording}
-                    className="p-2.5 bg-slate-950 border border-slate-900 hover:border-slate-800 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
-                    title="Record voice note"
-                    disabled={uploadingMedia}
-                  >
-                    <Mic className="w-4 h-4" />
-                  </button>
-
-                  <input
-                    type="text"
-                    placeholder="Type a message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    className="flex-1 min-w-0 w-full bg-slate-950 border border-slate-900 focus:border-brand-500 rounded-xl px-4 py-2.5 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
-                    disabled={uploadingMedia}
-                  />
-
-                  <button 
-                    type="submit"
-                    onMouseDown={(e) => e.preventDefault()}
-                    disabled={!newMessage.trim() || uploadingMedia}
-                    className="p-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl transition-all shadow-md shadow-brand-500/10 active:scale-[0.98] disabled:opacity-50 disabled:scale-100 flex items-center justify-center"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </form>
+                <ChatInput
+                  onSend={handleSendMessage}
+                  openCamera={openCamera}
+                  uploadingMedia={uploadingMedia}
+                  handleSelectMedia={handleSelectMedia}
+                  startRecording={startRecording}
+                  replyingToMessage={replyingToMessage}
+                  onCancelReply={() => setReplyingToMessage(null)}
+                />
               )}
             </div>
           </>
@@ -3916,7 +4514,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
               cameraMode === 'photo' ? (
                 <img src={capturedPreviewUrl} className="w-full h-full object-cover" alt="Captured" />
               ) : (
-                <video src={capturedPreviewUrl} controls className={`w-full h-full object-cover ${cameraFacing === 'user' ? '-scale-x-100' : ''}`} />
+                <video src={capturedPreviewUrl} controls playsInline className={`w-full h-full object-cover ${cameraFacing === 'user' ? '-scale-x-100' : ''}`} />
               )
             ) : (
               // Live viewfinder
@@ -4454,6 +5052,29 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate }) => 
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN VIDEO MODAL */}
+      {activeFullscreenVideo && (
+        <div className="fixed inset-0 bg-black/95 z-[999] flex flex-col items-center justify-center animate-fade-in select-none">
+          <button
+            type="button"
+            onClick={() => { if (Date.now() - modalOpenTimeRef.current > 400) { setActiveFullscreenVideo(null); } }}
+            className="absolute top-4 right-4 p-2.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-xl transition-colors border border-white/10 z-[1000] active:scale-95 flex items-center justify-center"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          
+          <video
+            src={activeFullscreenVideo.url}
+            autoPlay
+            controls
+            playsInline
+            controlsList={activeFullscreenVideo.allowSave ? "" : "nodownload"}
+            onContextMenu={(e) => !activeFullscreenVideo.allowSave && e.preventDefault()}
+            className="w-full h-full max-h-screen object-contain"
+          />
         </div>
       )}
 

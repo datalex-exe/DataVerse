@@ -26,24 +26,17 @@ const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<string>('feed');
   const [profileParam, setProfileParam] = useState<string | undefined>(undefined);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
+  const [messagesParam, setMessagesParam] = useState<string | undefined>(undefined);
   const [hideBottomNav, setHideBottomNav] = useState<boolean>(false);
 
 
-  const [viewportHeight, setViewportHeight] = React.useState<number>(window.innerHeight);
-  const [maxHeight, setMaxHeight] = React.useState<number>(window.innerHeight);
   const [isMobile, setIsMobile] = React.useState<boolean>(window.innerWidth < 768);
 
   React.useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      setMaxHeight(prev => Math.max(prev, window.innerHeight));
-      
-      if (window.visualViewport) {
-        setViewportHeight(window.visualViewport.height);
-      } else {
-        setViewportHeight(window.innerHeight);
-      }
 
       if (activeView === 'messages' && mobile) {
         document.documentElement.style.height = '100%';
@@ -61,6 +54,10 @@ const AppContent: React.FC = () => {
     const resetScroll = () => {
       const mobile = window.innerWidth < 768;
       if (activeView === 'messages' && mobile) {
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+          return;
+        }
         if (window.scrollY !== 0 || window.scrollX !== 0) {
           window.scrollTo(0, 0);
         }
@@ -91,10 +88,8 @@ const AppContent: React.FC = () => {
     };
   }, [activeView]);
 
-  const isKeyboardOpen = isMobile && viewportHeight < maxHeight - 100;
-
   React.useEffect(() => {
-    if (activeView !== 'messages' || !isKeyboardOpen) return;
+    if (activeView !== 'messages' || !isMobile) return;
 
     const preventTouchScroll = (e: TouchEvent) => {
       let target = e.target as HTMLElement | null;
@@ -120,21 +115,8 @@ const AppContent: React.FC = () => {
     return () => {
       document.removeEventListener('touchmove', preventTouchScroll);
     };
-  }, [activeView, isKeyboardOpen]);
+  }, [activeView, isMobile]);
 
-  React.useEffect(() => {
-    if (activeView !== 'messages' || !isKeyboardOpen) return;
-
-    const interval = setInterval(() => {
-      if (window.scrollY !== 0 || window.scrollX !== 0) {
-        window.scrollTo(0, 0);
-      }
-    }, 30);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [activeView, isKeyboardOpen]);
 
   // Fetch unread notification count periodically
   const fetchUnreadCount = React.useCallback(async () => {
@@ -151,12 +133,42 @@ const AppContent: React.FC = () => {
     } catch {}
   }, [token]);
 
+  // Fetch unread chat count periodically
+  const fetchUnreadChatsCount = React.useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/conversations/unread/count', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadChatsCount(data.count || 0);
+      }
+    } catch {}
+  }, [token]);
+
   React.useEffect(() => {
     if (!user) return;
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [user, fetchUnreadCount]);
+    fetchUnreadChatsCount();
+    const notificationInterval = setInterval(fetchUnreadCount, 30000);
+    const chatsInterval = setInterval(fetchUnreadChatsCount, 15000);
+
+    const handleChatsValueUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (typeof customEvent.detail === 'number') {
+        setUnreadChatsCount(customEvent.detail);
+      }
+    };
+
+    window.addEventListener('unread-chats-update-value', handleChatsValueUpdate);
+
+    return () => {
+      clearInterval(notificationInterval);
+      clearInterval(chatsInterval);
+      window.removeEventListener('unread-chats-update-value', handleChatsValueUpdate);
+    };
+  }, [user, fetchUnreadCount, fetchUnreadChatsCount]);
 
   React.useEffect(() => {
     const handleHashChange = () => {
@@ -169,8 +181,13 @@ const AppContent: React.FC = () => {
       } else if (hash === '#/profile') {
         setActiveView('profile');
         setProfileParam(undefined);
+      } else if (hash.startsWith('#/messages/')) {
+        const convoId = hash.substring(11);
+        setActiveView('messages');
+        setMessagesParam(convoId);
       } else if (hash === '#/messages') {
         setActiveView('messages');
+        setMessagesParam(undefined);
       } else if (hash === '#/search' || hash === '#/explore') {
         setActiveView('search');
       } else if (hash === '#/notifications') {
@@ -209,7 +226,7 @@ const AppContent: React.FC = () => {
     } else if (newView === 'search') {
       window.location.hash = '#/search';
     } else if (newView === 'messages') {
-      window.location.hash = '#/messages';
+      window.location.hash = param ? `#/messages/${param}` : '#/messages';
     } else if (newView === 'notifications') {
       window.location.hash = '#/notifications';
     } else if (newView === 'create') {
@@ -243,29 +260,10 @@ const AppContent: React.FC = () => {
     return <Auth />;
   }
 
-  // Helper to determine page titles
-  const getHeaderTitle = () => {
-    if (activeView === 'feed') return 'Home';
-    if (activeView === 'messages') return 'Messages';
-    if (activeView === 'search') return 'Search';
-    if (activeView === 'notifications') return 'Notifications';
-    if (activeView === 'create') return 'Create';
-    if (activeView === 'profile') return 'Profile';
-    if (activeView === 'admin') return 'Admin Panel';
-    return 'DataVerse';
-  };
+
 
   return (
     <div 
-      style={activeView === 'messages' && isKeyboardOpen ? { 
-        position: 'fixed', 
-        top: 0, 
-        left: 0, 
-        right: 0, 
-        height: `${viewportHeight}px`, 
-        minHeight: 'auto',
-        zIndex: 50
-      } : undefined}
       className={`bg-[#030303] text-slate-100 flex flex-col md:flex-row relative overflow-x-hidden ${
         activeView === 'messages' 
           ? 'h-[100dvh] min-h-0 overflow-hidden' 
@@ -287,11 +285,13 @@ const AppContent: React.FC = () => {
           {/* Logo DV circle -> DataVerse Text */}
           <div 
             onClick={() => { navigate('feed'); }}
-            className="flex items-center gap-4 px-3 py-2 cursor-pointer hover:bg-slate-900/10 rounded-2xl transition-all"
+            className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-900/10 rounded-2xl transition-all"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-[10px] font-black text-white flex-shrink-0 shadow-md shadow-brand-500/30 tracking-tight">
-              DV
-            </div>
+            <img 
+              src="/logo.png?v=2" 
+              alt="DataVerse Logo" 
+              className="w-8 h-8 object-contain flex-shrink-0"
+            />
             <span className="text-sm font-black text-white tracking-widest opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap bg-gradient-to-r from-white to-brand-300 bg-clip-text text-transparent">
               DataVerse
             </span>
@@ -323,7 +323,14 @@ const AppContent: React.FC = () => {
                   : 'text-slate-455 hover:text-white hover:bg-slate-900/30'
               }`}
             >
-              <Send className="w-5 h-5 transform rotate-[-25deg] translate-y-[-2px] translate-x-[-1px] flex-shrink-0" />
+              <div className="relative flex-shrink-0">
+                <Send className="w-5 h-5 transform rotate-[-25deg] translate-y-[-2px] translate-x-[-1px]" />
+                {unreadChatsCount > 0 && activeView !== 'messages' && (
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[12px] h-3 px-0.5 bg-brand-500 rounded-full border border-[#060608] text-[7px] font-black text-white shadow shadow-brand-500/50">
+                    {unreadChatsCount}
+                  </span>
+                )}
+              </div>
               <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
                 Messages
               </span>
@@ -435,41 +442,18 @@ const AppContent: React.FC = () => {
 
       </aside>
 
-      {/* MOBILE HEADER */}
-      <header 
-        style={activeView === 'messages' ? { touchAction: 'none' } : undefined}
-        className="md:hidden flex items-center justify-between px-4 py-3 bg-[#060608]/95 backdrop-blur-md border-b border-white/[0.04] sticky top-0 z-35 select-none"
-      >
-        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate('feed')}>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-[10px] font-black text-white shadow-md shadow-brand-500/30 flex-shrink-0 tracking-tight">
-            DV
-          </div>
-          <span className="font-black text-sm text-white tracking-wide">DataVerse</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <h2 className="text-[11px] font-bold text-slate-400 tracking-wider uppercase">
-            {getHeaderTitle()}
-          </h2>
-          <button
-            onClick={() => logout()}
-            className="p-1 text-red-500 hover:text-red-400 transition-colors"
-            title="Log Out"
-          >
-            <LogOut className="w-4.5 h-4.5" />
-          </button>
-        </div>
-      </header>
+
 
       {/* RIGHT MAIN BLOCK (Main Viewport) */}
       <div className={`flex-1 flex flex-col relative z-10 ${
         activeView === 'messages' 
-          ? 'h-0 min-h-0 overflow-hidden'
+          ? 'h-0 md:h-full min-h-0 overflow-hidden'
           : 'min-h-screen md:pb-0 pb-16'
       }`}>
         <main className={`flex-1 relative z-10 flex flex-col ${activeView === 'messages' ? 'h-full min-h-0 overflow-hidden' : ''}`}>
           {activeView === 'feed' && <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} />}
 
-          {activeView === 'messages' && <Chat onToggleBottomNav={setHideBottomNav} onNavigate={navigate} />}
+          {activeView === 'messages' && <Chat onToggleBottomNav={setHideBottomNav} onNavigate={navigate} targetConvoId={messagesParam} />}
           {activeView === 'search' && <Explore activeRoom="general" onNavigate={navigate} />}
           {activeView === 'notifications' && <Activity onNavigate={navigate} />}
           {activeView === 'create' && <Create onNavigate={navigate} />}
@@ -522,9 +506,14 @@ const AppContent: React.FC = () => {
         {/* Messages */}
         <button
           onClick={() => navigate('messages')}
-          className={`p-2 transition-all ${activeView === 'messages' ? 'text-brand-500 scale-110' : 'text-slate-500'}`}
+          className={`p-2 transition-all relative ${activeView === 'messages' ? 'text-brand-500 scale-110' : 'text-slate-500'}`}
         >
           <Send className="w-5.5 h-5.5 transform rotate-[-25deg]" />
+          {unreadChatsCount > 0 && activeView !== 'messages' && (
+            <span className="absolute top-1 right-1 flex items-center justify-center min-w-[12px] h-3 px-0.5 bg-brand-500 rounded-full border border-[#060608] text-[7px] font-black text-white shadow shadow-brand-500/50">
+              {unreadChatsCount}
+            </span>
+          )}
         </button>
 
         {/* Profile */}

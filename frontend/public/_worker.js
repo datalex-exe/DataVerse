@@ -13,7 +13,7 @@ export default {
 
       // Handle WebSocket upgrades
       const upgradeHeader = request.headers.get('Upgrade');
-      if (upgradeHeader === 'websocket') {
+      if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
         return fetch(targetUrl, request);
       }
 
@@ -39,6 +39,23 @@ export default {
     }
 
     // For all other requests, fall through to static assets (handled by Pages)
-    return env.ASSETS.fetch(request);
+    const response = await env.ASSETS.fetch(request);
+
+    // Disable caching for HTML files so phone/mobile browsers always get the latest build
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      const newHeaders = new Headers(response.headers);
+      newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      newHeaders.set('Pragma', 'no-cache');
+      newHeaders.set('Expires', '0');
+
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: newHeaders,
+      });
+    }
+
+    return response;
   },
 };

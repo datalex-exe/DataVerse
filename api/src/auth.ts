@@ -87,7 +87,7 @@ authApp.post('/signup', async (c) => {
 
     // Check if user already exists
     const existing = await c.env.DB.prepare(
-      'SELECT id FROM users WHERE username = ? OR email = ?'
+      'SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?'
     )
       .bind(cleanUsername, cleanEmail)
       .first();
@@ -168,7 +168,7 @@ authApp.post('/login', async (c) => {
     const cleanLoginId = login_id.trim().toLowerCase();
 
     const user = await c.env.DB.prepare(
-      'SELECT * FROM users WHERE username = ? OR email = ?'
+      'SELECT * FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?'
     )
       .bind(cleanLoginId, cleanLoginId)
       .first<any>();

@@ -96,7 +96,10 @@ CREATE TABLE IF NOT EXISTS conversations (
   is_group INTEGER DEFAULT 0,
   group_name TEXT,
   creator_id TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  is_deleted INTEGER DEFAULT 0,
+  is_admin_hidden INTEGER DEFAULT 0,
+  admin_cleared_at INTEGER DEFAULT 0
 );
 -- Migration: add columns if upgrading existing DB
 -- ALTER TABLE conversations ADD COLUMN group_name TEXT;
@@ -107,6 +110,8 @@ CREATE TABLE IF NOT EXISTS conversation_members (
   conversation_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
   nickname TEXT,
+  last_read_at INTEGER DEFAULT 0,
+  cleared_at INTEGER DEFAULT 0,
   PRIMARY KEY (conversation_id, user_id),
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -123,6 +128,7 @@ CREATE TABLE IF NOT EXISTS messages (
   sender_id TEXT NOT NULL,
   body TEXT NOT NULL,
   created_at INTEGER NOT NULL,
+  is_deleted INTEGER DEFAULT 0,
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
@@ -176,4 +182,38 @@ CREATE TABLE IF NOT EXISTS user_blocks (
   FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked ON user_blocks(blocked_id);
+
+-- User Chat Deletions Table (Action 1)
+CREATE TABLE IF NOT EXISTS user_chat_deletions (
+  user_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  deleted_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, conversation_id)
+);
+
+-- Admin Text Redactions Table (Action 2)
+CREATE TABLE IF NOT EXISTS admin_text_redactions (
+  admin_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  redacted_at INTEGER NOT NULL,
+  PRIMARY KEY (admin_id, message_id)
+);
+
+-- Admin Audit Logs Table
+CREATE TABLE IF NOT EXISTS admin_audit_logs (
+  id TEXT PRIMARY KEY,
+  admin_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  details TEXT,
+  created_at INTEGER NOT NULL
+);
+
+-- Admin Conversation Hides Table (Action 2 Admin clear chat)
+CREATE TABLE IF NOT EXISTS admin_convo_hides (
+  admin_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  hidden_at INTEGER NOT NULL,
+  PRIMARY KEY (admin_id, conversation_id)
+);
 

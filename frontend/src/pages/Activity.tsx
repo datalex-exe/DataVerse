@@ -7,12 +7,13 @@ import {
   ArrowRight, 
   Loader2,
   Sparkles,
-  Shield
+  Shield,
+  AlertTriangle
 } from 'lucide-react';
 
 interface NotificationItem {
   id: string;
-  type: 'welcome' | 'follow' | 'follow_request' | 'follow_accept' | 'like' | 'comment' | 'verification_request';
+  type: 'welcome' | 'follow' | 'follow_request' | 'follow_accept' | 'like' | 'comment' | 'verification_request' | 'restriction';
   post_id: string | null;
   body: string | null;
   created_at: number;
@@ -20,6 +21,7 @@ interface NotificationItem {
   username: string | null;
   display_name: string | null;
   avatar_url: string | null;
+  notifier_id: string | null;
 }
 
 interface ActivityProps {
@@ -103,6 +105,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
       case 'like': return <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500" />;
       case 'comment': return <MessageCircle className="w-3.5 h-3.5 text-sky-400" />;
       case 'verification_request': return <Shield className="w-3.5 h-3.5 text-brand-400" />;
+      case 'restriction': return <AlertTriangle className="w-3.5 h-3.5 text-red-500" />;
       default: return <ArrowRight className="w-3.5 h-3.5 text-slate-500" />;
     }
   };
@@ -124,7 +127,9 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
           {/* Avatar / Icon Container */}
           <div className="relative flex-shrink-0">
             <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-xs font-bold text-slate-350 overflow-hidden shadow">
-              {isWelcome ? (
+              {!item.notifier_id ? (
+                <img src="/logo.png?v=2" alt="System Logo" className="w-full h-full object-cover" />
+              ) : isWelcome ? (
                 <div className="w-full h-full bg-brand-600/10 flex items-center justify-center text-brand-400">A</div>
               ) : item.avatar_url ? (
                 <img src={`/api/media/file/${item.avatar_url}`} alt={notifierName} className="w-full h-full object-cover" />
@@ -144,17 +149,42 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
               <p className="text-xs text-slate-300 leading-relaxed break-words">
                 {item.body ? (
                   <span>
-                    <span 
-                      onClick={() => item.username && onNavigate('profile', item.username)}
-                      className="font-extrabold text-white mr-1.5 hover:text-brand-400 cursor-pointer"
-                    >
-                      {notifierName}:
-                    </span>
+                    {item.notifier_id ? (
+                      <span 
+                        onClick={() => item.username && onNavigate('profile', item.username)}
+                        className="font-extrabold text-white mr-1.5 hover:text-brand-400 cursor-pointer"
+                      >
+                        {notifierName}:
+                      </span>
+                    ) : (
+                      <span className="font-extrabold text-brand-400 mr-1.5">
+                        System:
+                      </span>
+                    )}
                     {item.body}
                   </span>
                 ) : (
                   <span>
                     <span className="font-extrabold text-white">Welcome to DataVerse!</span> Explore your feed, share reels, and connect with other creators.
+                  </span>
+                )}
+              </p>
+            ) : item.type === 'restriction' ? (
+              <p className="text-xs text-slate-300 leading-relaxed break-words">
+                {item.notifier_id ? (
+                  <span>
+                    <span 
+                      onClick={() => item.username && onNavigate('profile', item.username)}
+                      className="font-extrabold text-white mr-1.5 hover:text-brand-400 cursor-pointer"
+                    >
+                      {notifierName}
+                    </span>
+                    restricted your chat access for {item.body?.replace("You can't chat for ", "")}
+                  </span>
+                ) : (
+                  <span>
+                    <span className="font-extrabold text-red-500 mr-1.5">System Alert:</span>
+                    {item.body}
                   </span>
                 )}
               </p>

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { compressImage } from '../utils/compress';
-import { Image as ImageIcon, X, Loader2, Check } from 'lucide-react';
+import { Image as ImageIcon, X, Loader2, Check, Video } from 'lucide-react';
 import { ImageCropper } from '../components/ImageCropper';
 
 interface CreateProps {
@@ -21,16 +21,31 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
 
+  // Clean up object URLs to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (imagePreview && imagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        setError('Only image uploads are supported.');
-        return;
+      if (file.type.startsWith('image/')) {
+        setFileToCrop(file);
+        setError(null);
+        setSuccess(false);
+      } else if (file.type.startsWith('video/')) {
+        // Videos are shared in original format/layout
+        setSelectedFile(file);
+        setImagePreview(URL.createObjectURL(file));
+        setError(null);
+        setSuccess(false);
+      } else {
+        setError('Only image and video uploads are supported.');
       }
-      setFileToCrop(file);
-      setError(null);
-      setSuccess(false);
     }
   };
 
@@ -43,29 +58,36 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
     setSuccess(false);
 
     try {
-      // 1. Compress image client-side to keep files small
-      const compressedBlob = await compressImage(selectedFile, 1080, 0.85);
+      let uploadBody: Blob | File = selectedFile;
+      let contentType = selectedFile.type;
 
-      // 2. Generate a unique key for the post media
-      const fileExtension = selectedFile.name.split('.').pop() || 'jpg';
+      // Only compress client-side if it's an image
+      if (selectedFile.type.startsWith('image/')) {
+        const compressedBlob = await compressImage(selectedFile, 1080, 0.85);
+        uploadBody = compressedBlob;
+        contentType = 'image/jpeg';
+      }
+
+      // Generate a unique key for the post media
+      const fileExtension = selectedFile.name.split('.').pop() || (selectedFile.type.startsWith('video/') ? 'mp4' : 'jpg');
       const r2Key = `posts/${user.id}-${Date.now()}.${fileExtension}`;
 
-      // 3. Upload directly to the Worker's R2 proxy endpoint
+      // Upload directly to the Worker's R2 proxy endpoint
       const uploadRes = await fetch(`/api/media/upload?key=${encodeURIComponent(r2Key)}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'image/jpeg'
+          'Content-Type': contentType
         },
-        body: compressedBlob
+        body: uploadBody
       });
 
       if (!uploadRes.ok) {
         const uploadErrData = await uploadRes.json();
-        throw new Error(uploadErrData.error || 'Failed to upload image to storage');
+        throw new Error(uploadErrData.error || 'Failed to upload media to storage');
       }
 
-      // 4. Register post metadata in D1
+      // Register post metadata in D1
       const postMetadataRes = await fetch('/api/posts', {
         method: 'POST',
         headers: {
@@ -74,7 +96,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
         },
         body: JSON.stringify({
           caption: caption.trim(),
-          media: [{ r2_key: r2Key, media_type: 'image/jpeg' }]
+          media: [{ r2_key: r2Key, media_type: contentType }]
         })
       });
 
@@ -111,7 +133,15 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
             <div className="border-2 border-dashed border-slate-800 hover:border-brand-500/50 rounded-2xl aspect-square flex flex-col items-center justify-center relative overflow-hidden transition-all bg-slate-950/40">
               {imagePreview ? (
                 <>
-                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  {selectedFile?.type.startsWith('video/') ? (
+                    <video 
+                      src={imagePreview} 
+                      controls 
+                      className="w-full h-full object-contain bg-black" 
+                    />
+                  ) : (
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  )}
                   <button
                     type="button"
                     onClick={() => { setSelectedFile(null); setImagePreview(null); setSuccess(false); }}
@@ -122,12 +152,15 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                 </>
               ) : (
                 <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-brand-500/5 transition-all p-6 text-center">
-                  <ImageIcon className="w-12 h-12 text-slate-700 mb-3 animate-pulse" />
-                  <span className="text-sm font-bold text-slate-300">Select a photo from device</span>
-                  <span className="text-[10px] text-slate-655 mt-1.5 font-medium">Supports high-res PNG, JPG</span>
+                  <div className="flex gap-2 mb-3">
+                    <ImageIcon className="w-10 h-10 text-slate-700 animate-pulse" />
+                    <Video className="w-10 h-10 text-slate-700 animate-pulse" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-300">Select a photo or video</span>
+                  <span className="text-[10px] text-slate-655 mt-1.5 font-medium">Supports PNG, JPG, MP4, WebM</span>
                   <input 
                     type="file" 
-                    accept="image/*" 
+                    accept="image/*,video/*" 
                     onChange={handleFileChange} 
                     className="hidden" 
                   />
@@ -182,7 +215,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                   {uploading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Compressing & Sharing...
+                      {selectedFile?.type.startsWith('video/') ? 'Uploading...' : 'Compressing & Sharing...'}
                     </>
                   ) : (
                     'Share'
@@ -201,11 +234,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
           isAvatar={false}
           onCrop={(croppedFile) => {
             setSelectedFile(croppedFile);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              setImagePreview(reader.result as string);
-            };
-            reader.readAsDataURL(croppedFile);
+            setImagePreview(URL.createObjectURL(croppedFile));
             setFileToCrop(null);
           }}
           onCancel={() => setFileToCrop(null)}

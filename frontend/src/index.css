@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    overscroll-behavior: none;
+  }
   body {
     @apply bg-[#030303] text-slate-100 selection:bg-brand-500 selection:text-white;
   }
@@ -46,15 +49,19 @@
   /* Custom animations */
   .animate-zoom {
     animation: zoom 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    will-change: transform, opacity;
   }
   .animate-fade-in {
     animation: fadeIn 0.3s ease-out forwards;
+    will-change: opacity;
   }
   .animate-slide-left {
     animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform;
   }
   .animate-slide-up {
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform;
   }
 
   @keyframes zoom {
@@ -72,5 +79,36 @@
   @keyframes slideUp {
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
+  }
+
+  /* Global GPU & Mobile Scroll Enhancements */
+  .gpu {
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    will-change: transform;
+  }
+
+  /* Smooth touch scroll on mobile devices */
+  .overflow-y-auto, .overflow-x-auto, scrollbar {
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Lazy content rendering - skips rendering DOM elements outside the viewport */
+  .lazy-content {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 400px; /* Estimates item size to prevent scroll jumps */
+  }
+
+  /* Prevent highlight tap overlays on mobile web view */
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* Smooth rendering for image elements */
+  img {
+    content-visibility: auto;
+    image-rendering: -webkit-optimize-contrast;
   }
 }

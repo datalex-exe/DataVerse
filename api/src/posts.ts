@@ -186,7 +186,7 @@ postsApp.get('/user/:username', async (c) => {
 
   try {
     const targetUser = await c.env.DB.prepare(
-      'SELECT id, is_private FROM users WHERE username = ?'
+      'SELECT id, is_private FROM users WHERE LOWER(username) = ?'
     )
       .bind(username)
       .first<any>();

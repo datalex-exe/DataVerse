@@ -72,6 +72,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
   // Fetch feed posts
   const fetchFeed = async () => {
     if (!token) return;
+    setLoading(true);
     try {
       const res = await fetch('/api/posts/feed', {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -266,7 +267,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
           if (data.post) {
             setPosts([data.post]);
             setIsSinglePostFiltered(true);
-            handleOpenComments(targetPostId);
+            setLoading(false);
           } else {
             fetchFeed();
           }
@@ -274,9 +275,6 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
         .catch(err => {
           console.error(err);
           fetchFeed();
-        })
-        .finally(() => {
-          setLoading(false);
         });
     } else {
       fetchFeed();
@@ -455,7 +453,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
           return (
             <article 
               key={post.id} 
-              className="p-4 hover:bg-white/[0.01] transition-colors flex gap-3"
+              className="p-4 hover:bg-white/[0.01] transition-colors flex gap-3 lazy-content gpu"
             >
               {/* Left Side: Avatar */}
               <div 
@@ -511,18 +509,28 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                   </p>
                 )}
 
-                {/* Media Image */}
+                {/* Media Image or Video */}
                 {post.media && post.media[0] && (
                   <div 
-                    className="mt-2 rounded-2xl overflow-hidden border border-white/[0.06] bg-[#020202] max-h-[380px] relative flex items-center justify-center shadow-md cursor-pointer"
-                    onDoubleClick={() => handleLike(post.id, post.is_liked)}
+                    className="mt-2 rounded-2xl overflow-hidden border border-white/[0.06] bg-[#020202] max-h-[480px] w-full relative flex items-center justify-center shadow-md"
                   >
-                    <img 
-                      src={`/api/media/file/${post.media[0].r2_key}`} 
-                      alt="Post media" 
-                      className="w-full h-full object-contain select-none max-h-[380px]"
-                      loading="lazy"
-                    />
+                    {post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
+                      <video 
+                        src={`/api/media/file/${post.media[0].r2_key}`} 
+                        controls 
+                        className="w-full h-full object-contain max-h-[480px] select-none"
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img 
+                        src={`/api/media/file/${post.media[0].r2_key}`} 
+                        alt="Post media" 
+                        className="w-full h-full object-contain select-none max-h-[480px] cursor-pointer"
+                        loading="lazy"
+                        onDoubleClick={() => handleLike(post.id, post.is_liked)}
+                      />
+                    )}
                   </div>
                 )}
 

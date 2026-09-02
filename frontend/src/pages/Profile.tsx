@@ -586,7 +586,12 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
       });
 
       if (!uploadRes.ok) {
-        throw new Error('Failed to upload profile photo');
+        let errMsg = 'Failed to upload profile photo';
+        try {
+          const errData = await uploadRes.json();
+          if (errData.error) errMsg = `${errMsg}: ${errData.error}`;
+        } catch {}
+        throw new Error(errMsg);
       }
 
       // Save in DB
@@ -1798,12 +1803,22 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                       className="relative aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-white/[0.03] group cursor-pointer shadow-md"
                     >
                       {post.media && post.media[0] ? (
-                        <img 
-                          src={`/api/media/file/${post.media[0].r2_key}`} 
-                          alt="Thumbnail" 
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          loading="lazy"
-                        />
+                        post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
+                          <video 
+                            src={`/api/media/file/${post.media[0].r2_key}`} 
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            preload="metadata"
+                            muted
+                            playsInline
+                          />
+                        ) : (
+                          <img 
+                            src={`/api/media/file/${post.media[0].r2_key}`} 
+                            alt="Thumbnail" 
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                          />
+                        )
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-slate-800 text-xs">Media error</div>
                       )}
@@ -1857,11 +1872,21 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                       className="aspect-square relative rounded-2xl overflow-hidden border border-white/[0.03] bg-slate-950/20 group cursor-pointer"
                     >
                       {post.media && post.media[0] && (
-                        <img 
-                          src={`/api/media/file/${post.media[0].r2_key}`} 
-                          alt={post.caption || ''} 
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                        />
+                        post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
+                          <video 
+                            src={`/api/media/file/${post.media[0].r2_key}`} 
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                            preload="metadata"
+                            muted
+                            playsInline
+                          />
+                        ) : (
+                          <img 
+                            src={`/api/media/file/${post.media[0].r2_key}`} 
+                            alt={post.caption || ''} 
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                          />
+                        )
                       )}
                       
                       {/* Hover Overlay */}

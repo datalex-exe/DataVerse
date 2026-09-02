@@ -52,7 +52,7 @@ usersApp.get('/notifications', authMiddleware, async (c) => {
   const userId = c.get('userId');
   try {
     const { results: notifications } = await c.env.DB.prepare(`
-      SELECT n.id, n.type, n.post_id, n.body, n.created_at, n.is_read,
+      SELECT n.id, n.type, n.post_id, n.body, n.created_at, n.is_read, n.notifier_id,
         u.username, u.display_name, u.avatar_url
       FROM notifications n
       LEFT JOIN users u ON n.notifier_id = u.id
@@ -141,8 +141,8 @@ usersApp.put('/profile', authMiddleware, async (c) => {
       return c.json({ error: 'User not found' }, 404);
     }
 
-    const targetUsername = (username && username.trim() !== '') ? username.trim() : currentUser.username;
-    const targetEmail = (email && email.trim() !== '') ? email.trim() : currentUser.email;
+    const targetUsername = (username && username.trim() !== '') ? username.trim().toLowerCase() : currentUser.username;
+    const targetEmail = (email && email.trim() !== '') ? email.trim().toLowerCase() : currentUser.email;
     const targetAvatarUrl = (avatar_url !== undefined && avatar_url !== null) ? avatar_url : currentUser.avatar_url;
 
     // Validate username uniqueness if changed
@@ -441,11 +441,10 @@ usersApp.put('/:id/block', authMiddleware, async (c) => {
   }
 });
 
-// ─── CHAT RESTRICT USER (Admin & Top Admin) ──────────────────────────────────
 usersApp.put('/:id/chat-restrict', authMiddleware, async (c) => {
   const callerId = c.get('userId');
   const targetUserId = c.req.param('id');
-  const { minutes } = await c.req.json();
+  const { minutes, senderType } = await c.req.json();
 
   const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
     .bind(callerId)
@@ -470,6 +469,39 @@ usersApp.put('/:id/chat-restrict', authMiddleware, async (c) => {
       .bind(restrictUntil, targetUserId)
       .run();
 
+    if (minutes > 0) {
+      let durationText = '';
+      if (minutes === 10) durationText = '10 minutes';
+      else if (minutes === 60) durationText = '1 hour';
+      else if (minutes === 720) durationText = '12 hours';
+      else if (minutes === 1440) durationText = '24 hours';
+      else if (minutes === 10080) durationText = '7 days';
+      else {
+        if (minutes % 1440 === 0) {
+          durationText = `${minutes / 1440} days`;
+        } else if (minutes % 60 === 0) {
+          durationText = `${minutes / 60} hours`;
+        } else {
+          durationText = `${minutes} minutes`;
+        }
+      }
+
+      const notifierIdToSave = senderType === 'system' ? null : callerId;
+      const notifId = crypto.randomUUID();
+      await c.env.DB.prepare(
+        'INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)'
+      )
+        .bind(
+          notifId,
+          targetUserId,
+          notifierIdToSave,
+          'restriction',
+          `You can't chat for ${durationText} due to policy violation.`,
+          Date.now()
+        )
+        .run();
+    }
+
     return c.json({ success: true, chat_restricted_until: restrictUntil, message: 'User chat restriction updated' });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -479,7 +511,7 @@ usersApp.put('/:id/chat-restrict', authMiddleware, async (c) => {
 // ─── SEND SYSTEM NOTIFICATION (Top Admin only) ─────────────────────────────────
 usersApp.post('/broadcast-notification', authMiddleware, async (c) => {
   const callerId = c.get('userId');
-  const { targetUserId, text } = await c.req.json();
+  const { targetUserId, text, senderType } = await c.req.json();
 
   if (!text || text.trim() === '') {
     return c.json({ error: 'Notification message cannot be empty' }, 400);
@@ -495,13 +527,14 @@ usersApp.post('/broadcast-notification', authMiddleware, async (c) => {
 
   try {
     const createdAt = Date.now();
+    const notifierIdToSave = senderType === 'system' ? null : callerId;
 
     if (targetUserId === 'all') {
       const { results: allUsers } = await c.env.DB.prepare('SELECT id FROM users').all<any>();
       const insertStatements = (allUsers || []).map(u => {
         return c.env.DB.prepare(
           'INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)'
-        ).bind(crypto.randomUUID(), u.id, callerId, 'welcome', text.trim(), createdAt);
+        ).bind(crypto.randomUUID(), u.id, notifierIdToSave, 'welcome', text.trim(), createdAt);
       });
 
       if (insertStatements.length > 0) {
@@ -512,7 +545,7 @@ usersApp.post('/broadcast-notification', authMiddleware, async (c) => {
       await c.env.DB.prepare(
         'INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)'
       )
-        .bind(notificationId, targetUserId, callerId, 'welcome', text.trim(), createdAt)
+        .bind(notificationId, targetUserId, notifierIdToSave, 'welcome', text.trim(), createdAt)
         .run();
     }
 
@@ -700,7 +733,7 @@ usersApp.get('/:username', async (c) => {
       (CASE WHEN ? IS NOT NULL THEN (SELECT COUNT(*) FROM follows WHERE follower_id = ? AND following_id = users.id AND is_accepted = 0) ELSE 0 END) AS is_requested,
       (CASE WHEN ? IS NOT NULL THEN (SELECT COUNT(*) FROM follows WHERE follower_id = users.id AND following_id = ? AND is_accepted = 1) ELSE 0 END) AS is_followed_by
     FROM users
-    WHERE username = ?
+    WHERE LOWER(username) = ?
   `)
     .bind(currentUserId, currentUserId, currentUserId, currentUserId, currentUserId, currentUserId, username)
     .first<any>();
@@ -757,8 +790,8 @@ usersApp.get('/profile/:username/followers', authMiddleware, async (c) => {
   const { username } = c.req.param();
 
   // 1. Fetch user to check privacy
-  const targetUser = await c.env.DB.prepare('SELECT id, is_private FROM users WHERE username = ?')
-    .bind(username)
+  const targetUser = await c.env.DB.prepare('SELECT id, is_private FROM users WHERE LOWER(username) = ?')
+    .bind(username.toLowerCase())
     .first<any>();
 
   if (!targetUser) {
@@ -785,14 +818,19 @@ usersApp.get('/profile/:username/followers', authMiddleware, async (c) => {
     }
   }
 
-  // 3. Fetch followers
+  // 3. Fetch followers, excluding users who have blocked or been blocked by the viewer
   const { results: followers } = await c.env.DB.prepare(`
     SELECT u.id, u.username, u.display_name, u.avatar_url, u.is_verified
     FROM follows f
     JOIN users u ON f.follower_id = u.id
     WHERE f.following_id = ? AND f.is_accepted = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM user_blocks
+        WHERE (blocker_id = ? AND blocked_id = u.id)
+           OR (blocker_id = u.id AND blocked_id = ?)
+      )
   `)
-    .bind(targetUser.id)
+    .bind(targetUser.id, currentUserId, currentUserId)
     .all();
 
   return c.json({ users: followers || [] });
@@ -804,8 +842,8 @@ usersApp.get('/profile/:username/following', authMiddleware, async (c) => {
   const { username } = c.req.param();
 
   // 1. Fetch user to check privacy
-  const targetUser = await c.env.DB.prepare('SELECT id, is_private FROM users WHERE username = ?')
-    .bind(username)
+  const targetUser = await c.env.DB.prepare('SELECT id, is_private FROM users WHERE LOWER(username) = ?')
+    .bind(username.toLowerCase())
     .first<any>();
 
   if (!targetUser) {
@@ -832,14 +870,19 @@ usersApp.get('/profile/:username/following', authMiddleware, async (c) => {
     }
   }
 
-  // 3. Fetch following
+  // 3. Fetch following, excluding users who have blocked or been blocked by the viewer
   const { results: following } = await c.env.DB.prepare(`
     SELECT u.id, u.username, u.display_name, u.avatar_url, u.is_verified
     FROM follows f
     JOIN users u ON f.following_id = u.id
     WHERE f.follower_id = ? AND f.is_accepted = 1
+      AND NOT EXISTS (
+        SELECT 1 FROM user_blocks
+        WHERE (blocker_id = ? AND blocked_id = u.id)
+           OR (blocker_id = u.id AND blocked_id = ?)
+      )
   `)
-    .bind(targetUser.id)
+    .bind(targetUser.id, currentUserId, currentUserId)
     .all();
 
   return c.json({ users: following || [] });

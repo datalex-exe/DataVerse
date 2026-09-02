@@ -102,12 +102,24 @@ conversationsApp.get('/', async (c) => {
     // 1. Fetch conversations this user is part of, sorted by last message time or creation time
     const { results: conversations } = await c.env.DB.prepare(`
       SELECT c.id, c.is_group, c.group_name, c.creator_id, c.created_at,
-        (SELECT body FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_body,
-        (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_time,
-        (SELECT sender_id FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) AS last_message_sender_id
+        (SELECT body FROM messages WHERE conversation_id = c.id AND (is_deleted IS NULL OR is_deleted = 0) AND created_at > COALESCE(ucd.deleted_at, 0) ORDER BY created_at DESC LIMIT 1) AS last_message_body,
+        (SELECT created_at FROM messages WHERE conversation_id = c.id AND (is_deleted IS NULL OR is_deleted = 0) AND created_at > COALESCE(ucd.deleted_at, 0) ORDER BY created_at DESC LIMIT 1) AS last_message_time,
+        (SELECT sender_id FROM messages WHERE conversation_id = c.id AND (is_deleted IS NULL OR is_deleted = 0) AND created_at > COALESCE(ucd.deleted_at, 0) ORDER BY created_at DESC LIMIT 1) AS last_message_sender_id,
+        (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND (is_deleted IS NULL OR is_deleted = 0) AND created_at > COALESCE(ucd.deleted_at, 0) AND created_at > COALESCE(cm.last_read_at, 0) AND sender_id != ?) AS unread_count
       FROM conversations c
       JOIN conversation_members cm ON c.id = cm.conversation_id
+      LEFT JOIN user_chat_deletions ucd ON ucd.user_id = ? AND ucd.conversation_id = c.id
       WHERE cm.user_id = ?
+        AND (c.is_deleted IS NULL OR c.is_deleted = 0)
+        AND (
+          c.created_at > COALESCE(ucd.deleted_at, 0)
+          OR EXISTS (
+            SELECT 1 FROM messages
+            WHERE conversation_id = c.id
+              AND (is_deleted IS NULL OR is_deleted = 0)
+              AND created_at > COALESCE(ucd.deleted_at, 0)
+          )
+        )
         AND (
           c.is_group = 1
           OR NOT EXISTS (
@@ -119,7 +131,7 @@ conversationsApp.get('/', async (c) => {
         )
       ORDER BY COALESCE(last_message_time, c.created_at) DESC
     `)
-      .bind(currentUserId)
+      .bind(currentUserId, currentUserId, currentUserId)
       .all<any>();
 
     if (!conversations || conversations.length === 0) {
@@ -158,6 +170,7 @@ conversationsApp.get('/', async (c) => {
         group_name: convo.group_name || null,
         creator_id: convo.creator_id || null,
         created_at: convo.created_at,
+        unread_count: convo.unread_count || 0,
         last_message: convo.last_message_body ? {
           body: convo.last_message_body,
           created_at: convo.last_message_time,
@@ -172,6 +185,43 @@ conversationsApp.get('/', async (c) => {
     return c.json({ error: err.message }, 500);
   }
 });
+// GET UNREAD CONVERSATIONS COUNT
+conversationsApp.get('/unread/count', async (c) => {
+  const currentUserId = c.get('userId');
+  try {
+    const result = await c.env.DB.prepare(`
+      SELECT COUNT(DISTINCT c.id) AS count
+      FROM conversations c
+      JOIN conversation_members cm ON c.id = cm.conversation_id
+      LEFT JOIN user_chat_deletions ucd ON ucd.user_id = ? AND ucd.conversation_id = c.id
+      WHERE cm.user_id = ?
+        AND (c.is_deleted IS NULL OR c.is_deleted = 0)
+        AND (
+          c.is_group = 1
+          OR NOT EXISTS (
+            SELECT 1 FROM conversation_members cm2
+            JOIN user_blocks ub ON (ub.blocker_id = cm.user_id AND ub.blocked_id = cm2.user_id)
+                                OR (ub.blocker_id = cm2.user_id AND ub.blocked_id = cm.user_id)
+            WHERE cm2.conversation_id = c.id AND cm2.user_id != cm.user_id
+          )
+        )
+        AND EXISTS (
+          SELECT 1 FROM messages
+          WHERE conversation_id = c.id
+            AND (is_deleted IS NULL OR is_deleted = 0)
+            AND created_at > COALESCE(ucd.deleted_at, 0)
+            AND created_at > COALESCE(cm.last_read_at, 0)
+            AND sender_id != ?
+        )
+    `)
+      .bind(currentUserId, currentUserId, currentUserId)
+      .first<any>();
+
+    return c.json({ count: result ? result.count : 0 });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
 
 
 // GET MESSAGES HISTORY FOR A CONVERSATION
@@ -180,6 +230,12 @@ conversationsApp.get('/:id/messages', async (c) => {
   const currentUserId = c.get('userId');
 
   try {
+    // Check if Top Admin
+    const caller = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+      .bind(currentUserId)
+      .first<any>();
+    const isTopAdmin = caller && caller.is_top_admin === 1;
+
     // Verify membership first (bypass for public room IDs starting with room_)
     let isMember = false;
     if (conversationId.startsWith('room_')) {
@@ -195,18 +251,14 @@ conversationsApp.get('/:id/messages', async (c) => {
         console.error('Failed to auto-insert room in history route:', err);
       }
     } else {
-      // Check if Top Admin
-      const caller = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
-        .bind(currentUserId)
-        .first<any>();
-      const isTopAdmin = caller && caller.is_top_admin === 1;
-
       if (isTopAdmin) {
         isMember = true;
       } else {
-        const check = await c.env.DB.prepare(
-          'SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?'
-        )
+        const check = await c.env.DB.prepare(`
+          SELECT 1 FROM conversation_members cm
+          JOIN conversations c ON cm.conversation_id = c.id
+          WHERE cm.conversation_id = ? AND cm.user_id = ? AND (c.is_deleted IS NULL OR c.is_deleted = 0)
+        `)
           .bind(conversationId, currentUserId)
           .first();
         isMember = !!check;
@@ -217,23 +269,62 @@ conversationsApp.get('/:id/messages', async (c) => {
       return c.json({ error: 'Unauthorized conversation member access' }, 403);
     }
 
-    // Retrieve last 100 messages (use LEFT JOIN and COALESCE to allow system messages)
-    const { results: messages } = await c.env.DB.prepare(`
-      SELECT m.id, m.conversation_id, m.sender_id, m.body, m.created_at,
-        COALESCE(u.username, m.sender_id) AS username, u.display_name, u.avatar_url, u.is_verified
-      FROM messages m
-      LEFT JOIN users u ON m.sender_id = u.id
-      WHERE m.conversation_id = ?
-      ORDER BY m.created_at ASC
-      LIMIT 100
-    `)
-      .bind(conversationId)
+    // Retrieve all messages (use LEFT JOIN and COALESCE to allow system messages)
+    const query = `
+      SELECT * FROM (
+        SELECT m.id, m.conversation_id, m.sender_id, m.body, m.created_at, m.is_deleted,
+          COALESCE(u.username, m.sender_id) AS username, u.display_name, u.avatar_url, u.is_verified
+        FROM messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.conversation_id = ?
+          AND (m.is_deleted IS NULL OR m.is_deleted = 0)
+          AND m.created_at > COALESCE(
+            (SELECT deleted_at FROM user_chat_deletions WHERE user_id = ? AND conversation_id = m.conversation_id),
+            0
+          )
+        ORDER BY m.created_at DESC
+      ) ORDER BY created_at ASC
+    `;
+    const { results: messages } = await c.env.DB.prepare(query)
+      .bind(conversationId, currentUserId)
       .all<any>();
+
+    // Mark as read asynchronously
+    if (!conversationId.startsWith('room_')) {
+      c.executionCtx.waitUntil(
+        c.env.DB.prepare(
+          'UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?'
+        )
+          .bind(Date.now(), conversationId, currentUserId)
+          .run()
+          .catch(err => console.error('Failed to update last_read_at in messages route:', err))
+      );
+    }
 
     return c.json({ messages: messages || [] });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
+});
+
+// MARK CONVERSATION AS READ
+conversationsApp.post('/:id/read', async (c) => {
+  const conversationId = c.req.param('id');
+  const currentUserId = c.get('userId');
+
+  if (!conversationId.startsWith('room_')) {
+    try {
+      await c.env.DB.prepare(
+        'UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?'
+      )
+        .bind(Date.now(), conversationId, currentUserId)
+        .run();
+    } catch (err) {
+      console.error('Failed to update last_read_at in read route:', err);
+    }
+  }
+
+  return c.json({ success: true });
 });
 
 // UPDATE SECURE MEDIA MESSAGE ACCESS PERMISSIONS
@@ -408,20 +499,9 @@ conversationsApp.delete('/messages/:messageId', authMiddleware, async (c) => {
       return c.json({ error: 'Forbidden: Only the sender can unsend this message' }, 403);
     }
 
-    // 3. If secure media, delete from D1 media_files too
-    try {
-      const bodyObj = JSON.parse(msg.body);
-      if (bodyObj && bodyObj.type === 'secure_media' && bodyObj.url) {
-        await c.env.DB.prepare('DELETE FROM media_files WHERE key = ?')
-          .bind(bodyObj.url)
-          .run();
-      }
-    } catch {
-      // Not JSON or not media — ignore
-    }
-
-    // 4. Delete from D1
-    await c.env.DB.prepare('DELETE FROM messages WHERE id = ?')
+    // 3. Do NOT delete secure media from media_files so top admin can audit them
+    // 4. Soft-delete from D1
+    await c.env.DB.prepare('UPDATE messages SET is_deleted = 1 WHERE id = ?')
       .bind(messageId)
       .run();
 
@@ -594,11 +674,17 @@ conversationsApp.get('/global/all', authMiddleware, async (c) => {
 
   try {
     const { results: convos } = await c.env.DB.prepare(`
-      SELECT c.id, c.is_group, c.created_at
+      SELECT c.id, c.is_group, c.created_at, c.is_deleted, ach.hidden_at AS admin_cleared_at
       FROM conversations c
+      LEFT JOIN admin_convo_hides ach ON ach.conversation_id = c.id AND ach.admin_id = ?
       WHERE c.id NOT LIKE 'room_%'
+        AND (
+          ach.hidden_at IS NULL 
+          OR ach.hidden_at = 0 
+          OR (SELECT MAX(created_at) FROM messages WHERE conversation_id = c.id) > ach.hidden_at
+        )
       ORDER BY c.created_at DESC
-    `).all<any>();
+    `).bind(userId).all<any>();
 
     if (!convos || convos.length === 0) {
       return c.json({ conversations: [] });
@@ -615,17 +701,29 @@ conversationsApp.get('/global/all', authMiddleware, async (c) => {
       WHERE cm.conversation_id IN (${placeholders})
     `).bind(...convoIds).all<any>();
 
-    // Fetch last messages using correlated GROUP BY maximum
-    const { results: lastMessages } = await c.env.DB.prepare(`
-      SELECT m1.conversation_id, m1.body, m1.created_at, m1.sender_id
+    // Fetch last messages using correlated GROUP BY maximum (incorporating admin_text_redactions and admin_convo_hides check)
+    const queryLastMsg = `
+      SELECT m1.conversation_id,
+        CASE WHEN atr.message_id IS NOT NULL AND m1.body NOT LIKE '{"type":"secure_media"%' THEN
+          '[Redacted Text]'
+        ELSE
+          m1.body
+        END AS body,
+        m1.created_at, m1.sender_id
       FROM messages m1
       JOIN (
-        SELECT conversation_id, MAX(created_at) as max_created
-        FROM messages
-        GROUP BY conversation_id
+        SELECT m.conversation_id, MAX(m.created_at) as max_created
+        FROM messages m
+        LEFT JOIN admin_convo_hides ach ON ach.conversation_id = m.conversation_id AND ach.admin_id = ?
+        WHERE m.created_at > COALESCE(ach.hidden_at, 0) OR m.body LIKE '{"type":"secure_media"%'
+        GROUP BY m.conversation_id
       ) m2 ON m1.conversation_id = m2.conversation_id AND m1.created_at = m2.max_created
+      LEFT JOIN admin_text_redactions atr ON atr.message_id = m1.id AND atr.admin_id = ?
       WHERE m1.conversation_id IN (${placeholders})
-    `).bind(...convoIds).all<any>();
+    `;
+    const { results: lastMessages } = await c.env.DB.prepare(queryLastMsg)
+      .bind(userId, userId, ...convoIds)
+      .all<any>();
 
     const result = convos.map(cv => {
       const cvMembers = members
@@ -647,12 +745,176 @@ conversationsApp.get('/global/all', authMiddleware, async (c) => {
         group_name: cv.group_name || null,
         creator_id: cv.creator_id || null,
         created_at: cv.created_at,
+        is_deleted: cv.is_deleted === 1,
         members: cvMembers,
         last_message: lastMsg
       };
     });
 
     return c.json({ conversations: result });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// GET CONVERSATION MESSAGES AUDIT LOGS (Top Admin only)
+conversationsApp.get('/global/:id/messages', authMiddleware, async (c) => {
+  const conversationId = c.req.param('id');
+  const currentUserId = c.get('userId');
+
+  try {
+    const caller = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+      .bind(currentUserId)
+      .first<any>();
+    const isTopAdmin = caller && caller.is_top_admin === 1;
+
+    if (!isTopAdmin) {
+      return c.json({ error: 'Unauthorized: Admin audit access required' }, 403);
+    }
+
+    const { results: messages } = await c.env.DB.prepare(`
+      SELECT * FROM (
+        SELECT m.id, m.conversation_id, m.sender_id,
+          CASE WHEN atr.message_id IS NOT NULL AND m.body NOT LIKE '{"type":"secure_media"%' THEN
+            '[Redacted Text]'
+          ELSE
+            m.body
+          END AS body,
+          m.created_at, m.is_deleted,
+          COALESCE(u.username, m.sender_id) AS username, u.display_name, u.avatar_url, u.is_verified
+        FROM messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        LEFT JOIN admin_text_redactions atr ON atr.message_id = m.id AND atr.admin_id = ?
+        WHERE m.conversation_id = ?
+          AND (
+            m.created_at > (SELECT COALESCE(hidden_at, 0) FROM admin_convo_hides WHERE conversation_id = m.conversation_id AND admin_id = ?)
+            OR m.body LIKE '{"type":"secure_media"%'
+          )
+        ORDER BY m.created_at DESC
+      ) ORDER BY created_at ASC
+    `)
+      .bind(currentUserId, conversationId, currentUserId)
+      .all<any>();
+
+    return c.json({ messages: messages || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// DELETE CHAT FOR ME — records deleted_at only for the requesting user; other participants are unaffected
+conversationsApp.delete('/:id', authMiddleware, async (c) => {
+  const conversationId = c.req.param('id');
+  const currentUserId = c.get('userId');
+
+  try {
+    // Verify caller is a member
+    const isMember = await c.env.DB.prepare(
+      'SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?'
+    )
+      .bind(conversationId, currentUserId)
+      .first();
+
+    if (!isMember) {
+      return c.json({ error: 'Unauthorized: You are not a member of this conversation' }, 403);
+    }
+
+    // Record deletion timestamp scoped ONLY to this user — other participants are not affected
+    await c.env.DB.prepare(
+      'INSERT OR REPLACE INTO user_chat_deletions (user_id, conversation_id, deleted_at) VALUES (?, ?, ?)'
+    )
+      .bind(currentUserId, conversationId, Date.now())
+      .run();
+
+    return c.json({ success: true, message: 'Chat cleared for you successfully' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// POST /global/:id/hide (Action 2 Admin clear chat - top admin only, hides convo from Admin Console)
+conversationsApp.post('/global/:id/hide', authMiddleware, async (c) => {
+  const conversationId = c.req.param('id');
+  const currentUserId = c.get('userId');
+
+  try {
+    // 1. Role check: Verify caller is a top admin
+    const checkUser = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+      .bind(currentUserId)
+      .first<any>();
+    const isTopAdmin = checkUser && checkUser.is_top_admin === 1;
+
+    if (!isTopAdmin) {
+      return c.json({ error: 'Forbidden: Only Top Admin can hide conversations' }, 403);
+    }
+
+    // 2. Soft-hide for Top Admin (hides from Admin Console view and sets clear timestamp in admin_convo_hides)
+    await c.env.DB.prepare(
+      'INSERT OR REPLACE INTO admin_convo_hides (admin_id, conversation_id, hidden_at) VALUES (?, ?, ?)'
+    )
+      .bind(currentUserId, conversationId, Date.now())
+      .run();
+
+    // 3. Audit log the clear chat action
+    const logId = crypto.randomUUID();
+    await c.env.DB.prepare(
+      'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+      .bind(
+        logId,
+        currentUserId,
+        'ADMIN_CHAT_HIDE',
+        conversationId,
+        `Admin ${currentUserId} hid conversation ${conversationId} from Admin Console`,
+        Date.now()
+      )
+      .run();
+
+    return c.json({ success: true, message: 'Conversation hidden from Admin Console successfully' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// Action 2: Admin Redact (top admin only, redact message text for own view)
+conversationsApp.post('/messages/:messageId/redact', authMiddleware, async (c) => {
+  const messageId = c.req.param('messageId');
+  const currentUserId = c.get('userId');
+
+  try {
+    // 1. Role check: Verify caller is a top admin
+    const checkUser = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+      .bind(currentUserId)
+      .first<any>();
+    const isTopAdmin = checkUser && checkUser.is_top_admin === 1;
+
+    if (!isTopAdmin) {
+      return c.json({ error: 'Forbidden: Only Top Admin can redact text' }, 403);
+    }
+
+    // 2. Insert text redaction record scoped to this admin + message
+    await c.env.DB.prepare(
+      'INSERT OR IGNORE INTO admin_text_redactions (admin_id, message_id, redacted_at) VALUES (?, ?, ?)'
+    )
+      .bind(currentUserId, messageId, Date.now())
+      .run();
+
+    // 3. Audit log the redaction action
+    const logId = crypto.randomUUID();
+    await c.env.DB.prepare(
+      'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+      .bind(
+        logId,
+        currentUserId,
+        'ADMIN_TEXT_REDACT',
+        messageId,
+        `Admin ${currentUserId} redacted text of message ${messageId}`,
+        Date.now()
+      )
+      .run();
+
+    return c.json({ success: true, message: 'Message text redacted successfully' });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
