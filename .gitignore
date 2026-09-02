@@ -30,6 +30,7 @@ desktop.ini
 # Editor directories
 .idea/
 .vscode/
+!.vscode/settings.json
 *.suo
 *.ntvs*
 *.njsproj
