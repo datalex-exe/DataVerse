@@ -81,39 +81,68 @@ app.post('/api/media/upload', authMiddleware, async (c) => {
     return c.json({ error: 'Missing key parameter' }, 400);
   }
 
+  const chunkIndexParam = c.req.query('chunkIndex');
+  const totalChunksParam = c.req.query('totalChunks');
+  const totalSizeParam = c.req.query('totalSize');
   const contentType = c.req.header('Content-Type') || 'application/octet-stream';
   
   try {
     const body = await c.req.arrayBuffer();
-    const totalSize = body.byteLength;
-    const CHUNK_SIZE = 20 * 1024 * 1024; // Slice into 20MB chunks to stay under KV's 25MB limit
 
-    if (totalSize <= CHUNK_SIZE) {
-      // Direct single upload
-      await c.env.SESSION_KV.put(`media:${key}`, body);
-    } else {
-      // Chunked upload
-      const numChunks = Math.ceil(totalSize / CHUNK_SIZE);
-      const chunkPromises = [];
-      for (let i = 0; i < numChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, totalSize);
-        const chunk = body.slice(start, end);
-        chunkPromises.push(c.env.SESSION_KV.put(`media:${key}:chunk:${i}`, chunk));
+    if (chunkIndexParam !== undefined && totalChunksParam !== undefined && totalSizeParam !== undefined) {
+      // Direct chunked upload from client (for files up to 2 GB)
+      const chunkIndex = parseInt(chunkIndexParam, 10);
+      const totalChunks = parseInt(totalChunksParam, 10);
+      const totalSize = parseInt(totalSizeParam, 10);
+
+      await c.env.SESSION_KV.put(`media:${key}:chunk:${chunkIndex}`, body);
+
+      // If this is the final chunk, store manifest and database record
+      if (chunkIndex === totalChunks - 1) {
+        await c.env.SESSION_KV.put(
+          `media:${key}:manifest`,
+          JSON.stringify({ numChunks: totalChunks, totalSize })
+        );
+        await c.env.DB.prepare(
+          'INSERT OR REPLACE INTO media_files (key, content, content_type, created_at) VALUES (?, ?, ?, ?)'
+        )
+          .bind(key, new Uint8Array([0]), contentType, Date.now())
+          .run();
       }
-      await Promise.all(chunkPromises);
-      // Save manifest file in KV
-      await c.env.SESSION_KV.put(`media:${key}:manifest`, JSON.stringify({ numChunks, totalSize }));
+
+      return c.json({ success: true, key, chunkIndex, totalChunks });
+    } else {
+      // Single request payload upload
+      const totalSize = body.byteLength;
+      const CHUNK_SIZE = 20 * 1024 * 1024; // Slice into 20MB chunks to stay under KV limit
+
+      if (totalSize <= CHUNK_SIZE) {
+        // Direct single upload
+        await c.env.SESSION_KV.put(`media:${key}`, body);
+      } else {
+        // Server-side chunked upload
+        const numChunks = Math.ceil(totalSize / CHUNK_SIZE);
+        const chunkPromises = [];
+        for (let i = 0; i < numChunks; i++) {
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(start + CHUNK_SIZE, totalSize);
+          const chunk = body.slice(start, end);
+          chunkPromises.push(c.env.SESSION_KV.put(`media:${key}:chunk:${i}`, chunk));
+        }
+        await Promise.all(chunkPromises);
+        // Save manifest file in KV
+        await c.env.SESSION_KV.put(`media:${key}:manifest`, JSON.stringify({ numChunks, totalSize }));
+      }
+
+      // Put metadata into D1 database for backwards-compatibility
+      await c.env.DB.prepare(
+        'INSERT OR REPLACE INTO media_files (key, content, content_type, created_at) VALUES (?, ?, ?, ?)'
+      )
+        .bind(key, new Uint8Array([0]), contentType, Date.now())
+        .run();
+
+      return c.json({ success: true, key });
     }
-
-    // 2. Put metadata into D1 database as placeholder for backwards-compatibility
-    await c.env.DB.prepare(
-      'INSERT OR REPLACE INTO media_files (key, content, content_type, created_at) VALUES (?, ?, ?, ?)'
-    )
-      .bind(key, new Uint8Array([0]), contentType, Date.now())
-      .run();
-
-    return c.json({ success: true, key });
   } catch (err: any) {
     return c.json({ error: err.message || 'Media upload to KV/D1 failed' }, 500);
   }
@@ -150,12 +179,19 @@ app.get('/api/media/file/*', async (c) => {
       const numChunks = manifest.numChunks;
       const totalSize = manifest.totalSize;
 
-      // Retrieve all chunks in parallel
-      const chunkPromises = [];
-      for (let i = 0; i < numChunks; i++) {
-        chunkPromises.push(c.env.SESSION_KV.get(`media:${key}:chunk:${i}`, { type: 'arrayBuffer' }));
+      // Retrieve chunks in batches of 10 to avoid subrequest rate/memory limits
+      const BATCH_SIZE = 10;
+      const chunks: (ArrayBuffer | null)[] = new Array(numChunks);
+      for (let i = 0; i < numChunks; i += BATCH_SIZE) {
+        const batchPromises = [];
+        for (let j = i; j < Math.min(i + BATCH_SIZE, numChunks); j++) {
+          batchPromises.push(
+            c.env.SESSION_KV.get(`media:${key}:chunk:${j}`, { type: 'arrayBuffer' })
+              .then(res => { chunks[j] = res; })
+          );
+        }
+        await Promise.all(batchPromises);
       }
-      const chunks = await Promise.all(chunkPromises);
 
       // Reassemble chunks
       const merged = new Uint8Array(totalSize);

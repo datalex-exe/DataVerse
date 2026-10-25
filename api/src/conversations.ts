@@ -701,7 +701,7 @@ conversationsApp.get('/global/all', authMiddleware, async (c) => {
       WHERE cm.conversation_id IN (${placeholders})
     `).bind(...convoIds).all<any>();
 
-    // Fetch last messages using correlated GROUP BY maximum (incorporating admin_text_redactions and admin_convo_hides check)
+    // Fetch last messages using correlated GROUP BY maximum (incorporating admin_text_redactions check)
     const queryLastMsg = `
       SELECT m1.conversation_id,
         CASE WHEN atr.message_id IS NOT NULL AND m1.body NOT LIKE '{"type":"secure_media"%' THEN
@@ -714,15 +714,14 @@ conversationsApp.get('/global/all', authMiddleware, async (c) => {
       JOIN (
         SELECT m.conversation_id, MAX(m.created_at) as max_created
         FROM messages m
-        LEFT JOIN admin_convo_hides ach ON ach.conversation_id = m.conversation_id AND ach.admin_id = ?
-        WHERE m.created_at > COALESCE(ach.hidden_at, 0) OR m.body LIKE '{"type":"secure_media"%'
+        WHERE (m.is_deleted IS NULL OR m.is_deleted = 0)
         GROUP BY m.conversation_id
       ) m2 ON m1.conversation_id = m2.conversation_id AND m1.created_at = m2.max_created
       LEFT JOIN admin_text_redactions atr ON atr.message_id = m1.id AND atr.admin_id = ?
       WHERE m1.conversation_id IN (${placeholders})
     `;
     const { results: lastMessages } = await c.env.DB.prepare(queryLastMsg)
-      .bind(userId, userId, ...convoIds)
+      .bind(userId, ...convoIds)
       .all<any>();
 
     const result = convos.map(cv => {
@@ -775,25 +774,23 @@ conversationsApp.get('/global/:id/messages', authMiddleware, async (c) => {
     const { results: messages } = await c.env.DB.prepare(`
       SELECT * FROM (
         SELECT m.id, m.conversation_id, m.sender_id,
+          m.body AS raw_body,
           CASE WHEN atr.message_id IS NOT NULL AND m.body NOT LIKE '{"type":"secure_media"%' THEN
             '[Redacted Text]'
           ELSE
             m.body
           END AS body,
+          (atr.message_id IS NOT NULL) AS is_redacted,
           m.created_at, m.is_deleted,
           COALESCE(u.username, m.sender_id) AS username, u.display_name, u.avatar_url, u.is_verified
         FROM messages m
         LEFT JOIN users u ON m.sender_id = u.id
         LEFT JOIN admin_text_redactions atr ON atr.message_id = m.id AND atr.admin_id = ?
         WHERE m.conversation_id = ?
-          AND (
-            m.created_at > (SELECT COALESCE(hidden_at, 0) FROM admin_convo_hides WHERE conversation_id = m.conversation_id AND admin_id = ?)
-            OR m.body LIKE '{"type":"secure_media"%'
-          )
         ORDER BY m.created_at DESC
       ) ORDER BY created_at ASC
     `)
-      .bind(currentUserId, conversationId, currentUserId)
+      .bind(currentUserId, conversationId)
       .all<any>();
 
     return c.json({ messages: messages || [] });

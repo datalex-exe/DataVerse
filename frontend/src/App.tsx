@@ -12,12 +12,15 @@ import {
   Home, 
   Search, 
   LogOut, 
-  Loader2,
-  PlusSquare,
-  Heart,
-  Send,
-  Shield
+  Loader2, 
+  PlusSquare, 
+  Heart, 
+  Send, 
+  Shield 
 } from 'lucide-react';
+/* THEME START */
+import { SidebarThemeSwitch, ThemeIconButton } from './utils/theme';
+/* THEME END */
 
 const AppContent: React.FC = () => {
   const { user, loading, logout, token } = useAuth();
@@ -29,93 +32,56 @@ const AppContent: React.FC = () => {
   const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
   const [messagesParam, setMessagesParam] = useState<string | undefined>(undefined);
   const [hideBottomNav, setHideBottomNav] = useState<boolean>(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState<boolean>(false);
 
 
-  const [isMobile, setIsMobile] = React.useState<boolean>(window.innerWidth < 768);
 
+
+  // Synchronize mobile visual viewport and keyboard height for chat view
   React.useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-
-      if (activeView === 'messages' && mobile) {
-        document.documentElement.style.height = '100%';
-        document.documentElement.style.overflow = 'hidden';
-        document.body.style.height = '100%';
-        document.body.style.overflow = 'hidden';
-      } else {
-        document.documentElement.style.height = '';
-        document.documentElement.style.overflow = '';
-        document.body.style.height = '';
-        document.body.style.overflow = '';
-      }
-    };
-
-    const resetScroll = () => {
-      const mobile = window.innerWidth < 768;
-      if (activeView === 'messages' && mobile) {
-        const activeEl = document.activeElement;
-        if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
-          return;
-        }
-        if (window.scrollY !== 0 || window.scrollX !== 0) {
-          window.scrollTo(0, 0);
-        }
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleResize);
+    if (activeView !== 'messages') {
+      document.documentElement.classList.remove('messages-active', 'keyboard-open');
+      document.body.classList.remove('messages-active');
+      document.documentElement.style.removeProperty('--chat-viewport-height');
+      return;
     }
-    window.addEventListener('scroll', resetScroll);
-    document.addEventListener('focusin', resetScroll);
-    
-    handleResize();
-    
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleResize);
+
+    document.documentElement.classList.add('messages-active');
+    document.body.classList.add('messages-active');
+
+    const updateViewport = () => {
+      const vv = window.visualViewport;
+      const height = vv ? Math.round(vv.height) : window.innerHeight;
+      document.documentElement.style.setProperty('--chat-viewport-height', `${height}px`);
+
+      // Detect if virtual keyboard is open (visible height is noticeably smaller than screen/window)
+      const isKeyboard = vv ? (window.innerHeight - vv.height > 80) : false;
+      document.documentElement.classList.toggle('keyboard-open', isKeyboard);
+
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
       }
-      window.removeEventListener('scroll', resetScroll);
-      document.removeEventListener('focusin', resetScroll);
-      
-      document.documentElement.style.height = '';
-      document.documentElement.style.overflow = '';
-      document.body.style.height = '';
-      document.body.style.overflow = '';
+    };
+
+    updateViewport();
+
+    window.addEventListener('resize', updateViewport);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewport);
+      window.visualViewport.addEventListener('scroll', updateViewport);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', updateViewport);
+        window.visualViewport.removeEventListener('scroll', updateViewport);
+      }
+      document.documentElement.classList.remove('messages-active', 'keyboard-open');
+      document.body.classList.remove('messages-active');
+      document.documentElement.style.removeProperty('--chat-viewport-height');
     };
   }, [activeView]);
-
-  React.useEffect(() => {
-    if (activeView !== 'messages' || !isMobile) return;
-
-    const preventTouchScroll = (e: TouchEvent) => {
-      let target = e.target as HTMLElement | null;
-      let isScrollable = false;
-      
-      while (target && target !== document.body) {
-        if (target.classList.contains('overflow-y-auto') || target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
-          isScrollable = true;
-          break;
-        }
-        target = target.parentElement;
-      }
-
-      if (!isScrollable) {
-        if (e.cancelable) {
-          e.preventDefault();
-        }
-      }
-    };
-
-    document.addEventListener('touchmove', preventTouchScroll, { passive: false });
-
-    return () => {
-      document.removeEventListener('touchmove', preventTouchScroll);
-    };
-  }, [activeView, isMobile]);
 
 
   // Fetch unread notification count periodically
@@ -264,74 +230,146 @@ const AppContent: React.FC = () => {
 
   return (
     <div 
-      className={`bg-[#030303] text-slate-100 flex flex-col md:flex-row relative overflow-x-hidden ${
+      className={`bg-[var(--bg)] text-[var(--text)] flex flex-col md:flex-row relative overflow-x-hidden ${
         activeView === 'messages' 
-          ? 'h-[100dvh] min-h-0 overflow-hidden' 
-          : 'min-h-screen'
+          ? 'h-[var(--chat-viewport-height,100dvh)] min-h-0 overflow-hidden' 
+          : 'min-h-[100dvh]'
       }`}
+      style={activeView === 'messages' ? { height: 'var(--chat-viewport-height, 100dvh)' } : undefined}
     >
-      
       {/* Background Ambient Glow */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-b from-brand-900/10 via-brand-500/5 to-transparent blur-[130px] rounded-full pointer-events-none z-0"></div>
+      <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[140px] rounded-full pointer-events-none z-0"></div>
 
-      {/* Spacer to prevent content overlap with fixed sidebar */}
-      <div className="hidden md:block w-16 flex-shrink-0" />
+      {/* MOBILE SLIM TOP BAR (below 768px) - Hidden in Messages view so Chats header is the single top bar */}
+      {!hideBottomNav && activeView !== 'messages' && (
+        <header className="md:hidden sticky top-0 left-0 right-0 h-14 bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border-b border-[var(--line)] flex items-center justify-between px-4 z-40 flex-shrink-0">
+          <div 
+            onClick={() => navigate('feed')}
+            className="flex items-center gap-2 cursor-pointer active:scale-95 transition-transform"
+          >
+            <div className="w-8 h-8 rounded-lg bg-[#040b0d] border border-white/10 flex items-center justify-center p-0.5 shadow-sm">
+              <img 
+                src="/logo.png?v=2" 
+                alt="DataVerse Logo" 
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <span className="text-base font-black tracking-wide bg-gradient-to-r from-[var(--text)] to-[var(--accent-2)] bg-clip-text text-transparent">
+              DataVerse
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <ThemeIconButton />
+            <button
+              onClick={() => logout()}
+              className="p-2 text-[var(--muted)] hover:text-[var(--danger)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)]"
+              title="Log Out"
+              aria-label="Log Out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+      )}
 
-      {/* LEFT SIDEBAR: INSTAGRAM-STYLE COLLAPSED & EXPAND ON HOVER */}
-      <aside className="hidden md:flex w-16 hover:w-56 group transition-all duration-300 ease-in-out bg-[#060608] border-r border-white/[0.04] flex-col justify-between items-start py-6 px-3 fixed inset-y-0 left-0 z-40 select-none overflow-y-auto overflow-x-hidden scrollbar-none">
+      {/* Spacer to prevent content overlap with fixed sidebar on md and lg */}
+      <div className="hidden md:block w-20 flex-shrink-0" />
+
+      {/* LEFT SIDEBAR: Collapsed by default (w-20 icon rail), smoothly expands to w-64 on mouse hover / drag into */}
+      {/* THEME START */}
+      <aside 
+        onMouseEnter={() => setIsSidebarHovered(true)}
+        onMouseLeave={() => setIsSidebarHovered(false)}
+        onDragEnter={() => setIsSidebarHovered(true)}
+        onDragOver={(e) => { e.preventDefault(); setIsSidebarHovered(true); }}
+        onDragLeave={() => setIsSidebarHovered(false)}
+        onDrop={() => setIsSidebarHovered(false)}
+        className={`hidden md:flex bg-[var(--side)] border-r border-[var(--line)] flex-col justify-between items-start py-6 px-3 fixed inset-y-0 left-0 z-40 select-none overflow-y-auto overflow-x-hidden scrollbar-none transition-all duration-300 ease-in-out group/sidebar ${
+          isSidebarHovered 
+            ? 'w-64 shadow-2xl shadow-[var(--shadow-card)]' 
+            : 'w-20 hover:w-64 hover:shadow-2xl hover:shadow-[var(--shadow-card)]'
+        }`}
+      >
         
-        <div className="w-full space-y-8">
+        <div className="w-full space-y-6">
           
           {/* Logo DV circle -> DataVerse Text */}
           <div 
             onClick={() => { navigate('feed'); }}
-            className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-slate-900/10 rounded-2xl transition-all"
+            className={`flex items-center gap-0 group-hover/sidebar:gap-3 px-2 py-2 cursor-pointer hover:bg-[var(--hover)] rounded-2xl transition-all duration-300 overflow-hidden w-full ${
+              isSidebarHovered ? 'gap-3' : ''
+            }`}
           >
-            <img 
-              src="/logo.png?v=2" 
-              alt="DataVerse Logo" 
-              className="w-8 h-8 object-contain flex-shrink-0"
-            />
-            <span className="text-sm font-black text-white tracking-widest opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap bg-gradient-to-r from-white to-brand-300 bg-clip-text text-transparent">
+            <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-[#040b0d] border border-white/10 flex items-center justify-center p-1 shadow-sm">
+                <img 
+                  src="/logo.png?v=2" 
+                  alt="DataVerse Logo" 
+                  className="w-8 h-8 object-contain"
+                />
+              </div>
+            </div>
+            <span className={`text-base font-black tracking-wide whitespace-nowrap bg-gradient-to-r from-[var(--text)] to-[var(--accent-2)] bg-clip-text text-transparent transition-all duration-300 overflow-hidden ${
+              isSidebarHovered 
+                ? 'max-w-xs opacity-100' 
+                : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+            }`}>
               DataVerse
             </span>
           </div>
 
           {/* Menu Items List */}
-          <nav className="space-y-2 w-full">
+          <nav className="space-y-1.5 w-full">
             
             {/* Home */}
             <button
               onClick={() => { navigate('feed'); }}
-              className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all ${
+              title="Home"
+              className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
+                isSidebarHovered ? 'gap-3.5' : ''
+              } ${
                 activeView === 'feed'
-                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                  : 'text-slate-450 hover:text-white hover:bg-slate-900/30'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
-              <Home className="w-5 h-5 flex-shrink-0" />
-              <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
+              <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+                <Home className="w-5 h-5" />
+              </div>
+              <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                isSidebarHovered 
+                  ? 'max-w-xs opacity-100' 
+                  : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+              }`}>
                 Home
               </span>
             </button>
 
+            {/* Messages */}
             <button
               onClick={() => { navigate('messages'); }}
-              className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all ${
+              title="Messages"
+              className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
+                isSidebarHovered ? 'gap-3.5' : ''
+              } ${
                 activeView === 'messages'
-                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                  : 'text-slate-455 hover:text-white hover:bg-slate-900/30'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
-              <div className="relative flex-shrink-0">
+              <div className="relative w-6 h-6 flex items-center justify-center flex-shrink-0">
                 <Send className="w-5 h-5 transform rotate-[-25deg] translate-y-[-2px] translate-x-[-1px]" />
                 {unreadChatsCount > 0 && activeView !== 'messages' && (
-                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[12px] h-3 px-0.5 bg-brand-500 rounded-full border border-[#060608] text-[7px] font-black text-white shadow shadow-brand-500/50">
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[12px] h-3 px-0.5 bg-[var(--accent)] rounded-full border border-[var(--side)] text-[7px] font-black text-[var(--on-accent)] shadow shadow-[var(--shadow-accent)]">
                     {unreadChatsCount}
                   </span>
                 )}
               </div>
-              <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
+              <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                isSidebarHovered 
+                  ? 'max-w-xs opacity-100' 
+                  : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+              }`}>
                 Messages
               </span>
             </button>
@@ -339,14 +377,23 @@ const AppContent: React.FC = () => {
             {/* Search */}
             <button
               onClick={() => { navigate('search'); }}
-              className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all ${
+              title="Search"
+              className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
+                isSidebarHovered ? 'gap-3.5' : ''
+              } ${
                 activeView === 'search'
-                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                  : 'text-slate-455 hover:text-white hover:bg-slate-900/30'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
-              <Search className="w-5 h-5 flex-shrink-0" />
-              <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
+              <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+                <Search className="w-5 h-5" />
+              </div>
+              <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                isSidebarHovered 
+                  ? 'max-w-xs opacity-100' 
+                  : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+              }`}>
                 Search
               </span>
             </button>
@@ -354,19 +401,26 @@ const AppContent: React.FC = () => {
             {/* Notifications */}
             <button
               onClick={() => { navigate('notifications'); }}
-              className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all ${
+              title="Notifications"
+              className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
+                isSidebarHovered ? 'gap-3.5' : ''
+              } ${
                 activeView === 'notifications'
-                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                  : 'text-slate-455 hover:text-white hover:bg-slate-900/30'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
-              <div className="relative flex-shrink-0">
+              <div className="relative w-6 h-6 flex items-center justify-center flex-shrink-0">
                 <Heart className="w-5 h-5" />
                 {unreadCount > 0 && activeView !== 'notifications' && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-600 rounded-full border border-[#060608] shadow shadow-blue-600/50" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--accent-2)] rounded-full border border-[var(--side)] shadow shadow-[var(--shadow-accent)]" />
                 )}
               </div>
-              <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
+              <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                isSidebarHovered 
+                  ? 'max-w-xs opacity-100' 
+                  : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+              }`}>
                 Notifications
               </span>
             </button>
@@ -374,14 +428,23 @@ const AppContent: React.FC = () => {
             {/* Create */}
             <button
               onClick={() => { navigate('create'); }}
-              className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all ${
+              title="Create"
+              className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
+                isSidebarHovered ? 'gap-3.5' : ''
+              } ${
                 activeView === 'create'
-                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                  : 'text-slate-455 hover:text-white hover:bg-slate-900/30'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
-              <PlusSquare className="w-5 h-5 flex-shrink-0" />
-              <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
+              <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+                <PlusSquare className="w-5 h-5" />
+              </div>
+              <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                isSidebarHovered 
+                  ? 'max-w-xs opacity-100' 
+                  : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+              }`}>
                 Create
               </span>
             </button>
@@ -389,20 +452,27 @@ const AppContent: React.FC = () => {
             {/* Profile */}
             <button
               onClick={() => { navigate('profile'); }}
-              className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all ${
+              title="Profile"
+              className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
+                isSidebarHovered ? 'gap-3.5' : ''
+              } ${
                 activeView === 'profile'
-                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                  : 'text-slate-455 hover:text-white hover:bg-slate-900/30'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
-              <div className="w-5 h-5 rounded-full overflow-hidden border border-white/10 flex-shrink-0 flex items-center justify-center bg-slate-900">
+              <div className="w-6 h-6 rounded-full overflow-hidden border border-[var(--line)] flex-shrink-0 flex items-center justify-center bg-[var(--input)]">
                 {user.avatar_url ? (
                   <img src={`/api/media/file/${user.avatar_url}`} alt="Me" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-[8px] font-bold text-brand-400 uppercase">{user.username.substring(0, 2)}</span>
+                  <span className="text-[8px] font-bold text-[var(--accent-2)] uppercase">{user.username.substring(0, 2)}</span>
                 )}
               </div>
-              <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
+              <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                isSidebarHovered 
+                  ? 'max-w-xs opacity-100' 
+                  : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+              }`}>
                 Profile
               </span>
             </button>
@@ -411,14 +481,23 @@ const AppContent: React.FC = () => {
             {(user.is_admin || user.is_top_admin) && (
               <button
                 onClick={() => { navigate('admin'); }}
-                className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all ${
+                title="Admin Panel"
+                className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
+                  isSidebarHovered ? 'gap-3.5' : ''
+                } ${
                   activeView === 'admin'
-                    ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                    : 'text-slate-455 hover:text-white hover:bg-slate-900/30'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                    : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
                 }`}
               >
-                <Shield className="w-5 h-5 flex-shrink-0" />
-                <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
+                <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                  isSidebarHovered 
+                    ? 'max-w-xs opacity-100' 
+                    : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+                }`}>
                   Admin Panel
                 </span>
               </button>
@@ -427,28 +506,39 @@ const AppContent: React.FC = () => {
           </nav>
         </div>
 
-        {/* Bottom items: Logout */}
-        <div className="w-full mt-auto">
+        {/* Bottom items: Theme Switch + Logout */}
+        <div className="w-full mt-auto pt-4 border-t border-[var(--line)] space-y-2">
+          {/* Theme switch row just above Logout */}
+          <SidebarThemeSwitch isExpanded={isSidebarHovered} />
+
           <button
             onClick={() => logout()}
-            className="w-full flex items-center gap-4 p-3 rounded-2xl text-red-500 hover:text-red-400 hover:bg-red-500/5 transition-all"
+            title="Log Out"
+            className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] transition-all duration-300 ${
+              isSidebarHovered ? 'gap-3.5' : ''
+            }`}
           >
-            <LogOut className="w-5 h-5 flex-shrink-0" />
-            <span className="text-xs font-bold opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto transition-all duration-200 overflow-hidden whitespace-nowrap">
+            <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
+              <LogOut className="w-5 h-5" />
+            </div>
+            <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+              isSidebarHovered 
+                ? 'max-w-xs opacity-100' 
+                : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+            }`}>
               Log Out
             </span>
           </button>
         </div>
 
       </aside>
-
-
+      {/* THEME END */}
 
       {/* RIGHT MAIN BLOCK (Main Viewport) */}
-      <div className={`flex-1 flex flex-col relative z-10 ${
+      <div className={`flex-1 flex flex-col relative z-10 min-w-0 ${
         activeView === 'messages' 
-          ? 'h-0 md:h-full min-h-0 overflow-hidden'
-          : 'min-h-screen md:pb-0 pb-16'
+          ? 'h-full min-h-0 overflow-hidden' 
+          : 'min-h-[100dvh] md:pb-0 pb-16'
       }`}>
         <main className={`flex-1 relative z-10 flex flex-col ${activeView === 'messages' ? 'h-full min-h-0 overflow-hidden' : ''}`}>
           {activeView === 'feed' && <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} />}
@@ -463,13 +553,15 @@ const AppContent: React.FC = () => {
       </div>
 
       {/* MOBILE BOTTOM NAVIGATION BAR */}
+      {/* THEME START */}
       {!hideBottomNav && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#060608]/95 backdrop-blur-lg border-t border-white/[0.04] flex justify-around items-center z-40 px-2 shadow-2xl">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[color-mix(in_srgb,var(--side)_90%,transparent)] backdrop-blur-lg border-t border-[var(--line)] flex justify-around items-center px-2 py-1 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-2xl">
         
         {/* Home */}
         <button
           onClick={() => navigate('feed')}
-          className={`p-2 transition-all ${activeView === 'feed' ? 'text-brand-500 scale-110' : 'text-slate-500'}`}
+          className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all ${activeView === 'feed' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+          aria-label="Home"
         >
           <Home className="w-5.5 h-5.5" />
         </button>
@@ -477,66 +569,76 @@ const AppContent: React.FC = () => {
         {/* Search */}
         <button
           onClick={() => navigate('search')}
-          className={`p-2 transition-all ${activeView === 'search' ? 'text-brand-500 scale-110' : 'text-slate-500'}`}
+          className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all ${activeView === 'search' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+          aria-label="Search"
         >
           <Search className="w-5.5 h-5.5" />
         </button>
 
-        {/* Notifications (mobile) */}
-        <button
-          onClick={() => navigate('notifications')}
-          className={`p-2 transition-all relative ${activeView === 'notifications' ? 'text-brand-500 scale-110' : 'text-slate-500'}`}
-        >
-          <Heart className="w-5.5 h-5.5" />
-          {unreadCount > 0 && activeView !== 'notifications' && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-blue-600 rounded-full border border-[#060608]" />
-          )}
-        </button>
-
-
-
-        {/* Create */}
+        {/* Raised Create Button in Center */}
         <button
           onClick={() => navigate('create')}
-          className={`p-2 transition-all ${activeView === 'create' ? 'text-brand-500 scale-110' : 'text-slate-500'}`}
+          aria-label="Create Post"
+          className="relative -top-4 w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center shadow-lg shadow-[var(--shadow-accent)] border-2 border-[var(--side)] active:scale-95 hover:scale-105 transition-all flex-shrink-0"
         >
-          <PlusSquare className="w-5.5 h-5.5" />
+          <PlusSquare className="w-5 h-5" />
+        </button>
+
+        {/* Notifications */}
+        <button
+          onClick={() => navigate('notifications')}
+          className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all relative ${activeView === 'notifications' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+          aria-label="Notifications"
+        >
+          <div className="relative">
+            <Heart className="w-5.5 h-5.5" />
+            {unreadCount > 0 && activeView !== 'notifications' && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[var(--accent-2)] rounded-full border border-[var(--side)]" />
+            )}
+          </div>
         </button>
 
         {/* Messages */}
         <button
           onClick={() => navigate('messages')}
-          className={`p-2 transition-all relative ${activeView === 'messages' ? 'text-brand-500 scale-110' : 'text-slate-500'}`}
+          className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all relative ${activeView === 'messages' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+          aria-label="Messages"
         >
-          <Send className="w-5.5 h-5.5 transform rotate-[-25deg]" />
-          {unreadChatsCount > 0 && activeView !== 'messages' && (
-            <span className="absolute top-1 right-1 flex items-center justify-center min-w-[12px] h-3 px-0.5 bg-brand-500 rounded-full border border-[#060608] text-[7px] font-black text-white shadow shadow-brand-500/50">
-              {unreadChatsCount}
-            </span>
-          )}
+          <div className="relative">
+            <Send className="w-5.5 h-5.5 transform rotate-[-25deg]" />
+            {unreadChatsCount > 0 && activeView !== 'messages' && (
+              <span className="absolute -top-1 -right-1.5 flex items-center justify-center min-w-[12px] h-3 px-0.5 bg-[var(--accent)] rounded-full border border-[var(--side)] text-[7px] font-black text-[var(--on-accent)] shadow shadow-[var(--shadow-accent)]">
+                {unreadChatsCount}
+              </span>
+            )}
+          </div>
         </button>
 
         {/* Profile */}
         <button
           onClick={() => navigate('profile')}
-          className={`w-6 h-6 rounded-full overflow-hidden border transition-all ${
-            activeView === 'profile' ? 'border-brand-500 ring-2 ring-brand-500/20 scale-105' : 'border-white/10'
-          }`}
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2"
+          aria-label="Profile"
         >
-          {user.avatar_url ? (
-            <img src={`/api/media/file/${user.avatar_url}`} alt="Me" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-slate-900 flex items-center justify-center text-[8px] font-bold text-brand-400 uppercase">
-              {user.username.substring(0, 2)}
-            </div>
-          )}
+          <div className={`w-6 h-6 rounded-full overflow-hidden border transition-all ${
+            activeView === 'profile' ? 'border-[var(--accent-2)] ring-2 ring-[var(--accent-2)]/30 scale-105' : 'border-[var(--line)]'
+          }`}>
+            {user.avatar_url ? (
+              <img src={`/api/media/file/${user.avatar_url}`} alt="Me" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-[var(--input)] flex items-center justify-center text-[8px] font-bold text-[var(--accent-2)] uppercase">
+                {user.username.substring(0, 2)}
+              </div>
+            )}
+          </div>
         </button>
 
         {/* Admin Console (Admin & Top Admin) */}
         {(user.is_admin || user.is_top_admin) && (
           <button
             onClick={() => navigate('admin')}
-            className={`p-2 transition-all ${activeView === 'admin' ? 'text-brand-500 scale-110' : 'text-slate-500'}`}
+            className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all ${activeView === 'admin' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+            aria-label="Admin Panel"
           >
             <Shield className="w-5.5 h-5.5" />
           </button>
@@ -544,6 +646,8 @@ const AppContent: React.FC = () => {
 
       </nav>
       )}
+      {/* THEME END */}
+      {/* UI UPDATE END */}
 
     </div>
   );

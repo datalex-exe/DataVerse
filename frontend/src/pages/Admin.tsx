@@ -72,6 +72,82 @@ interface AuditMessage {
   is_deleted?: number;
 }
 
+/* AVATAR FIX START */
+interface AdminAvatarProps {
+  avatarUrl?: string | null;
+  name: string;
+  size?: number;
+  className?: string;
+  fallbackText?: string;
+}
+
+const AdminAvatar: React.FC<AdminAvatarProps> = ({
+  avatarUrl,
+  name,
+  size = 44,
+  className = '',
+  fallbackText,
+}) => {
+  const [hasError, setHasError] = useState(false);
+  const initials = fallbackText || (name ? name.substring(0, 2).toUpperCase() : 'U');
+
+  useEffect(() => {
+    setHasError(false);
+  }, [avatarUrl]);
+
+  const resolvedUrl = avatarUrl
+    ? (avatarUrl.startsWith('http') || avatarUrl.startsWith('/api') || avatarUrl.startsWith('/') || avatarUrl.startsWith('data:')
+        ? avatarUrl
+        : `/api/media/file/${avatarUrl}`)
+    : null;
+
+  return (
+    <div
+      className={`relative select-none flex-none rounded-full overflow-hidden grid place-items-center bg-[var(--input)] border border-[var(--line)] ${className}`}
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        minWidth: `${size}px`,
+        minHeight: `${size}px`,
+        maxWidth: `${size}px`,
+        maxHeight: `${size}px`,
+        flex: 'none',
+        borderRadius: '50%',
+        overflow: 'hidden',
+        display: 'grid',
+        placeItems: 'center',
+        position: 'relative',
+      }}
+    >
+      <span
+        className="font-bold uppercase text-[var(--accent-2)] select-none pointer-events-none"
+        style={{ fontSize: `${Math.max(9, Math.round(size * 0.35))}px`, lineHeight: 1 }}
+      >
+        {initials}
+      </span>
+      {resolvedUrl && !hasError && (
+        <img
+          src={resolvedUrl}
+          alt={name}
+          loading="lazy"
+          decoding="async"
+          onError={() => setHasError(true)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            maxWidth: 'none',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+        />
+      )}
+    </div>
+  );
+};
+/* AVATAR FIX END */
+
 export const Admin: React.FC = () => {
   const { token, user: currentUser } = useAuth();
   
@@ -478,18 +554,19 @@ export const Admin: React.FC = () => {
     );
   }
 
+/* THEME START */
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-8 animate-fade-in select-none">
+    <div className="max-w-5xl mx-auto px-4 py-8 space-y-8 animate-fade-in select-none" style={{ background: 'radial-gradient(ellipse at 50% 0%, var(--glow) 0%, transparent 70%)' }}>
       
       {/* Console Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.04] pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--line)] pb-6">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-brand-600/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
+          <div className="w-11 h-11 rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[var(--line)] flex items-center justify-center text-[var(--accent-2)]">
             <Shield className="w-5.5 h-5.5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-white tracking-wide uppercase">Admin Console</h2>
-            <p className="text-[10px] text-slate-500 mt-0.5">Global DataVerse platform directory and message logs audit system.</p>
+            <h2 className="text-base font-black text-[var(--text)] tracking-wide uppercase">Admin Console</h2>
+            <p className="text-[10px] text-[var(--muted)] mt-0.5">Global DataVerse platform directory and message logs audit system.</p>
           </div>
         </div>
 
@@ -499,8 +576,8 @@ export const Admin: React.FC = () => {
             onClick={() => setActiveTab('users')}
             className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === 'users'
-                ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                : 'bg-slate-950 border border-slate-900 text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
+                : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
             }`}
           >
             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -511,8 +588,8 @@ export const Admin: React.FC = () => {
               onClick={() => setActiveTab('chats')}
               className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
                 activeTab === 'chats'
-                  ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                  : 'bg-slate-950 border border-slate-900 text-slate-400 hover:text-white'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
+                  : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -523,8 +600,8 @@ export const Admin: React.FC = () => {
             onClick={() => setActiveTab('restrictions')}
             className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === 'restrictions'
-                ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                : 'bg-slate-950 border border-slate-900 text-slate-400 hover:text-white'
+                ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
+                : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
             }`}
           >
             <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -536,8 +613,8 @@ export const Admin: React.FC = () => {
                 onClick={() => setActiveTab('verifications')}
                 className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
                   activeTab === 'verifications'
-                    ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                    : 'bg-slate-950 border border-slate-900 text-slate-400 hover:text-white'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
+                    : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -547,8 +624,8 @@ export const Admin: React.FC = () => {
                 onClick={() => setActiveTab('reports')}
                 className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
                   activeTab === 'reports'
-                    ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
-                    : 'bg-slate-950 border border-slate-900 text-slate-400 hover:text-white'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
+                    : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
                 }`}
               >
                 <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -558,6 +635,7 @@ export const Admin: React.FC = () => {
           )}
         </div>
       </div>
+      {/* THEME END */}
 
       {error && (
         <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold rounded-2xl">
@@ -605,219 +683,222 @@ export const Admin: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    {/* Desktop View (Table) */}
-                    <div className="hidden md:block glass-card rounded-3xl overflow-hidden border border-white/5 bg-[#060608]/40 shadow-xl">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="border-b border-white/[0.04] bg-slate-950/40 text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-                              <th className="py-4 px-6">User</th>
-                              <th className="py-4 px-4 text-center">Status</th>
-                              <th className="py-4 px-6 text-right">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-white/[0.02] text-xs">
-                            {filteredUsers.map(u => (
-                              <tr key={u.id} className="hover:bg-white/[0.01] transition-colors">
-                                
-                                {/* User credentials */}
-                                <td className="py-4 px-6">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8.5 h-8.5 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-[10px] font-bold text-slate-400">
-                                      {u.avatar_url ? (
-                                        <img src={`/api/media/file/${u.avatar_url}`} alt={u.username} className="w-full h-full object-cover" />
-                                      ) : (
-                                        u.username.substring(0, 2).toUpperCase()
-                                      )}
-                                    </div>
-                                    <div>
-                                      <h5 className="font-extrabold text-white flex items-center gap-1.5">
-                                        {u.display_name || u.username}
-                                        {!!u.is_verified && <VerifiedBadge size={12} />}
-                                      </h5>
-                                      <p className="text-[10px] text-slate-500">@{u.username}</p>
-                                    </div>
-                                  </div>
-                                </td>
-
-                                {/* Status badges */}
-                                <td className="py-4 px-4 text-center">
-                                  <div className="flex justify-center gap-1.5 flex-wrap max-w-xs mx-auto">
-                                    {u.is_top_admin && (
-                                      <span className="text-[8px] font-black text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Top Admin</span>
-                                    )}
-                                    {u.is_admin && !u.is_top_admin && (
-                                      <span className="text-[8px] font-black text-brand-400 bg-brand-400/10 border border-brand-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Admin</span>
-                                    )}
-                                    {u.is_blocked && (
-                                      <span className="text-[8px] font-black text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Blocked</span>
-                                    )}
-                                    {!u.is_admin && !u.is_blocked && (
-                                      <span className="text-[8px] font-black text-slate-500 bg-slate-950 border border-slate-900 px-2 py-0.5 rounded-full uppercase tracking-wider">Member</span>
-                                    )}
-                                  </div>
-                                </td>
-
-                                {/* Actions toggle buttons */}
-                                <td className="py-4 px-6 text-right">
-                                  <div className="flex gap-2 justify-end">
-                                    
-                                    {/* Toggle Verification */}
-                                    {currentUser?.is_top_admin && (
-                                      <button
-                                        onClick={() => handleToggleVerify(u)}
-                                        className={`p-2 rounded-xl border transition-all ${
-                                          u.is_verified
-                                            ? 'bg-brand-600/10 border-brand-500/30 text-brand-400 hover:bg-brand-600/20'
-                                            : 'bg-slate-950 border-slate-900 text-slate-500 hover:text-white'
-                                        }`}
-                                        title="Toggle Verified badge"
-                                      >
-                                        <Sparkles className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-
-                                    {/* Toggle Admin Privilege (Disabled if target is the Top Admin) */}
-                                    {currentUser?.is_top_admin && (
-                                      <button
-                                        onClick={() => handleToggleAdmin(u)}
-                                        disabled={u.is_top_admin}
-                                        className={`p-2 rounded-xl border transition-all ${
-                                          u.is_top_admin
-                                            ? 'bg-slate-955 border-slate-900 text-slate-655 cursor-not-allowed'
-                                            : u.is_admin
-                                            ? 'bg-amber-400/10 border-amber-400/30 text-amber-400 hover:bg-amber-400/20'
-                                            : 'bg-slate-950 border-slate-900 text-slate-500 hover:text-white'
-                                        }`}
-                                        title="Toggle Admin Rights"
-                                      >
-                                        <Shield className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-
-                                    {/* Toggle Block Account */}
-                                    <button
-                                      onClick={() => handleToggleBlock(u)}
-                                      disabled={u.id === currentUser?.id || u.is_top_admin}
-                                      className={`p-2 rounded-xl border transition-all ${
-                                        u.id === currentUser?.id || u.is_top_admin
-                                          ? 'bg-slate-955 border-slate-900 text-slate-655 cursor-not-allowed'
-                                          : u.is_blocked
-                                          ? 'bg-red-600/10 border-red-500/30 text-red-500 hover:bg-red-600/20'
-                                          : 'bg-slate-950 border-slate-900 text-slate-500 hover:text-red-400 hover:border-red-500/20'
-                                      }`}
-                                      title="Toggle Block Account"
-                                    >
-                                      {u.is_blocked ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-                                    </button>
-
-                                  </div>
-                                </td>
-
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                    {/* AVATAR FIX START */}
+                    {/* Desktop View (CSS Grid Table) */}
+                    <div className="hidden md:block glass-card rounded-3xl overflow-hidden border border-[var(--line)] bg-[var(--card)] shadow-xl">
+                      {/* Header */}
+                      <div className="grid grid-cols-[44px_minmax(0,1fr)_auto_auto] items-center gap-[14px] px-6 py-4 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--side)_90%,transparent)] text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest">
+                        <div></div>
+                        <div>User</div>
+                        <div className="text-center min-w-[90px]">Status</div>
+                        <div className="text-right min-w-[130px]">Actions</div>
                       </div>
-                    </div>
 
-                    {/* Mobile View (Cards) */}
-                    <div className="md:hidden space-y-4">
-                      {filteredUsers.map(u => (
-                        <div key={u.id} className="glass-card p-4 rounded-2xl border border-white/5 bg-[#060608]/40 space-y-4 shadow-md">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-[10px] font-bold text-slate-400">
-                                {u.avatar_url ? (
-                                  <img src={`/api/media/file/${u.avatar_url}`} alt={u.username} className="w-full h-full object-cover" />
-                                ) : (
-                                  u.username.substring(0, 2).toUpperCase()
-                                )}
-                              </div>
-                              <div>
-                                <h5 className="font-extrabold text-xs text-white flex items-center gap-1.5">
-                                  {u.display_name || u.username}
-                                  {!!u.is_verified && <VerifiedBadge size={11} />}
-                                </h5>
-                                <p className="text-[10px] text-slate-500">@{u.username}</p>
-                              </div>
+                      {/* User rows */}
+                      <div className="divide-y divide-[var(--line)]">
+                        {filteredUsers.map(u => (
+                          <div 
+                            key={u.id} 
+                            className="grid grid-cols-[44px_minmax(0,1fr)_auto_auto] items-center gap-[14px] px-6 h-[72px] min-h-[72px] max-h-[72px] hover:bg-[var(--hover)] transition-colors"
+                          >
+                            {/* Avatar container (photo OR initials) is always 44px fixed circle */}
+                            <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={44} />
+
+                            {/* Name + Handle (1fr, min-width: 0) with single-line ellipsis */}
+                            <div className="min-w-0 pr-2">
+                              <h5 className="font-extrabold text-sm text-[var(--text)] flex items-center gap-1.5 truncate">
+                                <span className="truncate">{u.display_name || u.username}</span>
+                                {!!u.is_verified && <VerifiedBadge size={13} className="flex-shrink-0" />}
+                              </h5>
+                              <p className="text-xs text-[var(--muted)] truncate">@{u.username}</p>
                             </div>
-                            
-                            {/* Status Badge */}
-                            <div className="flex-shrink-0">
+
+                            {/* Status badge (auto) */}
+                            <div className="flex justify-center items-center min-w-[90px]">
                               {u.is_top_admin && (
-                                <span className="text-[8px] font-black text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Top Admin</span>
+                                <span className="text-[9px] font-black text-[var(--gold)] bg-[color-mix(in_srgb,var(--gold)_14%,transparent)] border border-[color-mix(in_srgb,var(--gold)_30%,transparent)] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                                  Top Admin
+                                </span>
                               )}
                               {u.is_admin && !u.is_top_admin && (
-                                <span className="text-[8px] font-black text-brand-400 bg-brand-400/10 border border-brand-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Admin</span>
+                                <span className="text-[9px] font-black text-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent-2)_14%,transparent)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                                  Admin
+                                </span>
                               )}
                               {u.is_blocked && (
-                                <span className="text-[8px] font-black text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider">Blocked</span>
+                                <span className="text-[9px] font-black text-[var(--danger)] bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                                  Blocked
+                                </span>
                               )}
                               {!u.is_admin && !u.is_blocked && (
-                                <span className="text-[8px] font-black text-slate-500 bg-slate-950 border border-slate-900 px-2 py-0.5 rounded-full uppercase tracking-wider">Member</span>
+                                <span className="text-[9px] font-black text-[var(--muted)] bg-[var(--input)] border border-[var(--line)] px-2.5 py-1 rounded-full uppercase tracking-wider whitespace-nowrap">
+                                  Member
+                                </span>
                               )}
                             </div>
-                          </div>
 
-                          {/* Actions bar */}
-                          <div className="flex items-center justify-between border-t border-white/[0.03] pt-3">
-                            <span className="text-[9px] text-slate-555 font-bold uppercase tracking-wider">Actions</span>
-                            <div className="flex gap-2">
+                            {/* Action buttons (auto) - 40x40 rounded buttons */}
+                            <div className="flex items-center gap-2 justify-end min-w-[130px]">
                               {/* Toggle Verification */}
                               {currentUser?.is_top_admin && (
                                 <button
                                   onClick={() => handleToggleVerify(u)}
-                                  className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
+                                  aria-label={u.is_verified ? "Remove verified badge" : "Grant verified badge"}
+                                  title="Toggle Verified badge"
+                                  className={`admin-action-btn ${
                                     u.is_verified
-                                      ? 'bg-brand-600/10 border-brand-500/30 text-brand-400'
-                                      : 'bg-slate-950 border-slate-900 text-slate-550'
+                                      ? '!text-[var(--accent-2)] !border-[var(--accent-2)]/40 !bg-[color-mix(in_srgb,var(--accent-2)_14%,var(--input))]'
+                                      : ''
                                   }`}
-                                  title="Toggle Verification"
                                 >
-                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <Sparkles className="w-4 h-4" />
                                 </button>
                               )}
 
-                              {/* Toggle Admin */}
+                              {/* Toggle Admin Privilege (Disabled if target is the Top Admin) */}
                               {currentUser?.is_top_admin && (
                                 <button
                                   onClick={() => handleToggleAdmin(u)}
                                   disabled={u.is_top_admin}
-                                  className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
-                                    u.is_top_admin
-                                      ? 'bg-slate-955 border-slate-900 text-slate-655 cursor-not-allowed'
-                                      : u.is_admin
-                                      ? 'bg-amber-400/10 border-amber-400/30 text-amber-400'
-                                      : 'bg-slate-950 border-slate-900 text-slate-550'
-                                  }`}
+                                  aria-label={u.is_admin ? "Revoke admin rights" : "Grant admin rights"}
                                   title="Toggle Admin Rights"
+                                  className={`admin-action-btn ${
+                                    u.is_top_admin
+                                      ? 'opacity-40 cursor-not-allowed'
+                                      : u.is_admin
+                                      ? '!text-[var(--gold)] !border-[var(--gold)]/40 !bg-[color-mix(in_srgb,var(--gold)_14%,var(--input))]'
+                                      : ''
+                                  }`}
                                 >
-                                  <Shield className="w-3.5 h-3.5" />
+                                  <Shield className="w-4 h-4" />
                                 </button>
                               )}
 
-                              {/* Toggle Block */}
+                              {/* Toggle Block Account */}
                               <button
                                 onClick={() => handleToggleBlock(u)}
                                 disabled={u.id === currentUser?.id || u.is_top_admin}
-                                className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
-                                  u.id === currentUser?.id || u.is_top_admin
-                                    ? 'bg-slate-955 border-slate-900 text-slate-655 cursor-not-allowed'
-                                    : u.is_blocked
-                                    ? 'bg-red-600/10 border-red-500/30 text-red-500'
-                                    : 'bg-slate-950 border-slate-900 text-slate-550 hover:text-red-400'
-                                }`}
+                                aria-label={u.is_blocked ? "Unblock account" : "Remove or block user"}
                                 title="Toggle Block Account"
+                                className={`admin-action-btn btn-remove ${
+                                  u.id === currentUser?.id || u.is_top_admin
+                                    ? 'opacity-40 cursor-not-allowed'
+                                    : u.is_blocked
+                                    ? '!text-[var(--danger)] !border-[var(--danger)]/40 !bg-[color-mix(in_srgb,var(--danger)_14%,var(--input))]'
+                                    : ''
+                                }`}
                               >
-                                {u.is_blocked ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+                                {u.is_blocked ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
                               </button>
                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Mobile View (Single-line Rows below 768px: avatar | name and handle | actions) */}
+                    <div className="md:hidden glass-card rounded-2xl overflow-hidden border border-[var(--line)] bg-[var(--card)] shadow-md divide-y divide-[var(--line)]">
+                      {filteredUsers.map(u => (
+                        <div 
+                          key={u.id} 
+                          className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 min-h-[72px] hover:bg-[var(--hover)] transition-colors"
+                        >
+                          {/* Col 1: Avatar (44px) */}
+                          <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={44} />
+
+                          {/* Col 2: Name + Handle with Role badge as small pill under handle */}
+                          <div className="min-w-0 pr-1 flex flex-col justify-center">
+                            <h5 className="font-extrabold text-xs text-[var(--text)] flex items-center gap-1 truncate leading-tight">
+                              <span className="truncate">{u.display_name || u.username}</span>
+                              {!!u.is_verified && <VerifiedBadge size={11} className="flex-shrink-0" />}
+                            </h5>
+                            <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+                              <span className="text-[10px] text-[var(--muted)] truncate max-w-[85px] xs:max-w-[130px]">
+                                @{u.username}
+                              </span>
+                              {u.is_top_admin && (
+                                <span className="flex-shrink-0 text-[8px] font-black text-[var(--gold)] bg-[color-mix(in_srgb,var(--gold)_14%,transparent)] border border-[color-mix(in_srgb,var(--gold)_30%,transparent)] px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
+                                  Top Admin
+                                </span>
+                              )}
+                              {u.is_admin && !u.is_top_admin && (
+                                <span className="flex-shrink-0 text-[8px] font-black text-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent-2)_14%,transparent)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)] px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
+                                  Admin
+                                </span>
+                              )}
+                              {u.is_blocked && (
+                                <span className="flex-shrink-0 text-[8px] font-black text-[var(--danger)] bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
+                                  Blocked
+                                </span>
+                              )}
+                              {!u.is_admin && !u.is_blocked && (
+                                <span className="flex-shrink-0 text-[8px] font-black text-[var(--muted)] bg-[var(--input)] border border-[var(--line)] px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
+                                  Member
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Col 3: Actions (Buttons at least 40px with 8px gaps) */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Toggle Verification */}
+                            {currentUser?.is_top_admin && (
+                              <button
+                                onClick={() => handleToggleVerify(u)}
+                                aria-label={u.is_verified ? "Remove verified badge" : "Grant verified badge"}
+                                title="Toggle Verification"
+                                className={`admin-action-btn ${
+                                  u.is_verified
+                                    ? '!text-[var(--accent-2)] !border-[var(--accent-2)]/40 !bg-[color-mix(in_srgb,var(--accent-2)_14%,var(--input))]'
+                                    : ''
+                                }`}
+                              >
+                                <Sparkles className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            {/* Toggle Admin */}
+                            {currentUser?.is_top_admin && (
+                              <button
+                                onClick={() => handleToggleAdmin(u)}
+                                disabled={u.is_top_admin}
+                                aria-label={u.is_admin ? "Revoke admin rights" : "Grant admin rights"}
+                                title="Toggle Admin Rights"
+                                className={`admin-action-btn ${
+                                  u.is_top_admin
+                                    ? 'opacity-40 cursor-not-allowed'
+                                    : u.is_admin
+                                    ? '!text-[var(--gold)] !border-[var(--gold)]/40 !bg-[color-mix(in_srgb,var(--gold)_14%,var(--input))]'
+                                    : ''
+                                }`}
+                              >
+                                <Shield className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            {/* Toggle Block */}
+                            <button
+                              onClick={() => handleToggleBlock(u)}
+                              disabled={u.id === currentUser?.id || u.is_top_admin}
+                              aria-label={u.is_blocked ? "Unblock user" : "Remove or block user"}
+                              title="Toggle Block Account"
+                              className={`admin-action-btn btn-remove ${
+                                u.id === currentUser?.id || u.is_top_admin
+                                  ? 'opacity-40 cursor-not-allowed'
+                                  : u.is_blocked
+                                  ? '!text-[var(--danger)] !border-[var(--danger)]/40 !bg-[color-mix(in_srgb,var(--danger)_14%,var(--input))]'
+                                  : ''
+                              }`}
+                            >
+                              {u.is_blocked ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                            </button>
                           </div>
                         </div>
                       ))}
                     </div>
+                    {/* AVATAR FIX END */}
                   </>
+
                 )}
               </div>
             );
@@ -1064,13 +1145,9 @@ export const Admin: React.FC = () => {
                         {restrictedUsers.map(u => (
                           <div key={u.id} className="flex items-center justify-between p-2 rounded-xl bg-white/[0.01] border border-white/[0.02]">
                             <div className="flex items-center gap-2 min-w-0">
-                              <div className="w-6.5 h-6.5 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[8px] font-extrabold text-slate-400 overflow-hidden select-none flex-shrink-0">
-                                {u.avatar_url ? (
-                                  <img src={`/api/media/file/${u.avatar_url}`} alt={u.username} className="w-full h-full object-cover" />
-                                ) : (
-                                  u.username.substring(0, 2).toUpperCase()
-                                )}
-                              </div>
+                              {/* AVATAR FIX START */}
+                              <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={32} />
+                              {/* AVATAR FIX END */}
                               <div className="min-w-0">
                                 <span className="text-[10px] font-extrabold text-white block truncate">@{u.username}</span>
                                 <span className="text-[8px] text-red-500 font-bold block truncate">
@@ -1132,13 +1209,9 @@ export const Admin: React.FC = () => {
                         <div className="space-y-4">
                           {/* User Header */}
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-xs font-bold text-slate-400">
-                              {u.avatar_url ? (
-                                <img src={`/api/media/file/${u.avatar_url}`} alt={u.username} className="w-full h-full object-cover" />
-                              ) : (
-                                u.username.substring(0, 2).toUpperCase()
-                              )}
-                            </div>
+                            {/* AVATAR FIX START */}
+                            <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={44} />
+                            {/* AVATAR FIX END */}
                             <div className="min-w-0">
                               <h5 className="font-extrabold text-xs text-white truncate">{u.display_name || u.username}</h5>
                               <p className="text-[9px] text-slate-500 truncate">@{u.username} | {u.email}</p>
@@ -1325,33 +1398,87 @@ export const Admin: React.FC = () => {
               ) : (
                 auditMessages.map(m => {
                   const isSystem = m.sender_id === 'system';
-                  const parseMessageBody = (rawBody: string) => {
-                    if (rawBody.startsWith('{') && rawBody.endsWith('}')) {
+                  
+                  const renderContent = () => {
+                    const raw = m.body;
+                    if (!raw) return <p className="text-xs text-slate-500 italic">(Empty message)</p>;
+
+                    if (raw.startsWith('{') && raw.endsWith('}')) {
                       try {
-                        const obj = JSON.parse(rawBody);
+                        const obj = JSON.parse(raw);
                         if (obj && obj.type === 'secure_media') {
-                          return obj;
+                          return (
+                            <div className="space-y-1.5 mt-1">
+                              {obj.media_type === 'image' && (
+                                <div className="relative rounded-xl overflow-hidden border border-white/[0.04] bg-[#020202] max-w-xs shadow-md">
+                                  <img 
+                                    src={`/api/media/file/${obj.url}`} 
+                                    alt="Audited secure photo" 
+                                    className="w-full max-h-56 object-cover"
+                                  />
+                                </div>
+                              )}
+                              {obj.media_type === 'video' && (
+                                <div className="relative rounded-xl overflow-hidden border border-white/[0.04] bg-[#020202] max-w-xs shadow-md">
+                                  <video 
+                                    src={`/api/media/file/${obj.url}`} 
+                                    className="w-full max-h-56 object-cover"
+                                    controls
+                                  />
+                                </div>
+                              )}
+                              {obj.media_type === 'voice' && (
+                                <div className="text-[10px] text-brand-300 font-mono bg-slate-900/60 border border-white/[0.04] px-3 py-1.5 rounded-xl inline-flex items-center gap-2">
+                                  <span>🎤 Voice note file:</span>
+                                  <span className="text-slate-400">{obj.url.substring(0, 20)}...</span>
+                                </div>
+                              )}
+                              {obj.caption && (
+                                <p className="text-xs text-slate-200 mt-1 font-medium">{obj.caption}</p>
+                              )}
+                            </div>
+                          );
+                        } else if (obj && (obj.type === 'reply' || obj.reply_to)) {
+                          return (
+                            <div className="space-y-1 mt-1">
+                              {obj.reply_to && (
+                                <div className="bg-white/[0.03] border-l-2 border-brand-500 rounded-r-lg px-2.5 py-1 text-[10px] text-slate-400">
+                                  <span className="font-extrabold text-brand-400 block">Replying to @{obj.reply_to.username}</span>
+                                  <span className="truncate block text-[9px] text-slate-400">{obj.reply_to.body}</span>
+                                </div>
+                              )}
+                              <p className="text-xs text-slate-200 leading-relaxed break-words font-normal">{obj.text || raw}</p>
+                            </div>
+                          );
                         }
                       } catch {}
                     }
-                    return null;
+
+                    if (raw.startsWith('[Shared Post] ')) {
+                      const parts = raw.substring(14).split(' | post_id: ');
+                      const textPart = parts[0];
+                      const username = textPart.split(':')[0].replace('@', '').trim();
+                      const caption = textPart.substring(textPart.indexOf(':') + 1).trim();
+
+                      return (
+                        <div className="bg-slate-900/80 border border-white/[0.04] p-2.5 rounded-xl max-w-xs text-left space-y-1 mt-1">
+                          <span className="text-[9px] font-black text-brand-400 uppercase tracking-wide block">Shared Post (@{username})</span>
+                          <p className="text-[11px] text-slate-300 italic">"{caption || 'Photo/Video'}"</p>
+                        </div>
+                      );
+                    }
+
+                    return <p className="text-xs text-slate-200 leading-relaxed break-words font-normal">{raw}</p>;
                   };
 
-                  const secureMedia = parseMessageBody(m.body);
-                  
+                  const isMedia = m.body && m.body.startsWith('{"type":"secure_media"');
+
                   return (
                     <div key={m.id} className="flex gap-3">
                       
-                      {/* Avatar */}
-                      <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex-shrink-0 flex items-center justify-center overflow-hidden text-[9px] font-bold text-slate-400 select-none">
-                        {isSystem ? (
-                          <span>S</span>
-                        ) : m.avatar_url ? (
-                          <img src={`/api/media/file/${m.avatar_url}`} alt={m.username} className="w-full h-full object-cover" />
-                        ) : (
-                          m.username.substring(0, 2).toUpperCase()
-                        )}
-                      </div>
+                      {/* AVATAR FIX START */}
+                      <AdminAvatar avatarUrl={isSystem ? null : m.avatar_url} name={m.username} fallbackText={isSystem ? 'S' : undefined} size={32} />
+                      {/* AVATAR FIX END */}
 
                       {/* Msg text bubble */}
                       <div className={`p-3 rounded-2xl flex-1 transition-all ${
@@ -1369,10 +1496,10 @@ export const Admin: React.FC = () => {
                             )}
                           </span>
                           <div className="flex items-center gap-2">
-                            <span className="text-[8px] text-slate-655 font-bold">
+                            <span className="text-[8px] text-slate-550 font-bold">
                               {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
-                            {!secureMedia && m.body !== '[Redacted Text]' && (
+                            {!isMedia && m.body !== '[Redacted Text]' && (
                               <button
                                 onClick={() => handleRedactMessageText(m.id)}
                                 className="text-[8px] font-bold text-amber-500/60 hover:text-amber-400 hover:bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/20 transition-all select-none uppercase tracking-wide"
@@ -1384,35 +1511,7 @@ export const Admin: React.FC = () => {
                           </div>
                         </div>
                         
-                        {secureMedia ? (
-                          <div className="space-y-1.5 mt-1">
-                            {secureMedia.media_type === 'image' && (
-                              <div className="relative rounded-xl overflow-hidden border border-white/[0.04] bg-[#020202] max-w-xs shadow-md">
-                                <img 
-                                  src={`/api/media/file/${secureMedia.url}`} 
-                                  alt="Audited secure photo" 
-                                  className="w-full max-h-48 object-cover"
-                                />
-                              </div>
-                            )}
-                            {secureMedia.media_type === 'video' && (
-                              <div className="relative rounded-xl overflow-hidden border border-white/[0.04] bg-[#020202] max-w-xs shadow-md">
-                                <video 
-                                  src={`/api/media/file/${secureMedia.url}`} 
-                                  className="w-full max-h-48 object-cover"
-                                  controls
-                                />
-                              </div>
-                            )}
-                            {secureMedia.media_type === 'voice' && (
-                              <span className="text-[10px] text-slate-500 italic bg-slate-900/60 border border-white/[0.02] px-2.5 py-1 rounded-lg inline-block">
-                                Voice message file: {secureMedia.url.substring(0, 15)}...
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-350 leading-relaxed break-words">{m.body}</p>
-                        )}
+                        {renderContent()}
                       </div>
 
                     </div>

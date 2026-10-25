@@ -8,12 +8,15 @@ import {
   Send, 
   X, 
   Loader2, 
-  Smile,
-  Bookmark,
-  Share2,
-  Trash,
-  Check,
-  Search
+  Smile, 
+  Bookmark, 
+  Share2, 
+  Trash, 
+  Check, 
+  Search,
+  /* UI UPDATE START - Added MoreHorizontal icon for post options */
+  MoreHorizontal
+  /* UI UPDATE END */
 } from 'lucide-react';
 
 interface Media {
@@ -68,6 +71,16 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
   const [comments, setComments] = useState<Comment[]>([]);
   const [newCommentText, setNewCommentText] = useState<string>('');
   const [loadingComments, setLoadingComments] = useState<boolean>(false);
+
+  /* UI UPDATE START - More menu state & click outside handler */
+  const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuPostId(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
+  /* UI UPDATE END */
 
   // Fetch feed posts
   const fetchFeed = async () => {
@@ -385,195 +398,317 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto self-center py-4 pb-20 select-none animate-fade-in divide-y divide-white/[0.04] border-x border-white/[0.04]">
+    <div className="w-full max-w-[620px] mx-auto min-h-screen py-0 pb-28 sm:pb-16 select-none border-x border-[#1c1c2b]/60 relative">
+      {/* UI UPDATE START - Feed column ~620px wide with subtle borders and spacing */}
       
-      {/* Twitter-style Composer */}
-      <div 
-        onClick={() => onNavigate('create')}
-        className="px-4 pb-4 flex gap-3 cursor-pointer group select-none"
-      >
-        <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-400 shadow flex-shrink-0">
-          Me
-        </div>
-        <div className="flex-1 flex flex-col gap-3">
-          <div className="text-slate-500 text-sm py-2 font-medium">What's happening?</div>
-          <div className="flex justify-between items-center border-t border-white/[0.02] pt-3">
-            <div className="flex gap-2 text-brand-400">
-              <PlusSquare className="w-5 h-5 opacity-70 group-hover:opacity-100 transition-opacity" />
+      {/* Dynamic Keyframes and Motion Styles */}
+      <style>{`
+        .post-enter {
+          animation: postSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        @keyframes postSlideUp {
+          0% {
+            opacity: 0;
+            transform: translateY(14px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes heartPop {
+          0% { transform: scale(1); }
+          35% { transform: scale(1.35); }
+          65% { transform: scale(0.9); }
+          100% { transform: scale(1); }
+        }
+
+        @keyframes bookmarkBounce {
+          0% { transform: translateY(0) scale(1); }
+          40% { transform: translateY(-4px) scale(1.2); }
+          75% { transform: translateY(1px) scale(0.95); }
+          100% { transform: translateY(0) scale(1); }
+        }
+
+        .heart-pop {
+          animation: heartPop 0.35s cubic-bezier(0.17, 0.89, 0.32, 1.49);
+        }
+
+        .bookmark-bounce {
+          animation: bookmarkBounce 0.35s cubic-bezier(0.17, 0.89, 0.32, 1.49);
+        }
+
+        @media (hover: hover) {
+          .post-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.45);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .post-enter,
+          .heart-pop,
+          .bookmark-bounce,
+          .post-card {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+          }
+        }
+      `}</style>
+
+      <div className="px-0 sm:px-3 pt-3 sm:pt-5">
+        {/* COMPOSER - Single clean row on phone, slightly lighter card on desktop (#0c0c13) */}
+        <div 
+          onClick={() => onNavigate('create')}
+          className="sm:bg-[#0c0c13] sm:border sm:border-[#1c1c2b] sm:rounded-[20px] bg-transparent border-b border-[#1c1c2b]/80 p-4 sm:p-4 sm:mb-4 cursor-pointer group select-none transition-all duration-200 hover:border-brand-500/30"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-400 shadow-inner flex-shrink-0">
+              {user?.avatar_url ? (
+                <img src={`/api/media/file/${user.avatar_url}`} alt="Me" className="w-full h-full object-cover" />
+              ) : (
+                user?.username ? user.username.substring(0, 2).toUpperCase() : 'Me'
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-slate-400 text-sm font-medium">What's happening?</span>
             </div>
             <button 
               onClick={(e) => { e.stopPropagation(); onNavigate('create'); }}
-              className="py-1.5 px-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-full shadow transition-all"
+              className="min-h-[44px] px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-full shadow-md shadow-brand-600/20 active:scale-95 transition-all flex items-center justify-center gap-1.5"
             >
-              Post
+              <PlusSquare className="w-4 h-4" />
+              <span>Post</span>
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Shared Post Filter Notice Banner */}
-      {isSinglePostFiltered && (
-        <div className="p-3 bg-brand-950/20 border border-brand-900/30 rounded-2xl flex items-center justify-between text-xs max-w-md mx-auto mb-6">
-          <span className="font-bold text-slate-350">Viewing a shared post</span>
-          <button 
-            onClick={() => {
-              setIsSinglePostFiltered(false);
-              window.history.replaceState({}, document.title, window.location.pathname);
-              setLoading(true);
-              fetchFeed();
-            }}
-            className="px-3 py-1 bg-brand-600 hover:bg-brand-500 text-white font-extrabold rounded-lg transition-colors uppercase tracking-wider text-[10px]"
-          >
-            View Full Feed
-          </button>
-        </div>
-      )}
-
-      {/* Feed Posts */}
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-500 gap-3">
-          <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
-          <p className="text-xs">Loading feed...</p>
-        </div>
-      ) : posts.length === 0 ? (
-        <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-4">
-          <Smile className="w-12 h-12 text-slate-700" />
-          <h3 className="font-extrabold text-sm text-slate-200">Your Feed is Empty</h3>
-          <p className="text-xs text-slate-555 max-w-xs leading-relaxed">Follow creators or upload your first photo to begin!</p>
-          <button 
-            onClick={() => onNavigate('create')}
-            className="mt-2 py-2 px-5 bg-brand-600 hover:bg-brand-500 text-white text-[10px] font-bold rounded-xl shadow transition-all uppercase tracking-wider"
-          >
-            Upload Photo
-          </button>
-        </div>
-      ) : (
-        posts.map((post) => {
-          const { caption: cleanCaption, room: postRoom } = getCleanCaptionAndRoom(post.caption);
-          return (
-            <article 
-              key={post.id} 
-              className="p-4 hover:bg-white/[0.01] transition-colors flex gap-3 lazy-content gpu"
+        {/* Shared Post Filter Notice Banner */}
+        {isSinglePostFiltered && (
+          <div className="p-3 bg-brand-950/20 border border-brand-900/30 rounded-2xl flex items-center justify-between text-xs max-w-md mx-auto mb-4 mx-4">
+            <span className="font-bold text-slate-350">Viewing a shared post</span>
+            <button 
+              onClick={() => {
+                setIsSinglePostFiltered(false);
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setLoading(true);
+                fetchFeed();
+              }}
+              className="px-3 py-1 bg-brand-600 hover:bg-brand-500 text-white font-extrabold rounded-lg transition-colors uppercase tracking-wider text-[10px]"
             >
-              {/* Left Side: Avatar */}
-              <div 
-                onClick={() => onNavigate('profile', post.username)}
-                className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-400 select-none shadow flex-shrink-0 cursor-pointer"
-              >
-                {post.avatar_url ? (
-                  <img src={`/api/media/file/${post.avatar_url}`} alt={post.username} className="w-full h-full object-cover" />
-                ) : (
-                  post.username.substring(0, 2).toUpperCase()
-                )}
-              </div>
+              View Full Feed
+            </button>
+          </div>
+        )}
 
-              {/* Right Side: Content */}
-              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                
-                {/* Header Line */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span 
+        {/* Feed Posts */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500 gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
+            <p className="text-xs">Loading feed...</p>
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-4">
+            <Smile className="w-12 h-12 text-slate-700" />
+            <h3 className="font-extrabold text-sm text-slate-200">Your Feed is Empty</h3>
+            <p className="text-xs text-slate-555 max-w-xs leading-relaxed">Follow creators or upload your first photo to begin!</p>
+            <button 
+              onClick={() => onNavigate('create')}
+              className="mt-2 py-2 px-5 bg-brand-600 hover:bg-brand-500 text-white text-[10px] font-bold rounded-xl shadow transition-all uppercase tracking-wider"
+            >
+              Upload Photo
+            </button>
+          </div>
+        ) : (
+          posts.map((post, index) => {
+            const { caption: cleanCaption, room: postRoom } = getCleanCaptionAndRoom(post.caption);
+            /* THEME START */
+            return (
+              <article 
+                key={post.id} 
+                className="post-card sm:bg-[var(--card)] sm:border sm:border-[var(--line)] sm:rounded-[20px] bg-transparent border-b border-[var(--line)] p-4 sm:p-5 sm:mb-4 sm:shadow-lg sm:shadow-[var(--shadow-card)] transition-all duration-200 relative lazy-content gpu post-enter"
+                style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}
+              >
+                {/* POST CARD POLISH - #0c0c13 card with 20px radius on desktop, edge-to-edge with divider on mobile */}
+                {/* Header Line: Avatar, name, verified badge, handle, time on one line + more menu on right */}
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div 
                       onClick={() => onNavigate('profile', post.username)}
-                      className="font-extrabold text-[13px] text-white hover:text-brand-400 cursor-pointer flex items-center"
+                      className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-400 select-none shadow flex-shrink-0 cursor-pointer hover:border-brand-500/50 transition-colors"
                     >
-                      {post.display_name || post.username}
-                      {!!post.is_verified && <VerifiedBadge />}
-                    </span>
-                    <span className="text-[11px] text-slate-500 font-semibold">@{post.username}</span>
-                    <span className="text-slate-650 text-[11px] font-bold">·</span>
-                    <span className="text-[11px] text-slate-500 font-semibold">{formatTime(post.created_at)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {postRoom && (
-                      <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-brand-500/15 text-brand-400">
-                        {postRoom}
-                      </span>
-                    )}
-                    {(post.user_id === user?.id || user?.is_admin || user?.is_top_admin) && (
-                      <button 
-                        onClick={() => handleDeletePost(post.id)}
-                        className="text-slate-500 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-all flex items-center justify-center cursor-pointer"
-                        title="Delete Post"
+                      {post.avatar_url ? (
+                        <img src={`/api/media/file/${post.avatar_url}`} alt={post.username} className="w-full h-full object-cover" />
+                      ) : (
+                        post.username.substring(0, 2).toUpperCase()
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                      <span 
+                        onClick={() => onNavigate('profile', post.username)}
+                        className="font-bold text-sm text-white hover:text-brand-300 cursor-pointer truncate flex items-center gap-1"
                       >
-                        <Trash className="w-3.5 h-3.5" />
-                      </button>
+                        {post.display_name || post.username}
+                        {!!post.is_verified && <VerifiedBadge />}
+                      </span>
+                      <span className="text-xs text-slate-400 font-medium truncate">@{post.username}</span>
+                      <span className="text-slate-500 text-xs font-bold">·</span>
+                      <span className="text-xs text-slate-500 font-medium whitespace-nowrap">{formatTime(post.created_at)}</span>
+                      {postRoom && (
+                        <span className="ml-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-300 border border-brand-500/20">
+                          {postRoom}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Header: More (three dots) menu for Delete / Share */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuPostId(prev => prev === post.id ? null : post.id);
+                      }}
+                      aria-label="More options"
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-full hover:bg-white/[0.05] transition-colors"
+                    >
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
+
+                    {openMenuPostId === post.id && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 top-11 z-30 w-44 rounded-xl bg-[var(--card)] border border-[var(--line)] shadow-2xl p-1.5 select-none"
+                      >
+                        <button
+                          onClick={() => {
+                            setOpenMenuPostId(null);
+                            handleShareExternally(post);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors min-h-[38px]"
+                        >
+                          <Share2 className="w-4 h-4 text-emerald-400" />
+                          Share Link
+                        </button>
+                        
+                        {(post.user_id === user?.id || user?.is_admin || user?.is_top_admin) && (
+                          <button
+                            onClick={() => {
+                              setOpenMenuPostId(null);
+                              handleDeletePost(post.id);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors min-h-[38px]"
+                          >
+                            <Trash className="w-4 h-4 text-red-400" />
+                            Delete Post
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
 
                 {/* Caption / Text */}
                 {cleanCaption && (
-                  <p className="text-[13px] text-slate-200 leading-normal whitespace-pre-wrap">
+                  <p className="text-[14px] text-slate-100 leading-relaxed whitespace-pre-wrap mb-2 font-normal">
                     {cleanCaption}
                   </p>
                 )}
 
-                {/* Media Image or Video */}
+                {/* THEME START */}
+                {/* Media Image or Video: object-fit contain with blurred dimmed background copy */}
                 {post.media && post.media[0] && (
-                  <div 
-                    className="mt-2 rounded-2xl overflow-hidden border border-white/[0.06] bg-[#020202] max-h-[480px] w-full relative flex items-center justify-center shadow-md"
-                  >
+                  <div className="relative w-full max-h-[560px] overflow-hidden rounded-2xl bg-[var(--card)] flex items-center justify-center my-3 border border-[var(--line)]">
                     {post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
                       <video 
                         src={`/api/media/file/${post.media[0].r2_key}`} 
                         controls 
-                        className="w-full h-full object-contain max-h-[480px] select-none"
+                        className="relative z-10 w-full h-auto max-h-[560px] object-contain select-none"
                         playsInline
                         preload="metadata"
                       />
                     ) : (
-                      <img 
-                        src={`/api/media/file/${post.media[0].r2_key}`} 
-                        alt="Post media" 
-                        className="w-full h-full object-contain select-none max-h-[480px] cursor-pointer"
-                        loading="lazy"
-                        onDoubleClick={() => handleLike(post.id, post.is_liked)}
-                      />
+                      <>
+                        <img 
+                          src={`/api/media/file/${post.media[0].r2_key}`} 
+                          alt="" 
+                          aria-hidden="true"
+                          className="absolute inset-0 w-full h-full object-cover scale-125 select-none pointer-events-none post-backdrop"
+                          style={{ filter: 'blur(28px) brightness(var(--img-dim)) saturate(1.3)' }}
+                        />
+                        <img 
+                          src={`/api/media/file/${post.media[0].r2_key}`} 
+                          alt="Post media" 
+                          className="relative z-10 w-full h-auto max-h-[560px] object-contain select-none cursor-pointer"
+                          loading="lazy"
+                          onDoubleClick={() => handleLike(post.id, post.is_liked)}
+                        />
+                      </>
                     )}
                   </div>
                 )}
+                {/* THEME END */}
 
-                {/* Action Buttons Panel */}
-                <div className="flex items-center justify-between text-slate-500 max-w-md mt-2">
-                  <button 
-                    onClick={() => handleOpenComments(post.id)}
-                    className="flex items-center gap-1.5 text-slate-500 hover:text-brand-400 transition-colors p-1.5 rounded-full hover:bg-brand-500/5 group"
-                  >
-                    <MessageCircle className="w-4.5 h-4.5" />
-                    <span className="text-[11px] font-bold">{post.comments_count}</span>
-                  </button>
+                {/* Action Row: Grouped icons with counts on left, bookmark on far right */}
+                <div className="flex items-center justify-between text-slate-400 pt-1 mt-1">
+                  <div className="flex items-center gap-1 sm:gap-3">
+                    {/* Comment */}
+                    <button 
+                      onClick={() => handleOpenComments(post.id)}
+                      className="min-w-[44px] min-h-[44px] flex items-center gap-1.5 text-slate-400 hover:text-brand-400 transition-colors p-2 rounded-full hover:bg-brand-500/10 active:scale-95"
+                      title="Comments"
+                      aria-label="Comments"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      <span className="text-xs font-semibold">{post.comments_count}</span>
+                    </button>
 
-                  <button 
-                    onClick={() => handleLike(post.id, post.is_liked)}
-                    className={`flex items-center gap-1.5 transition-colors p-1.5 rounded-full hover:bg-red-500/5 group ${
-                      post.is_liked ? 'text-red-500' : 'text-slate-500 hover:text-red-500'
-                    }`}
-                  >
-                    <Heart className={`w-4.5 h-4.5 transition-transform group-active:scale-125 ${post.is_liked ? 'fill-red-500' : ''}`} />
-                    <span className="text-[11px] font-bold">{post.likes_count}</span>
-                  </button>
+                    {/* THEME START */}
+                    {/* Like with Heart Pop Animation */}
+                    <button 
+                      onClick={() => handleLike(post.id, post.is_liked)}
+                      className={`min-w-[44px] min-h-[44px] flex items-center gap-1.5 transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--like)_12%,transparent)] active:scale-95 ${
+                        post.is_liked ? 'text-[var(--like)]' : 'text-[var(--muted)] hover:text-[var(--like)]'
+                      }`}
+                      title="Like Post"
+                      aria-label="Like Post"
+                    >
+                      <Heart className={`w-5 h-5 transition-transform ${post.is_liked ? 'fill-[var(--like)] text-[var(--like)] heart-pop' : ''}`} />
+                      <span className="text-xs font-semibold">{post.likes_count}</span>
+                    </button>
 
-                  <button 
-                    onClick={() => openShareModal(post)}
-                    className="text-slate-500 hover:text-emerald-400 transition-colors p-1.5 rounded-full hover:bg-emerald-500/5"
-                    title="Share Post"
-                  >
-                    <Share2 className="w-4.5 h-4.5" />
-                  </button>
+                    {/* Share */}
+                    <button 
+                      onClick={() => openShareModal(post)}
+                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--accent-2)] transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] active:scale-95"
+                      title="Share Post"
+                      aria-label="Share Post"
+                    >
+                      <Share2 className="w-5 h-5" />
+                    </button>
+                  </div>
 
-                  <button 
-                    onClick={() => handleToggleSave(post.id)}
-                    className={`transition-colors p-1.5 rounded-full hover:bg-amber-500/5 ${
-                      savedPostIds.includes(post.id) ? 'text-amber-500' : 'text-slate-550 hover:text-amber-400'
-                    }`}
-                    title="Save Post"
-                  >
-                    <Bookmark className={`w-4.5 h-4.5 ${savedPostIds.includes(post.id) ? 'fill-amber-500' : ''}`} />
-                  </button>
+                  {/* Bookmark with Bounce Animation */}
+                  <div>
+                    <button 
+                      onClick={() => handleToggleSave(post.id)}
+                      className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--gold)_12%,transparent)] active:scale-95 ${
+                        savedPostIds.includes(post.id) ? 'text-[var(--gold)]' : 'text-[var(--muted)] hover:text-[var(--gold)]'
+                      }`}
+                      title="Bookmark Post"
+                      aria-label="Bookmark Post"
+                    >
+                      <Bookmark className={`w-5 h-5 ${savedPostIds.includes(post.id) ? 'fill-[var(--gold)] text-[var(--gold)] bookmark-bounce' : ''}`} />
+                    </button>
+                  </div>
+                  {/* THEME END */}
                 </div>
 
-                {/* Inline Comment Input */}
+                {/* Comment Box: Pill input with Post button inside */}
+                {/* THEME START */}
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
@@ -607,31 +742,34 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                       console.error(err);
                     }
                   }}
-                  className="mt-3 flex gap-2 border-t border-white/[0.02] pt-3"
+                  className="mt-3 relative flex items-center"
                 >
                   <input
                     type="text"
                     placeholder="Add a comment..."
-                    className="flex-1 bg-slate-950/40 border border-white/[0.04] focus:border-brand-500 rounded-xl px-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
+                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 rounded-full pl-4 pr-16 py-2.5 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all"
                   />
                   <button 
                     type="submit" 
-                    className="px-3.5 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold transition-all shadow"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 py-1.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center justify-center min-h-[32px]"
                   >
                     Post
                   </button>
                 </form>
 
-              </div>
-            </article>
-          );
-        })
-      )}
+              </article>
+            );
+            /* THEME END */
+          })
+        )}
+      </div>
+      {/* UI UPDATE END */}
 
       {/* COMMENTS DRAWER / MODAL */}
+      {/* THEME START */}
       {activePostComments && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col justify-end sm:flex-row sm:justify-end sm:items-center">
-          <div className="glass-card w-full h-[85vh] h-[85dvh] sm:h-full sm:max-w-md rounded-t-3xl sm:rounded-t-none border-t sm:border-t-0 sm:border-l border-white/[0.04] flex flex-col bg-[#060608] sm:bg-[#060608]/75 shadow-2xl animate-slide-up sm:animate-slide-left overflow-hidden">
+          <div className="glass-card w-full h-[85vh] h-[85dvh] sm:h-full sm:max-w-md rounded-t-3xl sm:rounded-t-none border-t sm:border-t-0 sm:border-l border-[var(--line)] flex flex-col bg-[var(--card)] shadow-2xl animate-slide-up sm:animate-slide-left overflow-hidden">
             
             {/* Mobile Drag Indicator / Handle Bar */}
             <div className="w-12 h-1 bg-white/20 rounded-full mx-auto my-3 sm:hidden flex-shrink-0" />
@@ -839,6 +977,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
           </div>
         </div>
       )}
+      {/* THEME END */}
 
     </div>
   );

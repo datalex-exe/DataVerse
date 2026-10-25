@@ -96,41 +96,82 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
     return `${days}d`;
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'welcome': return <Sparkles className="w-3.5 h-3.5 text-brand-400" />;
-      case 'follow': return <UserPlus className="w-3.5 h-3.5 text-indigo-400" />;
-      case 'follow_request': return <UserPlus className="w-3.5 h-3.5 text-yellow-500" />;
-      case 'follow_accept': return <UserPlus className="w-3.5 h-3.5 text-emerald-400" />;
-      case 'like': return <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500" />;
-      case 'comment': return <MessageCircle className="w-3.5 h-3.5 text-sky-400" />;
-      case 'verification_request': return <Shield className="w-3.5 h-3.5 text-brand-400" />;
-      case 'restriction': return <AlertTriangle className="w-3.5 h-3.5 text-red-500" />;
-      default: return <ArrowRight className="w-3.5 h-3.5 text-slate-500" />;
-    }
-  };
+  /* UI UPDATE START - Notifications Page UI Redesign (Desktop & Phone responsive) */
+  const renderTypeBadge = (type: string) => {
+    let bgColor = 'bg-brand-600';
+    let icon = <UserPlus className="w-3 h-3 text-white" />;
 
-  const renderItem = (item: NotificationItem) => {
+    switch (type) {
+      case 'welcome':
+        bgColor = 'bg-brand-600';
+        icon = <Sparkles className="w-3 h-3 text-white" />;
+        break;
+/* THEME START */
+      case 'follow':
+        bgColor = 'bg-[var(--accent)]';
+        icon = <UserPlus className="w-3 h-3 text-[var(--on-accent)]" />;
+        break;
+      case 'follow_request':
+        bgColor = 'bg-amber-500';
+        icon = <UserPlus className="w-3 h-3 text-white" />;
+        break;
+      case 'follow_accept':
+        bgColor = 'bg-emerald-500';
+        icon = <UserPlus className="w-3 h-3 text-white" />;
+        break;
+      case 'like':
+        bgColor = 'bg-[var(--like)]';
+        icon = <Heart className="w-3 h-3 text-white fill-white" />;
+        break;
+      case 'comment':
+        bgColor = 'bg-sky-500';
+        icon = <MessageCircle className="w-3 h-3 text-white" />;
+        break;
+      case 'verification_request':
+        bgColor = 'bg-[var(--accent)]';
+        icon = <Shield className="w-3 h-3 text-[var(--on-accent)]" />;
+        break;
+      case 'restriction':
+        bgColor = 'bg-[var(--danger)]';
+        icon = <AlertTriangle className="w-3 h-3 text-white" />;
+        break;
+      default:
+        bgColor = 'bg-[var(--muted)]';
+        icon = <ArrowRight className="w-3 h-3 text-white" />;
+        break;
+    }
+
+    return (
+      <div className={`absolute -bottom-1 -right-1 w-5 h-5 sm:w-[22px] sm:h-[22px] rounded-full ${bgColor} border-2 border-[var(--card)] group-hover:border-[var(--hover)] transition-colors flex items-center justify-center shadow-md flex-shrink-0 z-10`}>
+        {icon}
+      </div>
+    );
+  };
+/* THEME END */
+
+  const renderItem = (item: NotificationItem, idx: number) => {
     const isWelcome = item.type === 'welcome';
     const notifierName = item.display_name || item.username || 'System';
     const isUnread = !item.is_read;
 
+/* THEME START */
     return (
       <div 
         key={item.id} 
-        className={`flex items-start justify-between py-4 border-b border-white/[0.02] last:border-0 px-3 -mx-3 rounded-2xl transition-all select-none ${
-          isUnread ? 'bg-blue-950/20 hover:bg-blue-950/30' : 'hover:bg-white/[0.01]'
+        style={{ animationDelay: `${Math.min(idx, 10) * 35}ms` }}
+        className={`flex items-center justify-between p-3.5 sm:p-4 hover:bg-[var(--hover)] transition-colors duration-200 select-none relative group animate-fade-in ${
+          isUnread ? 'bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]' : ''
         }`}
       >
-        <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
           
-          {/* Avatar / Icon Container */}
+          {/* Avatar / Icon Container (48px mobile, 52px desktop) with 22px cut-out badge */}
           <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-xs font-bold text-slate-350 overflow-hidden shadow">
+            <div className="w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm">
               {!item.notifier_id ? (
                 <img src="/logo.png?v=2" alt="System Logo" className="w-full h-full object-cover" />
               ) : isWelcome ? (
-                <div className="w-full h-full bg-brand-600/10 flex items-center justify-center text-brand-400">A</div>
+                <div className="w-full h-full bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] flex items-center justify-center text-[var(--accent-2)] font-extrabold text-sm sm:text-base">D</div>
               ) : item.avatar_url ? (
                 <img src={`/api/media/file/${item.avatar_url}`} alt={notifierName} className="w-full h-full object-cover" />
               ) : (
@@ -138,86 +179,92 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
               )}
             </div>
             
-            <div className="absolute -bottom-1 -right-1 w-5.5 h-5.5 rounded-full bg-slate-950 border border-slate-900 flex items-center justify-center shadow">
-              {getIcon(item.type)}
-            </div>
+            {/* 22px Solid Type Badge with 2px card-color cut-out border */}
+            {renderTypeBadge(item.type)}
           </div>
 
-          {/* Details Label */}
+          {/* Details Column: Username + Action on same line, Muted regular time on second line */}
           <div className="min-w-0 flex-1 pt-0.5">
             {isWelcome ? (
-              <p className="text-xs text-slate-300 leading-relaxed break-words">
+              <p className="text-sm text-slate-300 leading-snug break-words">
                 {item.body ? (
                   <span>
                     {item.notifier_id ? (
                       <span 
                         onClick={() => item.username && onNavigate('profile', item.username)}
-                        className="font-extrabold text-white mr-1.5 hover:text-brand-400 cursor-pointer"
+                        className="font-semibold text-white mr-1.5 hover:text-brand-300 cursor-pointer transition-colors"
                       >
                         {notifierName}:
                       </span>
                     ) : (
-                      <span className="font-extrabold text-brand-400 mr-1.5">
+                      <span className="font-semibold text-brand-400 mr-1.5">
                         System:
                       </span>
                     )}
-                    {item.body}
+                    <span className="text-[#aab0c8] font-normal">{item.body}</span>
                   </span>
                 ) : (
                   <span>
-                    <span className="font-extrabold text-white">Welcome to DataVerse!</span> Explore your feed, share reels, and connect with other creators.
+                    <span className="font-semibold text-white mr-1.5">Welcome to DataVerse!</span>
+                    <span className="text-[#aab0c8] font-normal">Explore your feed, share reels, and connect with other creators.</span>
                   </span>
                 )}
               </p>
             ) : item.type === 'restriction' ? (
-              <p className="text-xs text-slate-300 leading-relaxed break-words">
+              <p className="text-sm text-slate-300 leading-snug break-words">
                 {item.notifier_id ? (
                   <span>
                     <span 
                       onClick={() => item.username && onNavigate('profile', item.username)}
-                      className="font-extrabold text-white mr-1.5 hover:text-brand-400 cursor-pointer"
+                      className="font-semibold text-white mr-1.5 hover:text-brand-300 cursor-pointer transition-colors"
                     >
                       {notifierName}
                     </span>
-                    restricted your chat access for {item.body?.replace("You can't chat for ", "")}
+                    <span className="text-[#aab0c8] font-normal">restricted your chat access for {item.body?.replace("You can't chat for ", "")}</span>
                   </span>
                 ) : (
                   <span>
-                    <span className="font-extrabold text-red-500 mr-1.5">System Alert:</span>
-                    {item.body}
+                    <span className="font-semibold text-red-400 mr-1.5">System Alert:</span>
+                    <span className="text-[#aab0c8] font-normal">{item.body}</span>
                   </span>
                 )}
               </p>
             ) : (
-              <p className="text-xs text-slate-300 leading-relaxed break-words">
+              <p className="text-sm leading-snug break-words">
                 <span 
                   onClick={() => item.username && onNavigate('profile', item.username)}
-                  className="font-extrabold text-white mr-1.5 hover:text-brand-400 cursor-pointer"
+                  className="font-semibold text-white hover:text-brand-300 cursor-pointer transition-colors mr-1.5 inline"
                 >
                   {notifierName}
                 </span>
-                {item.type === 'follow' && 'started following you'}
-                {item.type === 'follow_request' && 'requested to follow you'}
-                {item.type === 'follow_accept' && 'accepted your request'}
-                {item.type === 'like' && 'liked your post'}
-                {item.type === 'comment' && `commented: "${item.body}"`}
-                {item.type === 'verification_request' && 'submitted a verification request'}
+                <span className="text-[#aab0c8] font-normal text-sm inline">
+                  {item.type === 'follow' && 'started following you'}
+                  {item.type === 'follow_request' && 'requested to follow you'}
+                  {item.type === 'follow_accept' && 'accepted your request'}
+                  {item.type === 'like' && 'liked your post'}
+                  {item.type === 'comment' && `commented: "${item.body}"`}
+                  {item.type === 'verification_request' && 'submitted a verification request'}
+                </span>
               </p>
             )}
-            <span className="text-[10px] text-slate-655 font-bold block mt-1">{formatTime(item.created_at)}</span>
+
+            {/* Time on second line: small muted gray, regular weight */}
+            <span className="text-xs text-[#6b7090] font-normal block mt-1">
+              {formatTime(item.created_at)}
+            </span>
           </div>
 
         </div>
 
-        {/* Right side: unread dot + optional profile button */}
-        <div className="flex flex-col items-end justify-center gap-1.5 ml-3 flex-shrink-0 self-center">
-          {/* Dark blue unread indicator dot */}
+        {/* Right side: unread dot + Outlined Profile pill button */}
+        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+          {/* Unread indicator dot */}
           {isUnread && item.type !== 'follow_request' && (
-            <span className="w-2 h-2 rounded-full bg-blue-600 shadow shadow-blue-600/50 flex-shrink-0 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-blue-500 shadow shadow-blue-500/50 flex-shrink-0 animate-pulse mr-1" />
           )}
 
           {item.type === 'follow_request' ? (
-            <div className="flex gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button
                 onClick={async () => {
                   try {
@@ -234,7 +281,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                     console.error(err);
                   }
                 }}
-                className="py-1 px-2.5 bg-brand-600 hover:bg-brand-500 text-white text-[9px] font-black rounded-lg transition-all uppercase tracking-wider shadow shadow-brand-600/20"
+                className="min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-full shadow-md shadow-brand-600/20 active:scale-95 transition-all flex items-center justify-center"
               >
                 Accept
               </button>
@@ -254,14 +301,14 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                     console.error(err);
                   }
                 }}
-                className="py-1 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] font-black rounded-lg transition-all uppercase tracking-wider"
+                className="min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-4 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/10 text-xs font-medium rounded-full active:scale-95 transition-all flex items-center justify-center"
               >
                 Reject
               </button>
             </div>
           ) : (
             <>
-              {/* Profile link button */}
+              {/* Profile link button - Outlined pill filling with accent on hover */}
               {!isWelcome && item.username && (
                 <button
                   onClick={() => {
@@ -271,7 +318,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                       onNavigate('profile', item.username!);
                     }
                   }}
-                  className="py-1 px-3 bg-slate-955 border border-slate-900 text-slate-400 hover:text-white text-[9px] font-black rounded-lg transition-all uppercase tracking-wider"
+                  className="min-h-[44px] sm:min-h-[36px] px-4 py-1.5 rounded-full border border-[var(--line)] text-[var(--accent-2)] hover:bg-[var(--accent)] hover:text-[var(--on-accent)] text-xs font-medium transition-all shadow-sm active:scale-95 flex items-center justify-center"
                 >
                   {item.type === 'verification_request' ? 'Admin' : 'Profile'}
                 </button>
@@ -301,14 +348,28 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="w-full max-w-2xl mx-auto self-center px-4 py-8 animate-fade-in space-y-10">
+    <div className="w-full max-w-[720px] mx-auto self-center px-4 sm:px-6 py-6 sm:py-8 animate-fade-in space-y-6 sm:space-y-8 relative z-10 pb-24 md:pb-12">
 
-      {/* Header with unread count badge */}
-      <div className="flex items-center justify-between">
+      {/* THEME START */}
+      {/* Faint radial glow behind the header */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[120px] rounded-full pointer-events-none -z-10" />
+
+      {/* Phone: Slim sticky top bar with blurred background */}
+      <div className="md:hidden sticky top-0 z-30 bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border-b border-[var(--line)] px-4 py-3 -mx-4 -mt-6 mb-4 flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-[var(--text)] tracking-tight">Notifications</h1>
+        {unreadCount > 0 && (
+          <span className="text-[10px] font-semibold text-[var(--on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-2 py-0.5 rounded-full shadow-sm">
+            {unreadCount} new
+          </span>
+        )}
+      </div>
+
+      {/* Desktop Header: 28px semibold title in sentence case */}
+      <div className="hidden md:flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-sm font-black text-white uppercase tracking-widest">Notifications</h2>
+          <h1 className="text-[28px] font-semibold text-[var(--text)] tracking-tight">Notifications</h1>
           {unreadCount > 0 && (
-            <span className="text-[9px] font-black text-white bg-blue-600 px-2 py-0.5 rounded-full shadow shadow-blue-600/30 animate-pulse">
+            <span className="text-xs font-semibold text-[var(--on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-2.5 py-0.5 rounded-full shadow-md shadow-[var(--shadow-accent)]">
               {unreadCount} new
             </span>
           )}
@@ -316,43 +377,51 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
       </div>
       
       {notifications.length === 0 ? (
-        <div className="glass-card rounded-3xl p-12 border border-white/5 shadow-xl text-center space-y-4 flex flex-col items-center justify-center py-20 select-none">
-          <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-900 flex items-center justify-center text-slate-500">
-            <Heart className="w-5.5 h-5.5 text-slate-605" />
+        <div className="rounded-3xl p-12 border border-[var(--line)] bg-[var(--card)] shadow-xl shadow-[var(--shadow-card)] text-center space-y-4 flex flex-col items-center justify-center py-20 select-none">
+          <div className="w-14 h-14 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center text-[var(--muted)]">
+            <Heart className="w-6 h-6 text-[var(--muted)]" />
           </div>
           <div>
-            <h4 className="text-xs font-black text-slate-350 uppercase tracking-widest">No Notifications Yet</h4>
-            <p className="text-[11px] text-slate-600 max-w-xs mx-auto mt-2 leading-relaxed font-medium">
+            <h4 className="text-sm font-semibold text-[var(--text)]">No notifications yet</h4>
+            <p className="text-xs text-[var(--muted)] max-w-xs mx-auto mt-2 leading-relaxed font-normal">
               When people follow your account, like your posts, or comment on updates, they will appear here in real-time.
             </p>
           </div>
         </div>
       ) : (
-        <>
+        <div className="space-y-6 sm:space-y-8">
           {/* New (within 24 hours) */}
           {newActivities.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">New</h3>
-              <div className="glass-card rounded-3xl p-5 border border-white/5 shadow-xl divide-y divide-white/[0.02]">
-                {newActivities.map(renderItem)}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 py-1">
+                <span className="text-xs font-medium text-[var(--muted)]">New</span>
+                <div className="flex-1 h-[1px] bg-[var(--line)]" />
+              </div>
+              <div className="bg-[var(--card)] border border-[var(--line)] rounded-2xl sm:rounded-3xl shadow-xl shadow-[var(--shadow-card)] overflow-hidden divide-y divide-[var(--line)]">
+                {newActivities.map((item, idx) => renderItem(item, idx))}
               </div>
             </div>
           )}
 
           {/* Earlier (older than 24 hours) */}
           {earlierActivities.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Earlier</h3>
-              <div className="glass-card rounded-3xl p-5 border border-white/5 shadow-xl divide-y divide-white/[0.02]">
-                {earlierActivities.map(renderItem)}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 py-1">
+                <span className="text-xs font-medium text-[var(--muted)]">Earlier</span>
+                <div className="flex-1 h-[1px] bg-[var(--line)]" />
+              </div>
+              <div className="bg-[var(--card)] border border-[var(--line)] rounded-2xl sm:rounded-3xl shadow-xl shadow-[var(--shadow-card)] overflow-hidden divide-y divide-[var(--line)]">
+                {earlierActivities.map((item, idx) => renderItem(item, idx))}
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
+      {/* THEME END */}
 
     </div>
   );
+  /* UI UPDATE END */
 };
 
 export default Activity;

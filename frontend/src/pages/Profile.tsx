@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { compressImage } from '../utils/compress';
+import { uploadMediaFile } from '../utils/upload';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { ImageCropper } from '../components/ImageCropper';
 import { 
@@ -23,8 +24,14 @@ import {
   LogOut,
   Clock,
   AlertTriangle,
-  X
+  X,
+  /* THEME START */
+  Sun
+  /* THEME END */
 } from 'lucide-react';
+/* THEME START */
+import { SettingsThemeControl } from '../utils/theme';
+/* THEME END */
 
 interface Media {
   id: string;
@@ -92,9 +99,10 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
   // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
 
-  // Settings tab flow state
+  /* THEME START */
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [settingsTab, setSettingsTab] = useState<'edit_profile' | 'verification' | 'privacy' | 'password' | 'report' | 'blocked_users'>('edit_profile');
+  const [settingsTab, setSettingsTab] = useState<'edit_profile' | 'verification' | 'privacy' | 'password' | 'report' | 'blocked_users' | 'theme'>('edit_profile');
+  /* THEME END */
 
   // Blocked users list states
   const [blockedUsersList, setBlockedUsersList] = useState<any[]>([]);
@@ -576,23 +584,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
       const fileExtension = croppedFile.name.split('.').pop() || 'jpg';
       const r2Key = `avatars/${currentUser.id}-${Date.now()}.${fileExtension}`;
 
-      const uploadRes = await fetch(`/api/media/upload?key=${encodeURIComponent(r2Key)}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'image/jpeg'
-        },
-        body: compressedAvatar
-      });
-
-      if (!uploadRes.ok) {
-        let errMsg = 'Failed to upload profile photo';
-        try {
-          const errData = await uploadRes.json();
-          if (errData.error) errMsg = `${errMsg}: ${errData.error}`;
-        } catch {}
-        throw new Error(errMsg);
-      }
+      await uploadMediaFile(compressedAvatar, r2Key, token, 'image/jpeg');
 
       // Save in DB
       const saveRes = await fetch('/api/users/profile', {
@@ -768,19 +760,12 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
         const fileExtension = verificationDocFile.name.split('.').pop() || 'jpg';
         const docKey = `verifications/${currentUser.id}-${Date.now()}.${fileExtension}`;
 
-        const uploadRes = await fetch(`/api/media/upload?key=${encodeURIComponent(docKey)}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': verificationDocFile.type || 'application/octet-stream'
-          },
-          body: verificationDocFile
-        });
-
-        if (!uploadRes.ok) {
-          const data = await uploadRes.json();
-          throw new Error(data.error || 'Failed to upload supporting document');
-        }
+        await uploadMediaFile(
+          verificationDocFile,
+          docKey,
+          token,
+          verificationDocFile.type || 'application/octet-stream'
+        );
 
         finalDocUrl = docKey;
         setUploadingVerificationDoc(false);
@@ -1024,6 +1009,19 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                   <Flag className="w-4 h-4" />
                   Report a Problem
                 </button>
+                {/* THEME START */}
+                <button
+                  onClick={() => { setSettingsTab('theme'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
+                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
+                    settingsTab === 'theme'
+                      ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
+                  }`}
+                >
+                  <Sun className="w-4 h-4 text-[var(--gold)]" />
+                  Theme & Appearance
+                </button>
+                {/* THEME END */}
               </nav>
             </div>
 
@@ -1064,6 +1062,19 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 {settingsErrorMsg}
               </div>
             )}
+
+            {/* THEME START */}
+            {/* TAB: THEME SETTINGS */}
+            {settingsTab === 'theme' && (
+              <div className="space-y-6 max-w-md animate-fade-in">
+                <div>
+                  <h2 className="text-base font-black text-white">Theme & Appearance</h2>
+                  <p className="text-[11px] text-slate-500 mt-1">Switch between Aurora Teal (Dark) and Warm Sand (Light) modes, or follow system appearance.</p>
+                </div>
+                <SettingsThemeControl />
+              </div>
+            )}
+            {/* THEME END */}
 
             {/* TAB: EDIT PROFILE */}
             {settingsTab === 'edit_profile' && (
@@ -1541,194 +1552,401 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
     );
   }
 
+  /* UI UPDATE START - Profile Page UI Redesign (Desktop & Phone responsive) */
   return (
-    <div className="w-full max-w-4xl mx-auto self-center px-4 py-8 space-y-10 animate-fade-in">
+    <div className="w-full max-w-[980px] mx-auto self-center px-4 sm:px-6 py-6 sm:py-8 space-y-8 animate-fade-in relative z-10 pb-24 md:pb-12">
       
-      {/* Profile Header block matching Image 5 layout */}
-      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8 select-none">
+      {/* Background Ambient Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-b from-brand-600/15 via-brand-500/5 to-transparent blur-[120px] rounded-full pointer-events-none -z-10" />
+
+      {/* Profile Header card */}
+      <div className="select-none">
         
-        {/* Large Avatar */}
-        <div className="relative group">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center shadow-xl">
-            {uploadingAvatar ? (
-              <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
-            ) : profile.avatar_url ? (
-              <img 
-                src={`/api/media/file/${profile.avatar_url}`} 
-                alt={profile.username} 
-                className="w-full h-full object-cover" 
-              />
-            ) : (
-              <span className="text-2xl font-black text-brand-400 uppercase">
-                {profile.username.substring(0, 2)}
-              </span>
+        {/* DESKTOP HEADER (min-width: 768px / md) */}
+        <div className="hidden md:flex items-start gap-10">
+          
+          {/* Avatar (150px) with gradient ring */}
+          {/* THEME START */}
+          <div className="relative flex-shrink-0">
+            <div className="p-[3px] rounded-full bg-gradient-to-tr from-[var(--accent)] via-[var(--accent-2)] to-[var(--gold)] shadow-xl shadow-[var(--shadow-card)]">
+              <div className="w-[146px] h-[146px] rounded-full bg-[var(--side)] p-1 overflow-hidden relative group">
+                <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-[var(--input)] border border-[var(--line)]">
+          {/* THEME END */}
+                  {uploadingAvatar ? (
+                    <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
+                  ) : profile.avatar_url ? (
+                    <img 
+                      src={`/api/media/file/${profile.avatar_url}`} 
+                      alt={profile.username} 
+                      className="w-full h-full object-cover" 
+                    />
+                  ) : (
+                    <span className="text-3xl font-black text-brand-400 uppercase">
+                      {profile.username.substring(0, 2)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Camera badge at bottom right */}
+            {isOwnProfile && (
+              <label 
+                className="absolute bottom-1 right-1 p-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-full transition-all border-2 border-[#050508] shadow-lg shadow-brand-600/40 cursor-pointer active:scale-95" 
+                title="Change Avatar"
+              >
+                <Camera className="w-4 h-4" />
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleAvatarChange} 
+                  className="hidden" 
+                />
+              </label>
             )}
           </div>
-          
-          {isOwnProfile && (
-            <label className="absolute bottom-0 right-0 p-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-full transition-all border border-slate-950 shadow-md cursor-pointer">
-              <Camera className="w-3.5 h-3.5" />
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handleAvatarChange} 
-                className="hidden" 
-              />
-            </label>
-          )}
+
+          {/* Info Column */}
+          <div className="flex-1 space-y-4 pt-1">
+            
+            {/* Top row: Name, Badge, Handle & Actions (Settings at top right) */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-black text-white flex items-center gap-2 tracking-tight">
+                  {profile.display_name || profile.username}
+                  {!!profile.is_verified && <VerifiedBadge size={18} />}
+                </h1>
+                <p className="text-sm font-medium text-slate-400 mt-0.5">
+                  @{profile.username}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                {isOwnProfile ? (
+                  <>
+                    <button
+                      onClick={() => setShowSettings(true)}
+                      className="px-4 py-2 bg-transparent hover:bg-white/[0.06] border border-white/10 hover:border-brand-500/50 text-slate-200 hover:text-white text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                    >
+                      <Settings className="w-4 h-4 text-slate-400" />
+                      Settings
+                    </button>
+                    <button
+                      onClick={() => logout()}
+                      className="md:hidden px-4 py-2 bg-red-650/10 border border-red-500/20 hover:bg-red-650/20 text-red-500 hover:text-red-400 text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-2"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Log Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {!isBlocked ? (
+                      <>
+                        <button
+                          onClick={handleFollowToggle}
+                          className={`px-5 py-2 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 ${
+                            profile.is_following
+                              ? 'bg-slate-900 border border-white/10 text-slate-300 hover:text-white'
+                              : profile.is_requested
+                              ? 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200'
+                              : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-500/20'
+                          }`}
+                        >
+                          {profile.is_following ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              Following
+                            </>
+                          ) : profile.is_requested ? (
+                            <>
+                              <Clock className="w-3.5 h-3.5" />
+                              Requested
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-3.5 h-3.5" />
+                              Follow
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          onClick={handleMessageUser}
+                          className="px-5 py-2 bg-transparent border border-white/10 hover:bg-white/[0.06] text-slate-200 hover:text-white text-xs font-semibold rounded-xl shadow-sm transition-all"
+                        >
+                          Message
+                        </button>
+
+                        <button
+                          onClick={handleBlockUser}
+                          className="px-4 py-2 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 hover:text-red-300 text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+                        >
+                          Block
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {!viewerBlocked && (
+                          <button
+                            onClick={handleUnblockUser}
+                            className="px-5 py-2 bg-slate-900 border border-white/10 hover:bg-slate-850 text-white text-xs font-semibold rounded-xl shadow transition-all"
+                          >
+                            Unblock
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Stats row: "4 posts   7 followers   7 following" */}
+            <div className="flex items-center gap-8 py-1">
+              <div className="flex items-baseline gap-1.5">
+                <span className="font-bold text-white text-base">
+                  {isBlocked ? 0 : formatStat(profile.posts_count ?? posts.length)}
+                </span>
+                <span className="text-slate-400 text-sm font-normal">posts</span>
+              </div>
+              <div 
+                onClick={() => {
+                  if (!isBlocked && canSeeStats) {
+                    fetchFollowers();
+                  }
+                }}
+                className={`flex items-baseline gap-1.5 ${!isBlocked && canSeeStats ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+              >
+                <span className="font-bold text-white text-base">
+                  {isBlocked ? 0 : formatStat(profile.followers_count)}
+                </span>
+                <span className="text-slate-400 text-sm font-normal">followers</span>
+              </div>
+              <div 
+                onClick={() => {
+                  if (!isBlocked && canSeeStats) {
+                    fetchFollowing();
+                  }
+                }}
+                className={`flex items-baseline gap-1.5 ${!isBlocked && canSeeStats ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
+              >
+                <span className="font-bold text-white text-base">
+                  {isBlocked ? 0 : formatStat(profile.following_count)}
+                </span>
+                <span className="text-slate-400 text-sm font-normal">following</span>
+              </div>
+            </div>
+
+            {/* Bio line */}
+            <div className="pt-0.5">
+              {isBlocked ? (
+                <p className="text-sm text-slate-500 italic">No information available.</p>
+              ) : profile.bio ? (
+                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap max-w-xl">
+                  {profile.bio}
+                </p>
+              ) : (
+                <p className="text-sm text-slate-400 italic">No bio shared yet.</p>
+              )}
+            </div>
+
+          </div>
+
         </div>
 
-        {/* Info Area */}
-        <div className="flex-1 text-center sm:text-left space-y-4">
+        {/* PHONE HEADER (below 768px / md:hidden) */}
+        <div className="md:hidden space-y-4">
           
-          {/* Name & Buttons row */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-            <h2 className="text-xl font-black text-white flex items-center justify-center sm:justify-start">
+          {/* Top row: Avatar on left, Stats on right (Instagram-style) */}
+          <div className="flex items-center gap-6">
+            
+            {/* Avatar (about 96px) with gradient ring */}
+            {/* THEME START */}
+            <div className="relative flex-shrink-0">
+              <div className="p-[2.5px] rounded-full bg-gradient-to-tr from-[var(--accent)] via-[var(--accent-2)] to-[var(--gold)] shadow-lg shadow-[var(--shadow-card)]">
+                <div className="w-24 h-24 rounded-full bg-[var(--side)] p-0.5 overflow-hidden relative group">
+                  <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-[var(--input)] border border-[var(--line)]">
+            {/* THEME END */}
+                    {uploadingAvatar ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+                    ) : profile.avatar_url ? (
+                      <img 
+                        src={`/api/media/file/${profile.avatar_url}`} 
+                        alt={profile.username} 
+                        className="w-full h-full object-cover" 
+                      />
+                    ) : (
+                      <span className="text-2xl font-black text-brand-400 uppercase">
+                        {profile.username.substring(0, 2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Camera badge */}
+              {isOwnProfile && (
+                <label 
+                  className="absolute bottom-0 right-0 p-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-full transition-all border-2 border-[#050508] shadow-md cursor-pointer active:scale-95" 
+                  title="Change Avatar"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handleAvatarChange} 
+                    className="hidden" 
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Stats row on the right (3 columns) */}
+            <div className="flex-1 flex justify-around items-center text-center">
+              <div className="flex flex-col">
+                <span className="font-extrabold text-white text-base">
+                  {isBlocked ? 0 : formatStat(profile.posts_count ?? posts.length)}
+                </span>
+                <span className="text-slate-400 text-xs font-normal">posts</span>
+              </div>
+              <div 
+                onClick={() => {
+                  if (!isBlocked && canSeeStats) {
+                    fetchFollowers();
+                  }
+                }}
+                className={`flex flex-col ${!isBlocked && canSeeStats ? 'cursor-pointer active:opacity-75' : 'cursor-default'}`}
+              >
+                <span className="font-extrabold text-white text-base">
+                  {isBlocked ? 0 : formatStat(profile.followers_count)}
+                </span>
+                <span className="text-slate-400 text-xs font-normal">followers</span>
+              </div>
+              <div 
+                onClick={() => {
+                  if (!isBlocked && canSeeStats) {
+                    fetchFollowing();
+                  }
+                }}
+                className={`flex flex-col ${!isBlocked && canSeeStats ? 'cursor-pointer active:opacity-75' : 'cursor-default'}`}
+              >
+                <span className="font-extrabold text-white text-base">
+                  {isBlocked ? 0 : formatStat(profile.following_count)}
+                </span>
+                <span className="text-slate-400 text-xs font-normal">following</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Details below: Name, Badge, Handle, Bio */}
+          <div className="space-y-1.5">
+            <h1 className="text-lg font-black text-white flex items-center gap-1.5">
               {profile.display_name || profile.username}
               {!!profile.is_verified && <VerifiedBadge size={16} />}
-            </h2>
-
-            {/* Action buttons */}
-            <div className="flex gap-2 justify-center">
-              {isOwnProfile ? (
-                <>
-                  <button
-                    onClick={() => setShowSettings(true)}
-                    className="py-1.5 px-6 bg-slate-950 border border-slate-900 hover:bg-slate-900/50 text-slate-300 hover:text-white text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5 uppercase tracking-wider"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                    Settings
-                  </button>
-                  <button
-                    onClick={() => logout()}
-                    className="md:hidden py-1.5 px-6 bg-red-650/10 border border-red-500/20 hover:bg-red-650/20 text-red-500 hover:text-red-400 text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5 uppercase tracking-wider"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    Log Out
-                  </button>
-                </>
+            </h1>
+            <p className="text-xs font-medium text-slate-400">
+              @{profile.username}
+            </p>
+            <div className="pt-1">
+              {isBlocked ? (
+                <p className="text-xs text-slate-500 italic">No information available.</p>
+              ) : profile.bio ? (
+                <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                  {profile.bio}
+                </p>
               ) : (
-                <>
-                  {!isBlocked ? (
-                    <>
-                      <button
-                        onClick={handleFollowToggle}
-                        className={`py-1.5 px-6 text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5 ${
-                          profile.is_following
-                            ? 'bg-slate-955 border border-slate-900 text-slate-400 hover:text-slate-200'
-                            : profile.is_requested
-                            ? 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200'
-                            : 'bg-brand-600 hover:bg-brand-500 text-white hover:shadow-brand-500/10'
-                        }`}
-                      >
-                        {profile.is_following ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            Following
-                          </>
-                        ) : profile.is_requested ? (
-                          <>
-                            <Clock className="w-3.5 h-3.5" />
-                            Requested
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="w-3.5 h-3.5" />
-                            Follow
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={handleMessageUser}
-                        className="py-1.5 px-6 bg-slate-950 border border-slate-900 hover:bg-slate-900/50 text-slate-300 hover:text-white text-xs font-bold rounded-xl shadow transition-all"
-                      >
-                        Message
-                      </button>
-
-                      <button
-                        onClick={handleBlockUser}
-                        className="py-1.5 px-6 bg-red-650/10 border border-red-500/20 hover:bg-red-650/20 text-red-500 hover:text-red-400 text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5 uppercase tracking-wider"
-                      >
-                        Block
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {!viewerBlocked && (
-                        <button
-                          onClick={handleUnblockUser}
-                          className="py-1.5 px-6 bg-slate-900 border border-slate-800 hover:bg-slate-850 text-white text-xs font-bold rounded-xl shadow transition-all"
-                        >
-                          Unblock
-                        </button>
-                      )}
-                    </>
-                  )}
-                </>
+                <p className="text-xs text-slate-400 italic">No bio shared yet.</p>
               )}
             </div>
           </div>
 
-          {/* Subtitle username */}
-          <p className="text-xs text-slate-400 font-semibold">
-            @{profile.username}
-          </p>
+          {/* Full-width Actions under that */}
+          <div className="pt-1">
+            {isOwnProfile ? (
+              <button
+                onClick={() => setShowSettings(true)}
+                className="w-full py-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+              >
+                <Settings className="w-4 h-4 text-slate-400" />
+                Settings
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                {!isBlocked ? (
+                  <>
+                    <button
+                      onClick={handleFollowToggle}
+                      className={`flex-1 py-2.5 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 ${
+                        profile.is_following
+                          ? 'bg-slate-900 border border-white/10 text-slate-300'
+                          : profile.is_requested
+                          ? 'bg-slate-800 border border-slate-700 text-slate-400'
+                          : 'bg-brand-600 text-white'
+                      }`}
+                    >
+                      {profile.is_following ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          Following
+                        </>
+                      ) : profile.is_requested ? (
+                        <>
+                          <Clock className="w-3.5 h-3.5" />
+                          Requested
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" />
+                          Follow
+                        </>
+                      )}
+                    </button>
 
-          {/* Stats counts */}
-          <div className="flex justify-center sm:justify-start gap-6 text-xs border-y border-white/[0.02] py-2.5">
-            <div>
-              <span className="font-extrabold text-white mr-1">{isBlocked ? 0 : formatStat(profile.posts_count ?? posts.length)}</span>
-              <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">posts</span>
-            </div>
-            <div 
-              onClick={() => {
-                if (!isBlocked && canSeeStats) {
-                  fetchFollowers();
-                }
-              }}
-              className={`select-none ${!isBlocked && canSeeStats ? 'cursor-pointer hover:text-brand-400 transition-all' : 'cursor-default'}`}
-            >
-              <span className="font-extrabold text-white mr-1">{isBlocked ? 0 : formatStat(profile.followers_count)}</span>
-              <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">followers</span>
-            </div>
-            <div 
-              onClick={() => {
-                if (!isBlocked && canSeeStats) {
-                  fetchFollowing();
-                }
-              }}
-              className={`select-none ${!isBlocked && canSeeStats ? 'cursor-pointer hover:text-brand-400 transition-all' : 'cursor-default'}`}
-            >
-              <span className="font-extrabold text-white mr-1">{isBlocked ? 0 : formatStat(profile.following_count)}</span>
-              <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px]">following</span>
-            </div>
+                    <button
+                      onClick={handleMessageUser}
+                      className="flex-1 py-2.5 bg-white/[0.04] border border-white/10 text-slate-200 text-xs font-semibold rounded-xl shadow-sm transition-all text-center"
+                    >
+                      Message
+                    </button>
+
+                    <button
+                      onClick={handleBlockUser}
+                      className="py-2.5 px-4 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold rounded-xl shadow-sm transition-all"
+                    >
+                      Block
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {!viewerBlocked && (
+                      <button
+                        onClick={handleUnblockUser}
+                        className="w-full py-2.5 bg-slate-900 border border-white/10 text-white text-xs font-semibold rounded-xl shadow transition-all"
+                      >
+                        Unblock
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* Bio text */}
-          {/* Bio text */}
-          {isBlocked ? (
-            <p className="text-[10px] text-slate-600 italic">No information available.</p>
-          ) : profile.bio ? (
-            <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap max-w-xl">
-              {profile.bio}
-            </p>
-          ) : (
-            <p className="text-[10px] text-slate-600 italic">No bio shared yet.</p>
-          )}
 
         </div>
 
       </div>
 
-      {/* Tabs navigation: Posts, Saved */}
+      {/* Tabs navigation: Posts, Saved (Sentence case, semibold, icons, sliding underline, sticky) */}
       <div className="space-y-6">
         {isBlocked ? (
-          <div className="flex flex-col items-center justify-center py-20 border border-white/[0.04] bg-[#060608]/20 rounded-3xl p-8 select-none text-center">
+          <div className="flex flex-col items-center justify-center py-20 border border-white/[0.04] bg-[#060608]/40 rounded-3xl p-8 select-none text-center">
             <div className="w-16 h-16 rounded-full bg-slate-900 border border-white/[0.04] flex items-center justify-center mb-4 text-slate-400">
               <Lock className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">
+            <h3 className="text-sm font-extrabold text-white">
               {viewerBlocked ? 'Account Not Accessible' : 'User Blocked'}
             </h3>
             <p className="text-xs text-slate-500 mt-2 max-w-sm">
@@ -1744,8 +1962,8 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 <Lock className="w-5 h-5 stroke-[1.5]" />
               </div>
               <div>
-                <h3 className="text-xs sm:text-sm font-extrabold text-white">This profile is private</h3>
-                <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                <h3 className="text-sm font-extrabold text-white">This profile is private</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
                   {profile.is_requested 
                     ? 'Wait for the owner to accept your follow request.' 
                     : 'Follow to see their photos and videos.'}
@@ -1755,58 +1973,73 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
           </div>
         ) : (
           <>
-            <div className="flex justify-center sm:justify-start gap-8 border-b border-white/[0.04]">
-              
-              <button
-                onClick={() => setActiveSubTab('posts')}
-                className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider pb-4 -mb-[1px] transition-all border-b-2 ${
-                  activeSubTab === 'posts'
-                    ? 'text-brand-500 border-brand-500'
-                    : 'text-slate-550 border-transparent hover:text-slate-350'
-                }`}
-              >
-                <Grid className="w-3.5 h-3.5" />
-                Posts
-              </button>
-
-              {isOwnProfile && (
+            {/* Sticky Tabs Bar */}
+            <div className="sticky top-0 z-20 bg-[#050508]/85 backdrop-blur-md border-b border-white/[0.06] -mx-4 sm:-mx-6 px-4 sm:px-6">
+              <div className="flex w-full sm:w-auto sm:justify-start gap-2 sm:gap-8">
+                
                 <button
-                  onClick={() => setActiveSubTab('saved')}
-                  className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider pb-4 -mb-[1px] transition-all border-b-2 ${
-                    activeSubTab === 'saved'
-                      ? 'text-brand-500 border-brand-500'
-                      : 'text-slate-550 border-transparent hover:text-slate-350'
+                  onClick={() => setActiveSubTab('posts')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-3.5 sm:py-4 px-2 text-xs sm:text-sm font-semibold transition-all relative ${
+                    activeSubTab === 'posts'
+                      ? 'text-white'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Bookmark className="w-3.5 h-3.5" />
-                  Saved
+                  <Grid className="w-4 h-4" />
+                  <span>Posts</span>
+                  {/* THEME START */}
+                  {activeSubTab === 'posts' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] rounded-full" />
+                  )}
                 </button>
-              )}
 
+                {isOwnProfile && (
+                  <button
+                    onClick={() => setActiveSubTab('saved')}
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-3.5 sm:py-4 px-2 text-xs sm:text-sm font-semibold transition-all relative ${
+                      activeSubTab === 'saved'
+                        ? 'text-white'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Bookmark className="w-4 h-4" />
+                    <span>Saved</span>
+                    {activeSubTab === 'saved' && (
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] rounded-full" />
+                    )}
+                  </button>
+                )}
+                {/* THEME END */}
+
+              </div>
             </div>
 
             {/* Tab display */}
             {activeSubTab === 'posts' && (
               posts.length === 0 ? (
-                <div className="text-center py-20 text-slate-600 text-xs font-semibold select-none">
-                  No posts shared yet.
+                <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
+                  <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center text-slate-500 mb-3">
+                    <Grid className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-300">No posts shared yet.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-2 md:gap-4 animate-fade-in">
-                  {posts.map((post) => (
+                <div className="grid grid-cols-3 gap-0.5 sm:gap-4 animate-fade-in">
+                  {posts.map((post, idx) => (
                     <div 
                       key={post.id} 
                       onClick={() => {
                         window.history.pushState({}, '', `/?post=${post.id}`);
                         onNavigate('feed');
                       }}
-                      className="relative aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-white/[0.03] group cursor-pointer shadow-md"
+                      style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+                      className="relative aspect-square sm:rounded-[18px] overflow-hidden bg-slate-900 border border-white/[0.04] group cursor-pointer shadow-md select-none animate-fade-in"
                     >
                       {post.media && post.media[0] ? (
                         post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
                           <video 
                             src={`/api/media/file/${post.media[0].r2_key}`} 
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
                             preload="metadata"
                             muted
                             playsInline
@@ -1815,24 +2048,24 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                           <img 
                             src={`/api/media/file/${post.media[0].r2_key}`} 
                             alt="Thumbnail" 
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
                             loading="lazy"
                           />
                         )
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-800 text-xs">Media error</div>
+                        <div className="w-full h-full flex items-center justify-center text-slate-700 text-xs">Media unavailable</div>
                       )}
                       
-                      {/* Stats hover Overlay */}
-                      <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity duration-200">
-                        <div className="flex items-center gap-6">
-                          <div className="flex items-center gap-1.5 text-white">
-                            <Heart className="w-4.5 h-4.5 fill-white" />
-                            <span className="text-xs font-extrabold">{post.likes_count}</span>
+                      {/* Gradient overlay & Stats (zoom on hover + fade in from bottom) */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 flex items-center justify-center transition-opacity duration-200">
+                        <div className="flex items-center gap-5 text-white">
+                          <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                            <Heart className="w-4 h-4 fill-white" />
+                            <span>{post.likes_count}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-white">
-                            <MessageCircle className="w-4.5 h-4.5 fill-white" />
-                            <span className="text-xs font-extrabold">{post.comments_count}</span>
+                          <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                            <MessageCircle className="w-4 h-4 fill-white" />
+                            <span>{post.comments_count}</span>
                           </div>
                         </div>
 
@@ -1841,7 +2074,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
-                            className="absolute top-2 right-2 p-1.5 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-all flex items-center justify-center shadow cursor-pointer active:scale-95"
+                            className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-red-650/90 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-all active:scale-90 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                             title="Delete Post"
                           >
                             <Trash className="w-3.5 h-3.5" />
@@ -1860,22 +2093,26 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                   <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
                 </div>
               ) : savedPosts.length === 0 ? (
-                <div className="text-center py-20 text-slate-655 text-xs font-semibold select-none">
-                  No saved posts yet.
+                <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
+                  <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center text-slate-500 mb-3">
+                    <Bookmark className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-300">No saved posts yet.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-1.5 sm:gap-4 animate-fade-in">
-                  {savedPosts.map((post) => (
+                <div className="grid grid-cols-3 gap-0.5 sm:gap-4 animate-fade-in">
+                  {savedPosts.map((post, idx) => (
                     <div 
                       key={post.id}
                       onClick={() => onNavigate('feed')}
-                      className="aspect-square relative rounded-2xl overflow-hidden border border-white/[0.03] bg-slate-950/20 group cursor-pointer"
+                      style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+                      className="relative aspect-square sm:rounded-[18px] overflow-hidden border border-white/[0.04] bg-slate-900 group cursor-pointer select-none animate-fade-in"
                     >
                       {post.media && post.media[0] && (
                         post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
                           <video 
                             src={`/api/media/file/${post.media[0].r2_key}`} 
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
                             preload="metadata"
                             muted
                             playsInline
@@ -1884,20 +2121,21 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                           <img 
                             src={`/api/media/file/${post.media[0].r2_key}`} 
                             alt={post.caption || ''} 
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
+                            loading="lazy"
                           />
                         )
                       )}
                       
-                      {/* Hover Overlay */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-6 z-10">
-                        <div className="flex items-center gap-1.5 text-white">
-                          <Heart className="w-4.5 h-4.5 fill-white" />
-                          <span className="text-xs font-extrabold">{post.likes_count}</span>
+                      {/* Gradient Hover Overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-5 z-10">
+                        <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
+                          <Heart className="w-4 h-4 fill-white" />
+                          <span>{post.likes_count}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-white">
-                          <MessageCircle className="w-4.5 h-4.5 fill-white" />
-                          <span className="text-xs font-extrabold">{post.comments_count}</span>
+                        <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
+                          <MessageCircle className="w-4 h-4 fill-white" />
+                          <span>{post.comments_count}</span>
                         </div>
                       </div>
                     </div>

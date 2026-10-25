@@ -1,7 +1,10 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+/* UI UPDATE START - Add useMemo for client-side chat filtering */
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+/* UI UPDATE END */
 import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { compressImage } from '../utils/compress';
+import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
 import { 
   Search, 
   Send, 
@@ -154,10 +157,60 @@ const AudioPlayer: React.FC<{ url: string; allowSave: boolean }> = ({ url, allow
   );
 };
 
+/* CHAT OVERFLOW FIX START */
+const renderFormattedMessageText = (content: string) => {
+  if (!content) return null;
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  const parts = content.split(urlRegex);
+
+  return (
+    <span
+      className="break-words whitespace-pre-wrap select-text block w-full min-w-0"
+      style={{
+        overflowWrap: 'anywhere',
+        wordBreak: 'break-word',
+        whiteSpace: 'pre-wrap',
+        minWidth: 0,
+        maxWidth: '100%',
+      }}
+    >
+      {parts.map((part, index) => {
+        if (part && part.match(urlRegex)) {
+          const href = part.startsWith('http') ? part : `https://${part}`;
+          return (
+            <a
+              key={index}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:opacity-80 transition-opacity font-medium cursor-pointer"
+              style={{
+                color: 'inherit',
+                overflowWrap: 'anywhere',
+                wordBreak: 'break-word',
+                display: 'inline',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {part}
+            </a>
+          );
+        }
+        return <React.Fragment key={index}>{part}</React.Fragment>;
+      })}
+    </span>
+  );
+};
+/* CHAT OVERFLOW FIX END */
+
 interface ChatInputProps {
+  draftText?: string;
+  onDraftChange?: (text: string) => void;
   onSend: (text: string) => void;
+  onFocus?: () => void;
   openCamera: (mode: 'photo' | 'video') => void;
   uploadingMedia: boolean;
+  uploadProgress?: { current: number; total: number; percent: number } | null;
   handleSelectMedia: (e: React.ChangeEvent<HTMLInputElement>) => void;
   startRecording: () => void;
   replyingToMessage: Message | null;
@@ -165,22 +218,57 @@ interface ChatInputProps {
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
+  draftText = '',
+  onDraftChange,
   onSend,
+  onFocus,
   openCamera,
   uploadingMedia,
+  uploadProgress,
   handleSelectMedia,
   startRecording,
   replyingToMessage,
   onCancelReply
 }) => {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(draftText);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Sync draft text if parent changes conversation
+  useEffect(() => {
+    setText(draftText);
+  }, [draftText]);
+
+  // Dynamically adjust textarea height to fit content smoothly up to 120px
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const newHeight = Math.min(el.scrollHeight, 120);
+    el.style.height = `${Math.max(newHeight, 24)}px`;
+  }, [text]);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!text.trim() || uploadingMedia) return;
     onSend(text.trim());
     setText('');
+    onDraftChange?.('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      // Retain focus on textarea so virtual keyboard remains stable
+      textareaRef.current.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Desktop Enter sends; Shift+Enter creates a new line
+    if (e.key === 'Enter' && !e.shiftKey) {
+      if (window.innerWidth >= 768) {
+        e.preventDefault();
+        handleSubmit();
+      }
+    }
   };
 
   const getReplyBodyText = (msg: Message) => {
@@ -199,92 +287,154 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <div className="flex flex-col w-full gap-2">
+    <div className="flex flex-col w-full min-w-0 max-w-full gap-2">
+      {/* Upload Progress Indicator */}
+      {uploadingMedia && (
+        <div className="flex items-center justify-between bg-brand-500/10 border border-brand-500/20 rounded-xl px-3 py-1.5 text-xs text-brand-300 animate-fade-in select-none w-full min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400 flex-shrink-0" />
+            <span className="font-bold truncate">
+              {uploadProgress && uploadProgress.total > 1
+                ? `Uploading ${uploadProgress.current} of ${uploadProgress.total} files (${uploadProgress.percent}%)`
+                : uploadProgress
+                ? `Uploading (${uploadProgress.percent}%)`
+                : 'Uploading media...'}
+            </span>
+          </div>
+          <span className="text-[10px] text-brand-400/70 font-semibold uppercase tracking-wider flex-shrink-0 ml-2">Max 2 GB / file</span>
+        </div>
+      )}
+
+      {/* CHAT OVERFLOW FIX START */}
       {/* Replying to Message Preview Box */}
       {replyingToMessage && (
-        <div className="flex items-center justify-between bg-slate-900/50 border border-white/[0.04] rounded-xl px-3 py-2 text-xs animate-fade-in select-none">
-          <div className="flex flex-col min-w-0 flex-1 border-l-2 border-brand-500 pl-2">
-            <span className="text-[10px] font-black text-brand-400 font-extrabold">
+        <div 
+          className="chat-reply-preview flex items-center justify-between bg-[var(--card)] border border-[var(--line)] rounded-xl px-3 py-2 text-xs animate-fade-in select-none w-full min-w-0 max-w-full overflow-hidden"
+          style={{ maxWidth: '100%', minWidth: 0 }}
+        >
+          <div className="flex flex-col min-w-0 flex-1 border-l-2 border-[var(--accent-2)] pl-2 overflow-hidden">
+            <span className="text-[10px] font-extrabold text-[var(--accent-2)] truncate max-w-full">
               Replying to @{replyingToMessage.username}
             </span>
-            <span className="text-slate-400 truncate text-[11px] mt-0.5">
+            <span 
+              className="text-[var(--muted)] truncate max-w-full text-[11px] mt-0.5 line-clamp-1"
+              style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+            >
               {getReplyBodyText(replyingToMessage)}
             </span>
           </div>
           <button 
             type="button" 
             onClick={onCancelReply} 
-            className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors ml-2"
+            className="p-1 hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] rounded-lg transition-colors ml-2 flex-shrink-0"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
+      {/* CHAT OVERFLOW FIX END */}
 
-      <form onSubmit={handleSubmit} className="flex gap-2 items-center w-full max-w-full overflow-hidden">
-        {/* Camera capture button */}
-        <button
-          type="button"
-          onClick={() => openCamera('photo')}
-          className="p-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
-          title="Take photo or record video"
-          disabled={uploadingMedia}
+      {/* CHAT OVERFLOW FIX START */}
+      {/* Modern Pill-shaped message input with nested send button */}
+      <form 
+        onSubmit={handleSubmit} 
+        className="flex gap-1.5 sm:gap-2 items-center w-full max-w-full min-w-0 overflow-hidden select-none box-border"
+        style={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}
+      >
+        {/* Media action buttons */}
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+          {/* Camera capture button */}
+          <button
+            type="button"
+            onClick={() => openCamera('photo')}
+            className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
+            title="Take photo or record video"
+            aria-label="Take photo or record video"
+            disabled={uploadingMedia}
+          >
+            <Camera className="w-4 h-4" />
+          </button>
+
+          {/* File selector icon trigger */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
+            title="Send photos, videos, or files (multiple selection, up to 2GB each)"
+            aria-label="Send media or files"
+            disabled={uploadingMedia}
+          >
+            {uploadingMedia ? (
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-2)]" />
+            ) : (
+              <ImageIcon className="w-4 h-4" />
+            )}
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleSelectMedia}
+            className="absolute w-0 h-0 opacity-0 pointer-events-none"
+            multiple
+          />
+
+          {/* Microphone icon trigger */}
+          <button
+            type="button"
+            onClick={startRecording}
+            className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
+            title="Record voice note"
+            aria-label="Record voice note"
+            disabled={uploadingMedia}
+          >
+            <Mic className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Pill-shaped Message Input with send button inside on the right */}
+        <div 
+          className="flex-1 min-w-0 flex items-center bg-[var(--input)] border border-[var(--line)] focus-within:border-[var(--accent-2)] focus-within:ring-2 focus-within:ring-[var(--accent-2)]/30 rounded-full pl-3 sm:pl-4 pr-1.5 py-1.5 transition-all"
+          style={{ minWidth: 0 }}
         >
-          <Camera className="w-4 h-4" />
-        </button>
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            placeholder="Type a message..."
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              onDraftChange?.(e.target.value);
+            }}
+            onKeyDown={handleKeyDown}
+            onFocus={onFocus}
+            className="flex-1 min-w-0 bg-transparent border-0 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none pr-1.5 resize-none leading-relaxed py-1"
+            style={{ minWidth: 0, maxHeight: '120px', minHeight: '24px' }}
+            disabled={uploadingMedia}
+            autoComplete="off"
+            autoCapitalize="sentences"
+          />
 
-        {/* File selector icon trigger */}
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="p-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
-          title="Send secure photo/video/file"
-          disabled={uploadingMedia}
-        >
-          {uploadingMedia ? (
-            <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
-          ) : (
-            <ImageIcon className="w-4 h-4" />
-          )}
-        </button>
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleSelectMedia}
-          className="absolute w-0 h-0 opacity-0 pointer-events-none"
-        />
-
-        {/* Microphone icon trigger */}
-        <button
-          type="button"
-          onClick={startRecording}
-          className="p-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-450 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
-          title="Record voice note"
-          disabled={uploadingMedia}
-        >
-          <Mic className="w-4 h-4" />
-        </button>
-
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="flex-1 min-w-0 w-full bg-slate-950 border border-slate-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl px-4 py-2.5 text-base md:text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all"
-          disabled={uploadingMedia}
-          autoComplete="off"
-          autoCapitalize="sentences"
-        />
-
-        <button 
-          type="submit"
-          onMouseDown={(e) => e.preventDefault()}
-          disabled={!text.trim() || uploadingMedia}
-          className="p-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl transition-all shadow-md shadow-brand-500/10 active:scale-[0.98] disabled:opacity-50 disabled:scale-100 flex items-center justify-center"
-        >
-          <Send className="w-3.5 h-3.5" />
-        </button>
+          <button 
+            type="submit"
+            onMouseDown={(e) => e.preventDefault()}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            disabled={!text.trim() || uploadingMedia}
+            className={`w-8 h-8 sm:w-9 sm:h-9 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] rounded-full flex items-center justify-center transition-all flex-shrink-0 ${
+              !text.trim() || uploadingMedia
+                ? 'opacity-30 pointer-events-none bg-[var(--input)] text-[var(--muted)]'
+                : 'bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] active:scale-90 cursor-pointer'
+            }`}
+            title="Send message"
+            aria-label="Send message"
+          >
+            <Send className="w-3.5 h-3.5 transform translate-x-[-0.5px]" />
+          </button>
+        </div>
       </form>
+      {/* CHAT OVERFLOW FIX END */}
     </div>
   );
 };
@@ -302,6 +452,23 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConvos, setLoadingConvos] = useState<boolean>(true);
   
+  /* UI UPDATE START - Client-side search filter query and memoized list */
+  const [chatFilterQuery, setChatFilterQuery] = useState<string>('');
+
+  const filteredConversations = useMemo(() => {
+    if (!chatFilterQuery.trim()) return conversations;
+    const q = chatFilterQuery.toLowerCase().trim();
+    return conversations.filter((convo) => {
+      const partner = getChatPartner(convo);
+      const title = convo.is_group
+        ? (convo.group_name || 'Group Chat')
+        : (partner.display_name || partner.username);
+      const username = partner.username || '';
+      return title.toLowerCase().includes(q) || username.toLowerCase().includes(q);
+    });
+  }, [conversations, chatFilterQuery]);
+  /* UI UPDATE END */
+  
   // Active conversation states
   const [activeConvo, setActiveConvo] = useState<Conversation | null>(null);
   const [activeFullscreenVideo, setActiveFullscreenVideo] = useState<{ url: string; allowSave: boolean } | null>(null);
@@ -314,6 +481,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   // Secure Media State
   const [revealedMessages, setRevealedMessages] = useState<Record<string, boolean>>({});
   const [uploadingMedia, setUploadingMedia] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; percent: number } | null>(null);
 
   // Camera modal state
   const [showCameraModal, setShowCameraModal] = useState<boolean>(false);
@@ -504,6 +672,10 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const pendingForwardRef = useRef<string | null>(null);
+  const isNearBottomRef = useRef<boolean>(true);
+  const userSentMessageRef = useRef<boolean>(false);
+  const prevConvoIdRef = useRef<string | null>(null);
+  const [draftsByConvo, setDraftsByConvo] = useState<{ [convoId: string]: string }>({});
 
   // Close three-dot header menu on outside click
   useEffect(() => {
@@ -919,11 +1091,91 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     };
   }, [activeConvo?.id, token, user, onNavigate]);
 
-  React.useLayoutEffect(() => {
-    if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+  // ─── Scroll & Viewport Management ──────────────────────────────────────
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const threshold = 120; // px threshold from bottom
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distFromBottom <= threshold;
+  }, []);
+
+  const handleInputFocus = useCallback(() => {
+    if (isNearBottomRef.current) {
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      }, 150);
     }
-  }, [messages]);
+  }, []);
+
+  // 1. Reset near-bottom tracking on conversation switch
+  useEffect(() => {
+    if (!activeConvo?.id) {
+      prevConvoIdRef.current = null;
+      return;
+    }
+    if (prevConvoIdRef.current !== activeConvo.id) {
+      prevConvoIdRef.current = activeConvo.id;
+      isNearBottomRef.current = true;
+      userSentMessageRef.current = false;
+    }
+  }, [activeConvo?.id]);
+
+  // 2. Intelligent auto-scroll on messages update
+  React.useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || loadingMessages) return;
+
+    // If user sent a message: always scroll to bottom immediately
+    if (userSentMessageRef.current) {
+      userSentMessageRef.current = false;
+      isNearBottomRef.current = true;
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      });
+      return;
+    }
+
+    // If incoming message: only auto-scroll if user was already reading near bottom
+    if (isNearBottomRef.current) {
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      });
+    }
+  }, [messages, loadingMessages]);
+
+  // 3. Keep latest messages visible when virtual keyboard opens or viewport resizes
+  useEffect(() => {
+    if (!activeConvo) return;
+
+    const handleViewportResize = () => {
+      if (isNearBottomRef.current && messagesContainerRef.current) {
+        requestAnimationFrame(() => {
+          if (messagesContainerRef.current) {
+            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          }
+        });
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+    }
+    window.addEventListener('resize', handleViewportResize);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportResize);
+      }
+      window.removeEventListener('resize', handleViewportResize);
+    };
+  }, [activeConvo]);
 
   // Audio Recorder logic
   const startRecording = async () => {
@@ -988,88 +1240,95 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     }
   };
 
-  // Secure Media Upload & Send helper
-  const uploadAndSendSecureMedia = async (blob: Blob, mediaType: 'voice' | 'image' | 'video' | 'file', contentType: string) => {
+  // Secure Media Upload & Send helper (Supports up to 2 GB with chunking and progress reporting)
+  const uploadAndSendSecureMedia = async (
+    blob: Blob,
+    mediaType: 'voice' | 'image' | 'video' | 'file',
+    contentType: string,
+    onProgress?: (percent: number) => void
+  ) => {
     if (!token || !user || !wsRef.current) return;
-    setUploadingMedia(true);
 
-    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB request limit
     if (blob.size > MAX_FILE_SIZE) {
-      alert(`File size (${(blob.size / 1024 / 1024).toFixed(1)}MB) exceeds the 100MB system limit. Please select or record a smaller file.`);
-      setUploadingMedia(false);
+      const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+      alert(`File size (${sizeMB} MB) exceeds the 2 GB system limit.`);
       return;
     }
 
-    try {
-      // Strip codec params before building key: 'video/webm;codecs=vp9' -> 'webm'
-      const baseContentType = contentType.split(';')[0].trim();
-      const fileExt = (blob as File).name ? (blob as File).name.split('.').pop() : (baseContentType.split('/')[1] || 'bin');
-      const r2Key = `secure/${user.id}-${Date.now()}.${fileExt}`;
+    // Strip codec params before building key
+    const baseContentType = contentType.split(';')[0].trim() || 'application/octet-stream';
+    const fileExt = (blob as File).name ? (blob as File).name.split('.').pop() : (baseContentType.split('/')[1] || 'bin');
+    const r2Key = `secure/${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
 
-      // 1. Upload to R2
-      const uploadRes = await fetch(`/api/media/upload?key=${encodeURIComponent(r2Key)}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': baseContentType
-        },
-        body: blob
-      });
+    // 1. Upload to storage using chunked upload utility (supporting up to 2 GB)
+    await uploadMediaFile(blob, r2Key, token, baseContentType, onProgress);
 
-      if (!uploadRes.ok) {
-        let errMsg = 'Secure media upload failed';
-        try {
-          const errData = await uploadRes.json();
-          if (errData.error) {
-            errMsg = `${errMsg}: ${errData.error}`;
-          }
-        } catch {}
-        throw new Error(errMsg);
-      }
+    // 2. Format JSON secure message payload
+    const secureMsgBody = JSON.stringify({
+      type: 'secure_media',
+      media_type: mediaType,
+      url: r2Key,
+      allow_save: true,
+      allow_forward: true,
+      file_name: (blob as File).name || `file.${fileExt}`
+    });
 
-      // 2. Format JSON secure message payload
-      const secureMsgBody = JSON.stringify({
-        type: 'secure_media',
-        media_type: mediaType,
-        url: r2Key,
-        allow_save: true,
-        allow_forward: true,
-        file_name: (blob as File).name || `file.${fileExt}`
-      });
-
-      // 3. Send over WebSocket
-      wsRef.current.send(JSON.stringify({
-        type: 'chat',
-        body: secureMsgBody
-      }));
-
-    } catch (err: any) {
-      alert(err.message || 'Failed to send secure media.');
-    } finally {
-      setUploadingMedia(false);
-    }
+    // 3. Send over WebSocket
+    userSentMessageRef.current = true;
+    wsRef.current.send(JSON.stringify({
+      type: 'chat',
+      body: secureMsgBody
+    }));
   };
 
-  // Select photo / video / file from device
+  // Select photo / video / file from device (Supports multiple selection & up to 2 GB per file)
   const handleSelectMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      let type: 'image' | 'video' | 'file' = 'file';
-      if (file.type.startsWith('image/')) type = 'image';
-      else if (file.type.startsWith('video/')) type = 'video';
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-      if (type === 'image') {
-        try {
-          const compressedBlob = await compressImage(file, 1080, 0.8);
-          const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
-          await uploadAndSendSecureMedia(compressedFile, 'image', 'image/jpeg');
-        } catch (err) {
-          console.error('Image compression failed, sending original:', err);
-          await uploadAndSendSecureMedia(file, 'image', file.type);
+    const fileList = Array.from(files);
+    e.target.value = ''; // Reset input so re-selecting same files works
+
+    setUploadingMedia(true);
+    setUploadProgress({ current: 1, total: fileList.length, percent: 0 });
+
+    try {
+      for (let idx = 0; idx < fileList.length; idx++) {
+        const file = fileList[idx];
+
+        if (file.size > MAX_FILE_SIZE) {
+          const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+          alert(`File "${file.name}" (${sizeMB} MB) exceeds the 2 GB maximum limit and will be skipped.`);
+          continue;
         }
-      } else {
-        await uploadAndSendSecureMedia(file, type, file.type);
+
+        let type: 'image' | 'video' | 'file' = 'file';
+        if (file.type.startsWith('image/')) type = 'image';
+        else if (file.type.startsWith('video/')) type = 'video';
+
+        const updateProgress = (pct: number) => {
+          setUploadProgress({ current: idx + 1, total: fileList.length, percent: pct });
+        };
+
+        if (type === 'image' && file.size < 20 * 1024 * 1024) {
+          try {
+            const compressedBlob = await compressImage(file, 1080, 0.8);
+            const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+            await uploadAndSendSecureMedia(compressedFile, 'image', 'image/jpeg', updateProgress);
+          } catch (err) {
+            console.error('Image compression failed, sending original:', err);
+            await uploadAndSendSecureMedia(file, 'image', file.type || 'image/jpeg', updateProgress);
+          }
+        } else {
+          await uploadAndSendSecureMedia(file, type, file.type || 'application/octet-stream', updateProgress);
+        }
       }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to upload media files.');
+    } finally {
+      setUploadingMedia(false);
+      setUploadProgress(null);
     }
   };
 
@@ -1384,6 +1643,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     if (!bodyText.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     if (!user || !activeConvo) return;
 
+    userSentMessageRef.current = true;
     const now = Date.now();
     const optimisticId = `optimistic-${now}-${Math.random()}`;
 
@@ -3647,41 +3907,144 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
   return (
     <>
-    <div className="h-full min-h-0 md:h-screen flex flex-col md:flex-row bg-[#030303] text-slate-100 overflow-hidden relative">
+    {/* UI UPDATE START - Motion styles, entrance animations and reduced-motion support */}
+    <style>{`
+      @keyframes chatRowEnter {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .chat-row-animate {
+        animation: chatRowEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      @keyframes convoSlideInMobile {
+        from {
+          opacity: 0;
+          transform: translateX(16px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      @keyframes convoFadeInDesktop {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @media (max-width: 767px) {
+        .convo-pane-enter {
+          animation: convoSlideInMobile 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      }
+      @media (min-width: 768px) {
+        .convo-pane-enter {
+          animation: convoFadeInDesktop 0.2s ease-out both;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .chat-row-animate,
+        .convo-pane-enter {
+          animation: none !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    `}</style>
+    {/* UI UPDATE END */}
+
+      {/* THEME START */}
+    {/* CHAT OVERFLOW FIX START */}
+    <div 
+      className="h-full min-h-0 md:h-screen flex flex-col md:flex-row bg-[var(--bg)] text-[var(--text)] overflow-hidden relative w-full max-w-full min-w-0 overflow-x-hidden"
+      style={{ height: 'var(--chat-viewport-height, 100%)' }}
+    >
+    {/* CHAT OVERFLOW FIX END */}
       
       {/* LEFT PANEL: CONVERSATIONS LIST */}
-      <div className={`w-full md:w-80 border-r border-white/[0.04] bg-[#060608]/40 flex flex-col h-full ${activeConvo ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`w-full md:w-[360px] md:min-w-[360px] md:max-w-[360px] border-r border-[var(--line)] bg-[var(--side)] flex flex-col h-full flex-shrink-0 select-none ${activeConvo ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Header */}
-        <div className="p-4 border-b border-white/[0.04] flex justify-between items-center bg-slate-950/20 select-none">
-          <h2 className="text-sm font-black tracking-wider text-white uppercase">Chats</h2>
-          <button 
-            onClick={() => setIsSearchMode(!isSearchMode)}
-            className="p-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition-all text-slate-400 hover:text-white"
-            title="Start new DM"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={() => { setShowCreateGroup(true); setIsSearchMode(false); }}
-            className="p-1.5 bg-slate-900 border border-slate-800 hover:border-brand-600 hover:border-opacity-80 rounded-xl transition-all text-slate-400 hover:text-brand-400"
-            title="Create group chat"
-          >
-            <Users className="w-4 h-4" />
-          </button>
+        <div className="px-4 py-3.5 border-b border-[var(--line)] flex justify-between items-center bg-[var(--side)] select-none flex-shrink-0">
+          <h2 className="text-base font-semibold text-[var(--text)] tracking-tight">Chats</h2>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsSearchMode(!isSearchMode)}
+              className={`w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border ${
+                isSearchMode
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] border-[var(--accent)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
+                  : 'bg-[var(--input)] border-[var(--line)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--muted)] hover:text-[var(--text)]'
+              } active:scale-95`}
+              title="Start new DM"
+              aria-label="Start new DM"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => { setShowCreateGroup(true); setIsSearchMode(false); }}
+              className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--muted)] hover:text-[var(--accent-2)] active:scale-95"
+              title="Create group chat"
+              aria-label="Create group chat"
+            >
+              <Users className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Client-side filter input under header */}
+        {!isSearchMode && (
+          <div className="px-3.5 pt-3 pb-1 select-none flex-shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search chats..."
+                value={chatFilterQuery}
+                onChange={(e) => setChatFilterQuery(e.target.value)}
+                className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)]/30 rounded-full py-2 pl-9 pr-8 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all"
+                autoComplete="off"
+              />
+              {chatFilterQuery && (
+                <button
+                  type="button"
+                  onClick={() => setChatFilterQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[var(--muted)] hover:text-[var(--text)] rounded-full"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Search DM user */}
         {isSearchMode && (
-          <div className="p-3 border-b border-white/[0.04] bg-slate-950/20 space-y-3 animate-zoom">
+          <div className="p-3 border-b border-[var(--line)] bg-[var(--card)] space-y-3 animate-zoom flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-[var(--text)]">New Conversation</span>
+              <button 
+                onClick={() => setIsSearchMode(false)}
+                className="p-1 text-[var(--muted)] hover:text-[var(--text)] rounded-lg hover:bg-[var(--hover)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-650" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
               <input
                 type="text"
                 placeholder="Search username to chat..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-xl py-2 pl-9 pr-3 text-base md:text-xs text-slate-200 placeholder:text-slate-500 outline-none transition-all"
+                className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)]/30 rounded-full py-2 pl-9 pr-3 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all"
                 autoFocus
                 autoComplete="off"
               />
@@ -3691,19 +4054,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             <div className="max-h-48 overflow-y-auto space-y-1.5 scrollbar-thin">
               {searching ? (
                 <div className="flex justify-center p-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+                  <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-2)]" />
                 </div>
               ) : searchQuery.trim() !== '' && searchResults.length === 0 ? (
-                <div className="text-[10px] text-center text-slate-600 py-2">No users found</div>
+                <div className="text-[11px] text-center text-[var(--muted)] py-2">No users found</div>
               ) : (
                 searchResults.map((su) => (
                   <div 
                     key={su.id}
                     onClick={() => handleStartDM(su)}
-                    className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-900/60 cursor-pointer transition-colors border border-transparent hover:border-white/5"
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-[var(--hover)] cursor-pointer transition-colors border border-transparent hover:border-[var(--line)]"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden flex-shrink-0 text-[10px] font-bold text-slate-400 select-none">
+                      <div className="w-8 h-8 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-semibold text-[var(--accent-2)] select-none">
                         {su.avatar_url ? (
                           <img src={`/api/media/file/${su.avatar_url}`} alt={su.username} className="w-full h-full object-cover" />
                         ) : (
@@ -3711,35 +4074,40 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                         )}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-white truncate flex items-center">
+                        <h4 className="text-xs font-semibold text-[var(--text)] truncate flex items-center">
                           {su.display_name || su.username}
                           {!!su.is_verified && <VerifiedBadge />}
                         </h4>
-                        <p className="text-[9px] text-slate-500">@{su.username}</p>
+                        <p className="text-[10px] text-[var(--muted)]">@{su.username}</p>
                       </div>
                     </div>
-                    <span className="text-[9px] font-bold text-brand-500 bg-brand-500/10 px-2 py-0.5 rounded-full select-none">Chat</span>
+                    <span className="text-[10px] font-semibold text-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] px-2.5 py-1 rounded-full select-none">Chat</span>
                   </div>
                 ))
               )}
             </div>
           </div>
         )}
+        {/* THEME END */}
+        {/* UI UPDATE END */}
 
         {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin select-none overscroll-contain">
+        {/* UI UPDATE START - Chat rows 72px height, 48px avatar, semibold title, muted regular timestamp, hover & active states with 3px indigo bar */}
+        <div className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1 scrollbar-thin select-none overscroll-contain pb-20 md:pb-2">
           {loadingConvos ? (
             <div className="flex flex-col items-center py-10 text-slate-600 gap-2">
               <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
-              <span className="text-xs font-bold uppercase tracking-wider text-[10px]">Loading chats...</span>
+              <span className="text-xs font-semibold text-slate-400">Loading chats...</span>
             </div>
-          ) : conversations.length === 0 ? (
-            <div className="text-center py-20 text-slate-600 text-xs px-4">
-              <MessageSquare className="w-8 h-8 mx-auto text-slate-800 mb-2" />
-              No active DMs. Click "+" to search users!
+          ) : filteredConversations.length === 0 ? (
+            <div className="text-center py-16 text-slate-500 text-xs px-4 space-y-2">
+              <MessageSquare className="w-8 h-8 mx-auto text-slate-700" />
+              <p className="font-normal text-slate-400">
+                {chatFilterQuery ? `No chats match "${chatFilterQuery}"` : 'No active DMs. Click "+" to search users!'}
+              </p>
             </div>
           ) : (
-            conversations.map((convo) => {
+            filteredConversations.map((convo, index) => {
               const partner = getChatPartner(convo);
               const isActive = activeConvo?.id === convo.id;
               
@@ -3755,15 +4123,17 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     try {
                       const parsed = JSON.parse(convo.last_message.body);
                       if (parsed && parsed.type === 'reply') {
-                        lastMsgText = parsed.text || '';
+                        lastMsgText = parsed.text || 'Replied to a message';
                       } else {
                         lastMsgText = convo.last_message.body;
                       }
                     } catch {
                       lastMsgText = convo.last_message.body;
                     }
+                  } else if (convo.last_message.body.startsWith('[Shared Post]')) {
+                    lastMsgText = '📎 Shared a post';
                   } else {
-                    lastMsgText = convo.last_message.body;
+                    lastMsgText = convo.last_message.body.trim() || 'Sent an attachment';
                   }
                 }
               }
@@ -3776,6 +4146,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               return (
                 <div
                   key={convo.id}
+                  style={{ animationDelay: `${Math.min(index * 30, 240)}ms` }}
                   onClick={async () => { 
                     onNavigate?.('messages', convo.id);
                     setIsSearchMode(false); 
@@ -3798,23 +4169,28 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       }
                     }
                   }}
-                  className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all ${
+                  className={`chat-row-animate group relative flex items-center gap-3 px-3.5 py-3 h-[72px] min-h-[72px] rounded-[12px] cursor-pointer transition-all duration-200 select-none ${
                     isActive 
-                      ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10'
+                      ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--text)] border border-[var(--accent-2)]/30'
                       : hasUnread
-                        ? 'bg-slate-900/50 border border-brand-500/20 shadow-sm'
-                        : 'hover:bg-slate-900/30 border border-transparent hover:border-white/[0.02]'
+                        ? 'bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[var(--hover)] border border-[var(--line)]'
+                        : 'bg-transparent hover:bg-[var(--hover)] border border-transparent'
                   }`}
                 >
-                  {/* Avatar */}
+                  {/* 3px accent bar on left for selected chat */}
+                  {isActive && (
+                    <span className="absolute left-0 top-2 bottom-2 w-[3px] bg-[var(--accent-2)] rounded-r-full" />
+                  )}
+
+                  {/* Avatar: 48px */}
                   {convo.is_group ? (
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-                      isActive ? 'bg-white/15 border border-white/20' : 'bg-brand-600/20 border border-brand-600/30'
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105 ${
+                      isActive ? 'bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] border border-[var(--accent-2)]/40 text-[var(--text)]' : 'bg-[var(--input)] border border-[var(--line)] text-[var(--accent-2)]'
                     }`}>
-                      <Users className={`w-5 h-5 ${isActive ? 'text-white' : 'text-brand-400'}`} />
+                      <Users className="w-5 h-5" />
                     </div>
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-slate-400">
+                    <div className="w-12 h-12 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden flex-shrink-0 text-sm font-semibold text-[var(--accent-2)] transition-transform group-hover:scale-105">
                       {partner.avatar_url ? (
                         <img src={`/api/media/file/${partner.avatar_url}`} alt={partner.username} className="w-full h-full object-cover" />
                       ) : (
@@ -3822,83 +4198,104 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       )}
                     </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center mb-0.5">
-                      <h4 className={`text-xs truncate flex items-center gap-1.5 ${
+
+                  {/* Row content */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <div className="flex justify-between items-center mb-1">
+                      <h4 className={`text-sm truncate flex items-center gap-1.5 ${
                         isActive 
-                          ? 'text-white font-bold' 
+                          ? 'text-[var(--text)] font-semibold' 
                           : hasUnread 
-                            ? 'text-white font-extrabold' 
-                            : 'text-slate-200 font-bold'
+                            ? 'text-[var(--text)] font-semibold' 
+                            : 'text-[var(--text)] font-medium'
                       }`}>
-                        {convoTitle}
+                        <span className="truncate">{convoTitle}</span>
                         {!convo.is_group && !!partner.is_verified && <VerifiedBadge />}
                         {convo.is_group && (
-                          <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full ${
+                          <span className={`text-[8px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
                             isActive ? 'bg-white/15 text-white' : 'bg-brand-500/15 text-brand-400'
                           }`}>Group</span>
                         )}
                       </h4>
-                      <div className="flex items-center gap-2">
-                        {hasUnread && !isActive && (
-                          <span className="flex items-center justify-center min-w-[16px] h-4 text-[9px] font-black text-white bg-brand-500 rounded-full px-1 shadow animate-pulse">
-                            {convo.unread_count}
-                          </span>
-                        )}
-                        {convo.last_message && (
-                          <span className={`text-[9px] flex-shrink-0 ml-1 ${
-                            isActive 
-                              ? 'text-brand-200 font-bold' 
-                              : hasUnread
-                                ? 'text-brand-400 font-black'
-                                : 'text-slate-550 font-bold'
-                          }`}>
-                            {formatTime(convo.last_message.created_at)}
-                          </span>
-                        )}
-                      </div>
+
+                      {convo.last_message && (
+                        <span className={`text-[11px] font-normal flex-shrink-0 ml-2 ${
+                          isActive 
+                            ? 'text-[var(--accent-2)]' 
+                            : hasUnread
+                              ? 'text-[var(--accent-2)]'
+                              : 'text-[var(--muted)]'
+                        }`}>
+                          {formatTime(convo.last_message.created_at)}
+                        </span>
+                      )}
                     </div>
-                    <p className={`text-[11px] truncate ${
-                      isActive 
-                        ? 'text-brand-100 font-medium' 
-                        : hasUnread
-                          ? 'text-slate-200 font-semibold' 
-                          : 'text-slate-500 font-medium'
-                    }`}>
-                      {lastMsgText}
-                    </p>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-xs font-normal truncate block leading-normal ${
+                        isActive 
+                          ? 'text-[var(--text)] opacity-90' 
+                          : hasUnread
+                            ? 'text-[var(--text)] font-medium' 
+                            : 'text-[var(--muted)]'
+                      }`}>
+                        {lastMsgText}
+                      </p>
+
+                      {hasUnread && !isActive && (
+                        <span className="flex items-center justify-center min-w-[18px] h-4 text-[9px] font-bold text-[var(--on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] rounded-full px-1.5 shadow flex-shrink-0">
+                          {convo.unread_count}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })
           )}
         </div>
+        {/* UI UPDATE END */}
 
       </div>
 
       {/* RIGHT PANEL: CHAT WINDOW */}
-      <div className={`flex-1 flex flex-col h-full bg-[#030303] ${!activeConvo ? 'hidden md:flex justify-center items-center text-slate-650 p-8' : 'flex'}`}>
+      {/* CHAT OVERFLOW FIX START */}
+      <div 
+        className={`chat-convo-pane flex-1 flex flex-col h-full bg-[var(--bg)] relative overflow-hidden min-w-0 w-full max-w-full overflow-x-hidden ${
+          !activeConvo 
+            ? 'hidden md:flex justify-center items-center text-[var(--muted)] p-8' 
+            : 'flex convo-pane-enter'
+        }`}
+        style={{
+          background: 'radial-gradient(ellipse at 50% 12%, var(--glow) 0%, transparent 65%), var(--bg)',
+          minWidth: 0,
+          maxWidth: '100%',
+          overflowX: 'hidden',
+        }}
+      >
+      {/* CHAT OVERFLOW FIX END */}
         {activeConvo ? (
           <>
             {/* Header */}
-            <div className="p-4 border-b border-white/[0.04] bg-slate-950/20 flex items-center justify-between select-none">
-              <div className="flex items-center gap-3">
+            <div className="sticky top-0 z-20 px-4 py-3 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md flex items-center justify-between select-none flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
                 <button 
-                  onClick={() => onNavigate?.('messages')}
-                  className="p-1 md:hidden hover:bg-slate-900 rounded-lg text-slate-400"
+                  onClick={() => { setActiveConvo(null); onNavigate?.('messages'); }}
+                  className="min-w-[44px] min-h-[44px] -ml-2 p-2.5 md:hidden hover:bg-white/[0.06] rounded-full text-slate-300 hover:text-white flex items-center justify-center transition-colors"
+                  aria-label="Back to conversations list"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 
                 {/* Avatar */}
                 {activeConvo.is_group ? (
-                  <div className="w-10 h-10 rounded-2xl bg-brand-600/20 border border-brand-600/30 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-brand-600/20 border border-brand-500/30 flex items-center justify-center flex-shrink-0">
                     <Users className="w-5 h-5 text-brand-400" />
                   </div>
                 ) : (
                   <div 
                     onClick={() => onNavigate && onNavigate('profile', getChatPartner(activeConvo).username)}
-                    className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden text-xs font-bold text-slate-400 cursor-pointer hover:opacity-80 transition-opacity"
+                    className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden text-xs font-semibold text-[var(--accent-2)] cursor-pointer hover:opacity-85 transition-opacity flex-shrink-0"
                   >
                     {getChatPartner(activeConvo).avatar_url ? (
                       <img src={`/api/media/file/${getChatPartner(activeConvo).avatar_url}`} alt="Active Partner" className="w-full h-full object-cover" />
@@ -3914,48 +4311,51 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       onNavigate('profile', getChatPartner(activeConvo).username);
                     }
                   }}
-                  className={!activeConvo.is_group ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}
+                  className={`min-w-0 ${!activeConvo.is_group ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
                 >
-                  <h4 className="text-xs font-black text-white flex items-center gap-1">
-                    {activeConvo.is_group
-                      ? (activeConvo.group_name || 'Group Chat')
-                      : (getChatPartner(activeConvo).display_name || getChatPartner(activeConvo).username)
-                    }
+                  <h4 className="text-sm font-semibold text-[var(--text)] flex items-center gap-1.5 truncate">
+                    <span className="truncate">
+                      {activeConvo.is_group
+                        ? (activeConvo.group_name || 'Group Chat')
+                        : (getChatPartner(activeConvo).display_name || getChatPartner(activeConvo).username)
+                      }
+                    </span>
                     {!activeConvo.is_group && !!getChatPartner(activeConvo).is_verified && <VerifiedBadge />}
                     {activeConvo.is_group && (
-                      <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-brand-500/15 text-brand-400 ml-1">Group</span>
+                      <span className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent-2)] flex-shrink-0">Group</span>
                     )}
                   </h4>
                   {activeConvo.is_group ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowMembersModal(true); }}
-                      className="text-[10px] text-slate-400 hover:text-white font-medium mt-0.5 flex items-center gap-1.5 transition-colors"
+                      className="text-[11px] text-[var(--muted)] hover:text-[var(--text)] font-normal mt-0.5 flex items-center gap-1.5 transition-colors"
                       title="View group members"
                     >
-                      <Users className="w-3.5 h-3.5" />
+                      <Users className="w-3.5 h-3.5 text-[var(--muted)]" />
                       <span>{activeConvo.members.length} members</span>
                     </button>
                   ) : (
-                    <span className="text-[10px] text-brand-400 font-bold flex items-center gap-1 mt-0.5">
-                      <Shield className="w-3.5 h-3.5 text-brand-400" />
-                      Encrypted Session
+                    <span className="text-[11px] text-[var(--muted)] font-normal flex items-center gap-1 mt-0.5">
+                      <Shield className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+                      <span>Encrypted Session</span>
                     </span>
                   )}
                 </div>
               </div>
 
               {/* Header Right: Three-dot menu */}
-              <div className="relative" ref={headerMenuRef}>
+              <div className="relative flex items-center gap-1" ref={headerMenuRef}>
                 <button
                   onClick={() => setShowHeaderMenu(prev => !prev)}
-                  className="p-2 rounded-xl transition-all border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-slate-400 hover:text-white"
+                  className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--muted)] hover:text-[var(--text)]"
                   title="More options"
+                  aria-label="More options"
                 >
                   <MoreVertical className="w-4 h-4" />
                 </button>
 
                 {showHeaderMenu && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-[#0e0e16] border border-white/[0.06] rounded-2xl shadow-2xl z-50 overflow-hidden animate-scale-up">
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--card)] border border-[var(--line)] rounded-2xl shadow-2xl shadow-[var(--shadow-card)] z-50 overflow-hidden animate-scale-up">
                     {/* Play Game — 1:1 DM only */}
                     {!activeConvo.is_group && (
                       <button
@@ -3967,9 +4367,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             handleInviteGame();
                           }
                         }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-slate-300 hover:bg-white/[0.04] hover:text-white transition-all"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] transition-all"
                       >
-                        <Gamepad2 className={`w-4 h-4 ${gameState && gameState.status !== 'idle' ? 'text-brand-400 animate-pulse' : 'text-slate-400'}`} />
+                        <Gamepad2 className={`w-4 h-4 ${gameState && gameState.status !== 'idle' ? 'text-[var(--accent-2)] animate-pulse' : 'text-[var(--muted)]'}`} />
                         {gameState && gameState.status !== 'idle'
                           ? (showGameBoard ? 'Go to Chat' : 'Resume Game')
                           : 'Play Game'}
@@ -3980,7 +4380,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     {!activeConvo.is_group && (
                       <button
                         onClick={() => { setShowHeaderMenu(false); handleDeleteChat(); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] transition-all"
                       >
                         <Trash className="w-4 h-4" />
                         Delete Chat
@@ -3991,7 +4391,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     {activeConvo.is_group && activeConvo.creator_id === user?.id && (
                       <button
                         onClick={() => { setShowHeaderMenu(false); handleDeleteChat(); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] transition-all"
                       >
                         <Trash className="w-4 h-4" />
                         Delete Group
@@ -4000,7 +4400,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     {activeConvo.is_group && (
                       <button
                         onClick={() => { setShowHeaderMenu(false); handleLeaveGroup(); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] transition-all"
                       >
                         <LeaveIcon className="w-4 h-4" />
                         Leave Group
@@ -4008,6 +4408,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     )}
                   </div>
                 )}
+                {/* THEME END */}
               </div>
             </div>
 
@@ -4074,7 +4475,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               <>
 
             {/* Messages Bubbles Flow */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-[#030303] to-[#07070c]/20 scrollbar-thin overscroll-contain will-change-transform transform-gpu">
+            {/* CHAT OVERFLOW FIX START */}
+            <div 
+              ref={messagesContainerRef} 
+              onScroll={handleMessagesScroll}
+              className="chat-messages-container flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 max-w-full p-3 sm:p-4 space-y-4 bg-transparent scrollbar-thin overscroll-contain"
+              style={{ overflowX: 'hidden', width: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+            >
               {loadingMessages ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
@@ -4103,8 +4510,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   const secureMedia = parseMessageBody(msg.body);
 
                   return (
-                    <div key={msg.id} id={`msg-${msg.id}`} className={`flex flex-col gap-1.5 max-w-[85%] ${isMe ? 'ml-auto items-end' : 'items-start'}`}>
-                      
+                    <div 
+                      key={msg.id} 
+                      id={`msg-${msg.id}`} 
+                      className={`flex flex-col gap-1.5 w-full min-w-0 max-w-[min(80%,520px)] ${isMe ? 'ml-auto items-end' : 'items-start'}`}
+                      style={{ maxWidth: 'min(80%, 520px)', minWidth: 0 }}
+                    >
                       {/* Group Chat: sender name label */}
                       {activeConvo?.is_group && !isMe && (() => {
                         const member = activeConvo.members.find(m => m.id === msg.sender_id);
@@ -4122,8 +4533,10 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       })()}
 
                       {/* Message Sender and Profile */}
-                      <div className={`flex items-start gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}>
-                        
+                      <div 
+                        className={`w-full min-w-0 max-w-full flex items-start gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}
+                        style={{ maxWidth: '100%', minWidth: 0 }}
+                      >
                         {!isMe && (
                           <div 
                             onClick={() => onNavigate && onNavigate('profile', msg.username)}
@@ -4138,22 +4551,25 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                         )}
 
                         {/* Speech Bubble Container */}
-                        <div className="flex flex-col">
-                          
+                        <div 
+                          className={`flex flex-col min-w-0 max-w-full flex-1 ${isMe ? 'items-end' : 'items-start'}`}
+                          style={{ maxWidth: '100%', minWidth: 0 }}
+                        >
                           {/* Secure Media Rendering */}
                           {secureMedia ? (
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 max-w-full min-w-0">
                               {secureMedia.media_type === 'voice' ? (
                                 <AudioPlayer url={secureMedia.url} allowSave={secureMedia.allow_save || isAdmin} />
                               ) : secureMedia.media_type === 'image' ? (
                                 <div 
-                                  className="relative rounded-2xl overflow-hidden border border-white/[0.04] bg-[#020202] w-56 sm:w-64 max-w-xs shadow-md select-none"
+                                  className="chat-media-tile relative rounded-2xl overflow-hidden border border-white/[0.04] bg-[#020202] w-56 sm:w-64 max-w-full shadow-md select-none"
+                                  style={{ maxWidth: '100%' }}
                                   onContextMenu={(e) => !(secureMedia.allow_save || isAdmin) && e.preventDefault()}
                                 >
                                   <img 
                                     src={`/api/media/file/${secureMedia.url}`} 
                                     alt="Secure media" 
-                                    className={`w-full max-h-60 object-cover transition-all duration-300 ${
+                                    className={`w-full max-w-full max-h-60 object-cover transition-all duration-300 ${
                                       !isMe && !secureMedia.allow_save && !revealedMessages[msg.id] && !isAdmin
                                         ? 'blur-xl scale-95 pointer-events-none'
                                         : ''
@@ -4181,13 +4597,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                 </div>
                               ) : secureMedia.media_type === 'video' ? (
                                 // Video secure media
-                                <div onClick={() => { if (secureMedia.allow_save || revealedMessages[msg.id] || isAdmin) { setActiveFullscreenVideo({ url: `/api/media/file/${secureMedia.url}`, allowSave: !!(secureMedia.allow_save || isAdmin) }); modalOpenTimeRef.current = Date.now(); } }} 
-                                  className="relative rounded-2xl overflow-hidden border border-white/[0.04] bg-[#020202] w-56 sm:w-64 max-w-xs shadow-md select-none cursor-pointer"
+                                <div 
+                                  onClick={() => { if (secureMedia.allow_save || revealedMessages[msg.id] || isAdmin) { setActiveFullscreenVideo({ url: `/api/media/file/${secureMedia.url}`, allowSave: !!(secureMedia.allow_save || isAdmin) }); modalOpenTimeRef.current = Date.now(); } }} 
+                                  className="chat-media-tile relative rounded-2xl overflow-hidden border border-white/[0.04] bg-[#020202] w-56 sm:w-64 max-w-full shadow-md select-none cursor-pointer"
+                                  style={{ maxWidth: '100%' }}
                                   onContextMenu={(e) => !(secureMedia.allow_save || isAdmin) && e.preventDefault()}
                                 >
                                   <video playsInline 
                                     src={`/api/media/file/${secureMedia.url}`} 
-                                    className={`w-full max-h-60 object-cover transition-all duration-300 ${
+                                    className={`w-full max-w-full max-h-60 object-cover transition-all duration-300 ${
                                       !isMe && !secureMedia.allow_save && !revealedMessages[msg.id] && !isAdmin
                                         ? 'blur-xl scale-95 pointer-events-none'
                                         : ''
@@ -4234,7 +4652,10 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                 </div>
                               ) : (
                                 // File secure media card
-                                <div className="flex items-center gap-3 bg-slate-950/60 p-3 rounded-2xl border border-white/[0.04] max-w-xs shadow-md select-none">
+                                <div 
+                                  className="flex items-center gap-3 bg-slate-950/60 p-3 rounded-2xl border border-white/[0.04] max-w-full w-full shadow-md select-none min-w-0"
+                                  style={{ maxWidth: '100%', minWidth: 0 }}
+                                >
                                   <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0">
                                     <Send className="w-5 h-5 transform rotate-[-25deg] translate-y-[-1px] text-brand-400" />
                                   </div>
@@ -4258,28 +4679,40 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           ) : (() => {
                             const replyObj = parseReplyBody(msg.body);
                             return (
-                              // Standard Text Message (or Reply)
-                              <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
-                                isMe 
-                                  ? 'bg-brand-600 text-white rounded-tr-none' 
-                                  : 'bg-slate-900/60 border border-white/[0.02] text-slate-200 rounded-tl-none'
-                              }`}>
+                              <div 
+                                className={`chat-bubble px-4 py-2.5 rounded-[18px] text-xs sm:text-sm leading-relaxed shadow-sm break-words whitespace-pre-wrap min-w-0 max-w-full ${
+                                  isMe 
+                                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-br-[4px]' 
+                                    : 'bg-[var(--card)] border border-[var(--line)] text-[var(--text)] rounded-bl-[4px]'
+                                }`}
+                                style={{
+                                  maxWidth: 'min(80%, 520px)',
+                                  minWidth: 0,
+                                  overflowWrap: 'anywhere',
+                                  wordBreak: 'break-word',
+                                  whiteSpace: 'pre-wrap',
+                                }}
+                              >
                                 {replyObj && (
                                   <div 
                                     onClick={() => handleScrollToMessage(replyObj.reply_to.id)}
-                                    className="mb-1.5 bg-white/[0.03] hover:bg-white/[0.06] border-l-2 border-brand-500 rounded-r-lg px-2.5 py-1.5 text-[10px] cursor-pointer transition-colors max-w-full overflow-hidden text-left"
+                                    className="chat-reply-preview mb-1.5 bg-black/10 dark:bg-white/[0.04] hover:bg-black/15 dark:hover:bg-white/[0.08] border-l-2 border-[var(--accent-2)] rounded-r-lg px-2.5 py-1.5 text-[10px] cursor-pointer transition-colors w-full min-w-0 max-w-full overflow-hidden text-left"
+                                    style={{ maxWidth: '100%', minWidth: 0 }}
                                   >
-                                    <span className="font-extrabold text-brand-400 block mb-0.5">
+                                    <span className="font-extrabold text-[var(--accent-2)] block mb-0.5 truncate max-w-full">
                                       @{replyObj.reply_to.username}
                                     </span>
-                                    <span className="text-slate-400 truncate block text-[10px]">
+                                    <span 
+                                      className="opacity-80 block text-[10px] truncate max-w-full line-clamp-2"
+                                      style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                                    >
                                       {getReplyPreviewText(replyObj.reply_to.body)}
                                     </span>
                                   </div>
                                 )}
 
                                 {replyObj ? (
-                                  <p>{replyObj.text}</p>
+                                  renderFormattedMessageText(replyObj.text)
                                 ) : msg.body.startsWith('[Shared Post] ') ? (() => {
                                   const parts = msg.body.substring(14).split(' | post_id: ');
                                   const textPart = parts[0];
@@ -4287,18 +4720,23 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                   const caption = textPart.substring(textPart.indexOf(':') + 1).trim();
 
                                   return (
-                                    <div className="bg-[#0b0c10]/95 border border-white/[0.04] p-3 rounded-2xl space-y-2.5 max-w-[200px] shadow-lg animate-fade-in select-none text-left">
+                                    <div 
+                                      className="bg-[var(--card)] border border-[var(--line)] p-3 rounded-2xl space-y-2.5 max-w-full w-[240px] shadow-lg shadow-[var(--shadow-card)] animate-fade-in select-none text-left"
+                                      style={{ maxWidth: '100%', minWidth: 0 }}
+                                    >
                                       <div className="flex items-center gap-1.5">
-                                        <img 
-                                          src="/logo.png" 
-                                          alt="DV" 
-                                          className="w-5 h-5 object-contain flex-shrink-0"
-                                        />
-                                        <span className="text-[9px] font-black text-slate-400 tracking-wide uppercase">Shared Post</span>
+                                        <div className="w-5 h-5 rounded-md bg-[#040b0d] border border-[var(--line)] flex items-center justify-center p-0.5 overflow-hidden flex-shrink-0">
+                                          <img 
+                                            src="/logo.png" 
+                                            alt="DV" 
+                                            className="w-full h-full object-contain"
+                                          />
+                                        </div>
+                                        <span className="text-[9px] font-black text-[var(--muted)] tracking-wide uppercase">Shared Post</span>
                                       </div>
                                       <div className="space-y-0.5">
-                                        <span className="text-[10px] font-extrabold text-white block">@{username}</span>
-                                        <p className="text-[10px] text-slate-350 line-clamp-2 leading-relaxed italic">"{caption || 'Photo'}"</p>
+                                        <span className="text-[10px] font-extrabold text-[var(--text)] block truncate">@{username}</span>
+                                        <p className="text-[10px] text-[var(--muted)] line-clamp-2 leading-relaxed italic" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>"{caption || 'Photo'}"</p>
                                       </div>
                                       <button
                                         onClick={() => {
@@ -4321,7 +4759,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                     </div>
                                   );
                                 })() : (
-                                  <p>{msg.body}</p>
+                                  renderFormattedMessageText(msg.body)
                                 )}
                               </div>
                             );
@@ -4332,12 +4770,21 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       </div>
 
                       {/* Action buttons (Toggles for sender, forward for receiver if allowed) */}
-                      <div className={`flex items-center gap-3 px-1 text-[9px] font-extrabold text-slate-650 select-none ${isMe ? 'justify-end' : 'pl-10'}`}>
-                        <span>{formatTime(msg.created_at)}</span>
+                      <div 
+                        className={`chat-meta-row flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1 text-[10px] max-[400px]:text-[13px] max-[400px]:gap-x-[10px] max-[400px]:gap-y-1 font-normal text-[var(--muted)] select-none max-w-full min-w-0 ${isMe ? 'justify-end ml-auto text-right' : 'justify-start pl-10 text-left'}`}
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          rowGap: '4px',
+                          maxWidth: '100%',
+                          minWidth: 0,
+                        }}
+                      >
+                        <span className="text-[var(--muted)] font-normal flex-shrink-0">{formatTime(msg.created_at)}</span>
                         
                         {/* Sender Control Toggles */}
                         {isMe && secureMedia && (
-                          <div className="flex items-center gap-2 border-l border-white/[0.04] pl-2">
+                          <div className="flex items-center gap-2 border-l border-white/[0.04] pl-2 flex-wrap">
                             <button
                               type="button"
                               onClick={() => handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'save')}
@@ -4414,9 +4861,16 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               )}
               <div ref={messagesEndRef} />
             </div>
+            {/* CHAT OVERFLOW FIX END */}
 
             {/* Input Form Box (Recording Waveform & Secure Uploader) */}
-            <div className="p-3 border-t border-white/[0.04] bg-[#030303] z-20 shrink-0">
+            {/* Bottom message input box respecting safe area and border */}
+            {/* CHAT OVERFLOW FIX START */}
+            <div 
+              className="chat-bottom-input-bar w-full max-w-full p-2.5 sm:p-3 border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md z-20 shrink-0 box-border pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
+              style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+            >
+            {/* CHAT OVERFLOW FIX END */}
               
               {isRecording ? (
                 // Recording Active state
@@ -4446,9 +4900,16 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 </div>
               ) : (
                 <ChatInput
+                  key={activeConvo.id}
+                  draftText={draftsByConvo[activeConvo.id] || ''}
+                  onDraftChange={(val) => {
+                    setDraftsByConvo(prev => ({ ...prev, [activeConvo.id]: val }));
+                  }}
                   onSend={handleSendMessage}
+                  onFocus={handleInputFocus}
                   openCamera={openCamera}
                   uploadingMedia={uploadingMedia}
+                  uploadProgress={uploadProgress}
                   handleSelectMedia={handleSelectMedia}
                   startRecording={startRecording}
                   replyingToMessage={replyingToMessage}
@@ -4460,17 +4921,28 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         )}
       </>
     ) : (
-          <div className="flex flex-col items-center justify-center gap-4 text-center max-w-sm">
-            <div className="w-16 h-16 rounded-2xl bg-slate-950 border border-slate-900 flex items-center justify-center text-slate-500">
-              <MessageSquare className="w-7 h-7" />
-            </div>
-            <div>
-              <h3 className="text-slate-200 font-extrabold text-sm uppercase tracking-wider">No Active Conversation</h3>
-              <p className="text-xs text-slate-650 mt-1.5 leading-relaxed font-medium">
-                Select a contact from the left list to open a chat session, or search for other registered usernames to start a new chat.
-              </p>
-            </div>
+      <div className="flex-1 flex flex-col items-center justify-center text-center p-8 select-none">
+        {/* UI UPDATE START - Modern Centered Empty State with soft indigo glow and Start New Chat action */}
+        {/* UI UPDATE END */}
+        <div className="flex flex-col items-center justify-center gap-4 max-w-[360px]">
+          <div className="w-20 h-20 rounded-2xl bg-[#0f0f1c] border border-brand-500/20 shadow-[0_0_35px_rgba(99,102,241,0.18)] flex items-center justify-center text-brand-400">
+            <MessageSquare className="w-9 h-9" />
           </div>
+          <div className="space-y-1.5">
+            <h3 className="text-xl font-semibold text-white tracking-tight">No active conversation</h3>
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-[340px]">
+              Select a conversation from the left to start chatting, or reach out to someone new.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsSearchMode(true)}
+            className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-600 hover:bg-brand-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-brand-600/30 active:scale-95 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Start a new chat</span>
+          </button>
+        </div>
+      </div>
         )}
       </div>
 

@@ -6,24 +6,40 @@ export default {
   ],
   theme: {
     extend: {
+/* THEME START */
       colors: {
-        // Aesthetic custom colors
+        // Theme mapped colors
+        bg: 'var(--bg)',
+        side: 'var(--side)',
+        card: 'var(--card)',
+        line: 'var(--line)',
+        input: 'var(--input)',
+        hover: 'var(--hover)',
+        text: 'var(--text)',
+        muted: 'var(--muted)',
+        accent: 'var(--accent)',
+        'accent-2': 'var(--accent-2)',
+        'on-accent': 'var(--on-accent)',
+        gold: 'var(--gold)',
+        danger: 'var(--danger)',
+        like: 'var(--like)',
         brand: {
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          300: '#a5b4fc',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          800: '#3730a3',
-          900: '#312e81',
+          50: 'var(--accent-2)',
+          100: 'var(--accent-2)',
+          200: 'var(--accent-2)',
+          300: 'var(--accent-2)',
+          400: 'var(--accent-2)',
+          500: 'var(--accent)',
+          600: 'var(--accent)',
+          700: 'var(--accent)',
+          800: 'var(--accent)',
+          900: 'var(--accent)',
         },
-        darkbg: '#030303',
-        darkcard: '#0c0c12',
-        darkborder: '#151522',
+        darkbg: 'var(--bg)',
+        darkcard: 'var(--card)',
+        darkborder: 'var(--line)',
       }
+      /* THEME END */
     },
   },
   darkMode: 'class', // support manual dark mode if needed

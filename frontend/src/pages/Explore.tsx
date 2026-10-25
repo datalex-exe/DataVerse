@@ -90,8 +90,9 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
             </h4>
           </div>
           
+          {/* THEME START */}
           {results.length === 0 && !loading ? (
-            <div className="text-center py-16 bg-[#09090d]/30 rounded-3xl border border-white/5 text-slate-600 text-xs">
+            <div className="text-center py-16 bg-[var(--card)] rounded-3xl border border-[var(--line)] text-[var(--muted)] text-xs">
               No users matching "{searchQuery}" found.
             </div>
           ) : (
@@ -99,13 +100,13 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
               {results.map((item) => (
                 <div 
                   key={item.id} 
-                  className="glass-card p-4 rounded-2xl flex items-center justify-between border border-white/[0.03] hover:border-slate-850 transition-colors"
+                  className="glass-card p-4 rounded-2xl flex items-center justify-between border border-[var(--line)] transition-colors"
                 >
                   <div 
                     onClick={() => onNavigate('profile', item.username)}
                     className="flex items-center gap-3 cursor-pointer group"
                   >
-                    <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 uppercase select-none overflow-hidden shadow">
+                    <div className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center text-xs font-bold text-[var(--accent-2)] uppercase select-none overflow-hidden shadow">
                       {item.avatar_url ? (
                         <img src={`/api/media/file/${item.avatar_url}`} alt={item.username} className="w-full h-full object-cover" />
                       ) : (
@@ -113,16 +114,16 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
                       )}
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-white group-hover:text-brand-400 transition-colors flex items-center">
+                      <h4 className="text-xs font-bold text-[var(--text)] group-hover:text-[var(--accent-2)] transition-colors flex items-center">
                         {item.display_name || item.username}
                         {!!item.is_verified && <VerifiedBadge />}
                       </h4>
-                      <p className="text-[10px] text-slate-505 mt-0.5">@{item.username}</p>
+                      <p className="text-[10px] text-[var(--muted)] mt-0.5">@{item.username}</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => onNavigate('profile', item.username)}
-                    className="text-[10px] font-black text-brand-500 hover:text-brand-400 bg-brand-500/10 px-4 py-2 rounded-xl transition-all"
+                    className="text-[10px] font-bold text-[var(--accent-2)] hover:text-[var(--on-accent)] hover:bg-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[var(--line)] px-4 py-2 rounded-xl transition-all"
                   >
                     View Profile
                   </button>
@@ -133,18 +134,19 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
         </div>
       ) : (
         // Empty Search State Page (Search Guidance & Discover Tips)
-        <div className="max-w-xl mx-auto py-16 text-center space-y-4 bg-[#09090d]/10 rounded-3xl border border-white/[0.01]">
-          <div className="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-900 flex items-center justify-center mx-auto text-slate-500">
+        <div className="max-w-xl mx-auto py-16 text-center space-y-4 bg-[var(--card)] rounded-3xl border border-[var(--line)] shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mx-auto text-[var(--muted)]">
             <UserPlus className="w-5.5 h-5.5" />
           </div>
           <div>
-            <h4 className="text-xs font-black text-slate-300 uppercase tracking-widest">Find Friends</h4>
-            <p className="text-[11px] text-slate-600 max-w-xs mx-auto mt-2 leading-relaxed font-medium">
+            <h4 className="text-xs font-semibold text-[var(--text)] uppercase tracking-widest">Find Friends</h4>
+            <p className="text-[11px] text-[var(--muted)] max-w-xs mx-auto mt-2 leading-relaxed font-medium">
               Start typing a username in the search input above to discover other creators, view their profiles, or send messages!
             </p>
           </div>
         </div>
       )}
+      {/* THEME END */}
 
     </div>
   );

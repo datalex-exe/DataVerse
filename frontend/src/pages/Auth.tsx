@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, User, AtSign, Eye, EyeOff } from 'lucide-react';
+/* THEME START */
+import { ThemeIconButton } from '../utils/theme';
+/* THEME END */
 
 export const Auth: React.FC = () => {
   const { login } = useAuth();
@@ -16,6 +19,78 @@ export const Auth: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+
+  /* ANIMATION START */
+  const [animationKey, setAnimationKey] = useState<number>(0);
+  const [placeholderText, setPlaceholderText] = useState<string>('');
+  const isInputInteractingRef = useRef<boolean>(false);
+
+  // Typewriter effect for username placeholder
+  useEffect(() => {
+    const targetPlaceholder = isLogin 
+      ? "your_username or mail@domain.com" 
+      : "username (letters, numbers, _)";
+
+    // Respect prefers-reduced-motion: skip typing and set placeholder immediately
+    const prefersReduced = typeof window !== 'undefined' && 
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReduced) {
+      setPlaceholderText(targetPlaceholder);
+      return;
+    }
+
+    // If user is already typing, focused, or field has value, do not overwrite
+    if (isInputInteractingRef.current || username !== '') {
+      setPlaceholderText(targetPlaceholder);
+      return;
+    }
+
+    setPlaceholderText('');
+    let currentIndex = 0;
+    let typeInterval: any = null;
+
+    // Start typing after username field slides in (~2.6s)
+    const startDelay = setTimeout(() => {
+      if (isInputInteractingRef.current || username !== '') {
+        setPlaceholderText(targetPlaceholder);
+        return;
+      }
+
+      typeInterval = setInterval(() => {
+        if (isInputInteractingRef.current || username !== '') {
+          setPlaceholderText(targetPlaceholder);
+          clearInterval(typeInterval);
+          return;
+        }
+
+        currentIndex++;
+        setPlaceholderText(targetPlaceholder.slice(0, currentIndex));
+        if (currentIndex >= targetPlaceholder.length) {
+          clearInterval(typeInterval);
+        }
+      }, 35);
+    }, 2600);
+
+    return () => {
+      clearTimeout(startDelay);
+      if (typeInterval) clearInterval(typeInterval);
+    };
+  }, [isLogin, animationKey, username]);
+
+  // Console helper to replay intro animation without any button
+  useEffect(() => {
+    (window as any).replayIntro = () => {
+      isInputInteractingRef.current = false;
+      setAnimationKey(prev => prev + 1);
+      console.log('🎬 Replaying DataVerse intro animation...');
+    };
+
+    return () => {
+      delete (window as any).replayIntro;
+    };
+  }, []);
+  /* ANIMATION END */
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,39 +122,404 @@ export const Auth: React.FC = () => {
     }
   };
 
+/* THEME START */
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#030303] relative overflow-hidden px-4">
-      {/* Background Ambient Glows */}
-      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-brand-500/5 blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-96 h-96 rounded-full bg-brand-600/10 blur-[150px] pointer-events-none"></div>
+    <div key={animationKey} className="min-h-screen w-full flex items-center justify-center bg-[var(--bg)] relative overflow-hidden px-4">
+      {/* Theme Toggle Button in top right corner of Login/Sign Up */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-50">
+        <ThemeIconButton />
+      </div>
 
-      {/* Main Container */}
-      <div className="w-full max-w-md glass-card rounded-2xl p-8 relative z-10 shadow-2xl border border-white/5 transition-all duration-300">
+      {/* ANIMATION START - Scoped CSS styles & Timing Configuration */}
+      <style>{`
+        :root {
+          /* Intro animation timing config */
+          --t-card: 0.1s;
+          --t-logo: 0.4s;
+          --t-title: 0.9s;
+          --t-tagline: 1.8s;
+          --t-tabs: 2.1s;
+          --t-form: 2.4s;
+          --t-button: 3.1s;
+          --t-glow: 3.4s;
+
+          /* Accents pulled from theme system */
+          --intro-gold: var(--gold);
+          --intro-gold-glow: color-mix(in srgb, var(--gold) 45%, transparent);
+          --intro-teal: var(--accent);
+          --intro-teal-glow: color-mix(in srgb, var(--accent) 40%, transparent);
+          --intro-indigo: var(--accent-2);
+          --intro-indigo-glow: var(--shadow-accent);
+        }
+/* THEME END */
+
+        /* 1. Card fades and scales in (0.94 to 1) */
+        .intro-card {
+          animation: cardFadeScale 0.75s cubic-bezier(0.16, 1, 0.3, 1) var(--t-card) both;
+          will-change: transform, opacity;
+        }
+        @keyframes cardFadeScale {
+          0% {
+            opacity: 0;
+            transform: scale(0.94);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        /* 2. Logo wipe from bottom up + gold/teal glow pulse + gentle floating */
+        .intro-logo {
+          animation: 
+            logoWipeGlow 1.05s cubic-bezier(0.16, 1, 0.3, 1) var(--t-logo) both,
+            logoFloat 3.2s ease-in-out calc(var(--t-logo) + 1.1s) infinite alternate;
+          will-change: clip-path, transform, filter;
+        }
+        @keyframes logoWipeGlow {
+          0% {
+            clip-path: inset(100% 0 0 0);
+            filter: drop-shadow(0 0 0px transparent);
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          50% {
+            clip-path: inset(0 0 0 0);
+            filter: drop-shadow(0 0 16px var(--intro-gold-glow));
+            opacity: 1;
+            transform: scale(1.03);
+          }
+          80% {
+            clip-path: inset(0 0 0 0);
+            filter: drop-shadow(0 0 20px var(--intro-teal-glow));
+            transform: scale(1);
+          }
+          100% {
+            clip-path: inset(0 0 0 0);
+            filter: drop-shadow(0 0 0px transparent);
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes logoFloat {
+          0% {
+            transform: translateY(0);
+          }
+          100% {
+            transform: translateY(-5px);
+          }
+        }
+
+        /* 3. Title split letters flip up from below + gold shine sweep */
+        .intro-title {
+          position: relative;
+          display: inline-block;
+          perspective: 800px;
+        }
+        .intro-title-char {
+          display: inline-block;
+          transform-origin: 50% 100%;
+          opacity: 0;
+          animation: letterFlipUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+          will-change: transform, opacity, filter;
+        }
+        @keyframes letterFlipUp {
+          0% {
+            opacity: 0;
+            transform: translateY(24px) rotateX(-80deg);
+            filter: blur(10px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) rotateX(0deg);
+            filter: blur(0px);
+          }
+        }
+        .intro-title-shine {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          pointer-events: none;
+          background: linear-gradient(
+            105deg,
+            transparent 0%,
+            transparent 35%,
+            rgba(251, 191, 36, 0.75) 48%,
+            rgba(254, 240, 138, 0.95) 50%,
+            rgba(251, 191, 36, 0.75) 52%,
+            transparent 65%,
+            transparent 100%
+          );
+          background-size: 250% 100%;
+          background-position: 150% 0;
+          mix-blend-mode: color-dodge;
+          opacity: 0;
+          animation: titleShineSweep 0.95s ease-in-out calc(var(--t-title) + 0.85s) forwards;
+        }
+        @keyframes titleShineSweep {
+          0% {
+            opacity: 0;
+            background-position: 150% 0;
+          }
+          30% {
+            opacity: 1;
+          }
+          70% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+            background-position: -60% 0;
+          }
+        }
+
+        /* 4. Tagline fades in */
+        .intro-tagline {
+          opacity: 0;
+          animation: taglineFadeIn 0.55s ease-out var(--t-tagline) both;
+        }
+        @keyframes taglineFadeIn {
+          0% {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        /* 5. Login/Sign Up tab switch expands from center (scaleX 0.6 to 1) */
+        .intro-tabs {
+          opacity: 0;
+          transform-origin: center;
+          animation: tabsExpand 0.5s cubic-bezier(0.16, 1, 0.3, 1) var(--t-tabs) both;
+        }
+        @keyframes tabsExpand {
+          0% {
+            opacity: 0;
+            transform: scaleX(0.6);
+          }
+          100% {
+            opacity: 1;
+            transform: scaleX(1);
+          }
+        }
+
+        /* 6. Form fields slide in from left/right + bottom glow line */
+        .intro-field-left {
+          opacity: 0;
+          animation: fieldSlideLeft 0.5s cubic-bezier(0.16, 1, 0.3, 1) var(--t-form) both;
+        }
+        .intro-field-right {
+          opacity: 0;
+          animation: fieldSlideRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) calc(var(--t-form) + 0.1s) both;
+        }
+        @keyframes fieldSlideLeft {
+          0% {
+            opacity: 0;
+            transform: translateX(-24px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        @keyframes fieldSlideRight {
+          0% {
+            opacity: 0;
+            transform: translateX(24px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        .intro-field-glow {
+          position: absolute;
+          bottom: 0;
+          left: 6%;
+          right: 6%;
+          height: 2px;
+          border-radius: 9999px;
+          background: linear-gradient(90deg, transparent, var(--intro-teal), var(--intro-indigo), var(--intro-gold), transparent);
+          pointer-events: none;
+          opacity: 0;
+          animation: fieldGlowSweep 1.1s ease-out calc(var(--t-form) + 0.3s) forwards;
+        }
+        @keyframes fieldGlowSweep {
+          0% {
+            opacity: 0;
+            transform: scaleX(0.2);
+          }
+          40% {
+            opacity: 1;
+            transform: scaleX(1);
+          }
+          100% {
+            opacity: 0;
+            transform: scaleX(1);
+          }
+        }
+
+        /* 7. Sign In button spring pop + repeating light shimmer swipe */
+        .intro-btn {
+          opacity: 0;
+          animation: buttonSpringPop 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) var(--t-button) both;
+        }
+        @keyframes buttonSpringPop {
+          0% {
+            opacity: 0;
+            transform: translateY(18px) scale(0.92);
+          }
+          70% {
+            transform: translateY(-2px) scale(1.02);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        .intro-btn-shimmer {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          background: linear-gradient(
+            105deg,
+            transparent 0%,
+            transparent 35%,
+            rgba(255, 255, 255, 0.32) 50%,
+            transparent 65%,
+            transparent 100%
+          );
+          background-size: 200% 100%;
+          background-position: 150% 0;
+          opacity: 0;
+          animation: buttonShimmerSweep 3.6s ease-in-out calc(var(--t-button) + 0.7s) infinite;
+        }
+        @keyframes buttonShimmerSweep {
+          0% {
+            opacity: 0;
+            background-position: 150% 0;
+          }
+          15% {
+            opacity: 1;
+          }
+          35% {
+            opacity: 1;
+            background-position: -50% 0;
+          }
+          40%, 100% {
+            opacity: 0;
+            background-position: -50% 0;
+          }
+        }
+
+        /* 8. Faint indigo radial glow behind card */
+        .intro-glow-bg {
+          opacity: 0;
+          animation: indigoGlowFadeIn 1.2s ease-out var(--t-glow) both;
+        }
+        @keyframes indigoGlowFadeIn {
+          0% {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        /* Prefers-reduced-motion: skip intro immediately */
+        @media (prefers-reduced-motion: reduce) {
+          .intro-card,
+          .intro-logo,
+          .intro-title-char,
+          .intro-title-shine,
+          .intro-tagline,
+          .intro-tabs,
+          .intro-field-left,
+          .intro-field-right,
+          .intro-field-glow,
+          .intro-btn,
+          .intro-btn-shimmer,
+          .intro-glow-bg {
+            animation: none !important;
+            opacity: 1 !important;
+            transform: none !important;
+            filter: none !important;
+            clip-path: none !important;
+          }
+        }
+      `}</style>
+      {/* ANIMATION END */}
+
+      {/* THEME START */}
+      {/* Background Ambient Glows */}
+      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-[var(--glow)] blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-96 h-96 rounded-full bg-[var(--glow)] blur-[150px] pointer-events-none"></div>
+
+      {/* 8. Faint radial glow behind card */}
+      <div className="intro-glow-bg absolute w-72 h-72 sm:w-96 sm:h-96 rounded-full bg-[var(--glow)] blur-[100px] pointer-events-none z-0"></div>
+
+      {/* Main Container - Card fades and scales in */}
+      <div className="w-full max-w-md bg-[var(--card)] rounded-2xl p-8 relative z-10 shadow-2xl border border-[var(--line)] transition-all duration-300 intro-card">
         
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 mb-4 flex items-center justify-center">
+          {/* Logo in rounded tile with dark --bg color (#040b0d) and 1px border */}
+          <div className="w-16 h-16 mb-4 flex items-center justify-center relative p-2 rounded-2xl bg-[#040b0d] border border-white/10 shadow-md">
             <img 
               src="/logo.png?v=2" 
               alt="DataVerse Logo" 
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain intro-logo"
             />
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-white">
-            DataVerse
+          {/* THEME END */}
+          {/* ANIMATION END */}
+
+          {/* ANIMATION START - 3. Title split into letters flip up + gold shine */}
+          <h1 
+            aria-label="DataVerse" 
+            className="text-3xl font-black tracking-tight text-white intro-title whitespace-nowrap"
+          >
+            <span aria-hidden="true" className="intro-title-text inline-flex">
+              {"DataVerse".split('').map((char, index) => (
+                <span
+                  key={index}
+                  className="intro-title-char"
+                  style={{
+                    animationDelay: `calc(var(--t-title) + ${index * 70}ms)`
+                  }}
+                >
+                  {char}
+                </span>
+              ))}
+            </span>
+            <span className="intro-title-shine" aria-hidden="true" />
           </h1>
-          <p className="text-xs text-slate-400 mt-1.5 font-medium">
+          {/* ANIMATION END */}
+
+          {/* ANIMATION START - 4. Tagline fades in */}
+          {/* THEME START */}
+          <p className="text-xs text-[var(--muted)] mt-1.5 font-medium intro-tagline">
             {isLogin ? 'Welcome back, sign in to continue' : 'Create an account to start connecting'}
           </p>
         </div>
 
-        {/* Auth Toggle Tab */}
-        <div className="flex bg-slate-950/80 rounded-xl p-1 mb-6 border border-slate-900">
+        {/* Auth Toggle Tab - Expands from center */}
+        <div className="flex bg-[var(--input)] rounded-xl p-1 mb-6 border border-[var(--line)] intro-tabs">
           <button
             type="button"
             onClick={() => { setIsLogin(true); setError(null); }}
             className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
-              isLogin ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10' : 'text-slate-400 hover:text-slate-200'
+              isLogin ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'
             }`}
           >
             Login
@@ -88,12 +528,14 @@ export const Auth: React.FC = () => {
             type="button"
             onClick={() => { setIsLogin(false); setError(null); }}
             className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
-              !isLogin ? 'bg-brand-600 text-white shadow-md shadow-brand-500/10' : 'text-slate-400 hover:text-slate-200'
+              !isLogin ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'
             }`}
           >
             Sign Up
           </button>
         </div>
+        {/* THEME END */}
+        {/* ANIMATION END */}
 
         {/* Error Alert */}
         {error && (
@@ -125,8 +567,8 @@ export const Auth: React.FC = () => {
             </>
           )}
 
-          {/* Username / Email field */}
-          <div>
+          {/* Username / Email field - ANIMATION START - 6. Slides in from left + glow line + typewriter */}
+          <div className="intro-field-left">
             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
               {isLogin ? 'Username or Email' : 'Username'}
             </label>
@@ -135,13 +577,19 @@ export const Auth: React.FC = () => {
               <input
                 type="text"
                 required
-                placeholder={isLogin ? "your_username or mail@domain.com" : "username (letters, numbers, _)"}
+                placeholder={placeholderText || (isLogin ? "your_username or mail@domain.com" : "username (letters, numbers, _)")}
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onFocus={() => { isInputInteractingRef.current = true; }}
+                onChange={(e) => { 
+                  isInputInteractingRef.current = true;
+                  setUsername(e.target.value); 
+                }}
                 className="w-full bg-slate-950/40 border border-slate-900 focus:border-brand-500 rounded-xl py-3 pl-11 pr-4 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-all focus:ring-1 focus:ring-brand-500/10"
               />
+              <span className="intro-field-glow" aria-hidden="true" />
             </div>
           </div>
+          {/* ANIMATION END */}
 
           {/* Email field (Signup only) */}
           {!isLogin && (
@@ -161,8 +609,8 @@ export const Auth: React.FC = () => {
             </div>
           )}
 
-          {/* Password field */}
-          <div>
+          {/* Password field - ANIMATION START - 6. Slides in from right + glow line */}
+          <div className="intro-field-right">
             <div className="flex justify-between items-center mb-1.5">
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
             </div>
@@ -183,17 +631,23 @@ export const Auth: React.FC = () => {
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
+              <span className="intro-field-glow" aria-hidden="true" />
             </div>
           </div>
+          {/* ANIMATION END */}
 
-          {/* Submit Button */}
+          {/* THEME START */}
+          {/* Submit Button - Spring pop + repeating shimmer */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 mt-2 bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-550 hover:to-brand-450 text-white rounded-xl font-bold tracking-wide shadow-lg shadow-brand-500/10 active:scale-[0.98] outline-none disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover"
+            className="w-full py-3 mt-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover intro-btn relative overflow-hidden"
           >
-            {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
+            <span className="relative z-10">{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
+            <span className="intro-btn-shimmer" aria-hidden="true" />
           </button>
+          {/* THEME END */}
+          {/* ANIMATION END */}
 
         </form>
 

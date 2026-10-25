@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { compressImage } from '../utils/compress';
-import { Image as ImageIcon, X, Loader2, Check, Video } from 'lucide-react';
+import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
+import { Image as ImageIcon, X, Loader2, Check, Video, Plus } from 'lucide-react';
 import { ImageCropper } from '../components/ImageCropper';
 
 interface CreateProps {
@@ -12,35 +13,52 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
   const { user, token } = useAuth();
   
   const [caption, setCaption] = useState<string>('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [filePreviews, setFilePreviews] = useState<{ url: string; type: string; file: File }[]>([]);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   
   // UI states
   const [uploading, setUploading] = useState<boolean>(false);
+  const [uploadProgressText, setUploadProgressText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
+  /* UI UPDATE START - Drag & Drop State */
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  /* UI UPDATE END */
 
   // Clean up object URLs to prevent memory leaks
   useEffect(() => {
     return () => {
-      if (imagePreview && imagePreview.startsWith('blob:')) {
-        URL.revokeObjectURL(imagePreview);
-      }
+      filePreviews.forEach(item => {
+        if (item.url.startsWith('blob:')) {
+          URL.revokeObjectURL(item.url);
+        }
+      });
     };
-  }, [imagePreview]);
+  }, [filePreviews]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    e.target.value = ''; // Reset input
+
+    for (const file of fileList) {
+      if (file.size > MAX_FILE_SIZE) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        setError(`File "${file.name}" (${sizeMB} MB) exceeds the 2 GB maximum limit.`);
+        return;
+      }
+
       if (file.type.startsWith('image/')) {
         setFileToCrop(file);
         setError(null);
         setSuccess(false);
+        break; // Process cropper for image
       } else if (file.type.startsWith('video/')) {
-        // Videos are shared in original format/layout
-        setSelectedFile(file);
-        setImagePreview(URL.createObjectURL(file));
+        setSelectedFiles(prev => [...prev, file]);
+        setFilePreviews(prev => [...prev, { url: URL.createObjectURL(file), type: 'video', file }]);
         setError(null);
         setSuccess(false);
       } else {
@@ -49,42 +67,82 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
     }
   };
 
+  /* UI UPDATE START - Drag-over and drop handlers */
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    for (const file of fileList) {
+      if (file.size > MAX_FILE_SIZE) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        setError(`File "${file.name}" (${sizeMB} MB) exceeds the 2 GB maximum limit.`);
+        return;
+      }
+
+      if (file.type.startsWith('image/')) {
+        setFileToCrop(file);
+        setError(null);
+        setSuccess(false);
+        break;
+      } else if (file.type.startsWith('video/')) {
+        setSelectedFiles(prev => [...prev, file]);
+        setFilePreviews(prev => [...prev, { url: URL.createObjectURL(file), type: 'video', file }]);
+        setError(null);
+        setSuccess(false);
+      } else {
+        setError('Only image and video uploads are supported.');
+      }
+    }
+  };
+  /* UI UPDATE END */
+
+  const removeFileAt = (index: number) => {
+    const target = filePreviews[index];
+    if (target && target.url.startsWith('blob:')) {
+      URL.revokeObjectURL(target.url);
+    }
+    setFilePreviews(prev => prev.filter((_, i) => i !== index));
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile || !token || !user) return;
+    if (selectedFiles.length === 0 || !token || !user) return;
 
     setUploading(true);
     setError(null);
     setSuccess(false);
 
     try {
-      let uploadBody: Blob | File = selectedFile;
-      let contentType = selectedFile.type;
+      const uploadedMediaItems: { r2_key: string; media_type: string }[] = [];
 
-      // Only compress client-side if it's an image
-      if (selectedFile.type.startsWith('image/')) {
-        const compressedBlob = await compressImage(selectedFile, 1080, 0.85);
-        uploadBody = compressedBlob;
-        contentType = 'image/jpeg';
-      }
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        let uploadBody: Blob | File = file;
+        let contentType = file.type || (file.type.startsWith('video/') ? 'video/mp4' : 'image/jpeg');
 
-      // Generate a unique key for the post media
-      const fileExtension = selectedFile.name.split('.').pop() || (selectedFile.type.startsWith('video/') ? 'mp4' : 'jpg');
-      const r2Key = `posts/${user.id}-${Date.now()}.${fileExtension}`;
+        // Compress images client-side if smaller than 20MB
+        if (file.type.startsWith('image/') && file.size < 20 * 1024 * 1024) {
+          try {
+            const compressedBlob = await compressImage(file, 1080, 0.85);
+            uploadBody = compressedBlob;
+            contentType = 'image/jpeg';
+          } catch {
+            uploadBody = file;
+          }
+        }
 
-      // Upload directly to the Worker's R2 proxy endpoint
-      const uploadRes = await fetch(`/api/media/upload?key=${encodeURIComponent(r2Key)}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': contentType
-        },
-        body: uploadBody
-      });
+        const fileExtension = file.name.split('.').pop() || (file.type.startsWith('video/') ? 'mp4' : 'jpg');
+        const r2Key = `posts/${user.id}-${Date.now()}-${i}.${fileExtension}`;
 
-      if (!uploadRes.ok) {
-        const uploadErrData = await uploadRes.json();
-        throw new Error(uploadErrData.error || 'Failed to upload media to storage');
+        await uploadMediaFile(uploadBody, r2Key, token, contentType, (pct) => {
+          setUploadProgressText(`Uploading ${i + 1} of ${selectedFiles.length} (${pct}%)`);
+        });
+
+        uploadedMediaItems.push({ r2_key: r2Key, media_type: contentType });
       }
 
       // Register post metadata in D1
@@ -96,7 +154,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
         },
         body: JSON.stringify({
           caption: caption.trim(),
-          media: [{ r2_key: r2Key, media_type: contentType }]
+          media: uploadedMediaItems
         })
       });
 
@@ -107,8 +165,8 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
 
       // Success Reset
       setCaption('');
-      setSelectedFile(null);
-      setImagePreview(null);
+      setSelectedFiles([]);
+      setFilePreviews([]);
       setSuccess(true);
       
       // Navigate to Feed after short delay
@@ -120,47 +178,113 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
       setError(err.message || 'Failed to publish post');
     } finally {
       setUploading(false);
+      setUploadProgressText(null);
     }
   };
 
+  /* UI UPDATE START - Create Post Page UI Redesign (Desktop & Phone responsive) */
   return (
-    <div className="w-full max-w-4xl mx-auto self-center px-4 py-8 animate-fade-in select-none">
-      <div className="glass-card rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
-        <div className="grid grid-cols-1 md:grid-cols-2">
+    <div className="w-full max-w-[1080px] mx-auto self-center px-4 sm:px-6 py-6 sm:py-10 animate-fade-in select-none relative z-10 pb-28 md:pb-12">
+      
+      {/* THEME START */}
+      {/* Background Radial Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[140px] rounded-full pointer-events-none -z-10" />
+
+      <div className="rounded-3xl border border-[var(--line)] bg-[var(--card)] backdrop-blur-2xl shadow-2xl shadow-[var(--shadow-card)] overflow-hidden">
+      {/* THEME END */}
+        <div className="grid grid-cols-1 md:grid-cols-2 min-h-[520px]">
           
-          {/* Left Column: Drag & Drop upload */}
-          <div className="p-6 md:p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-slate-900/60 bg-slate-950/20">
-            <div className="border-2 border-dashed border-slate-800 hover:border-brand-500/50 rounded-2xl aspect-square flex flex-col items-center justify-center relative overflow-hidden transition-all bg-slate-950/40">
-              {imagePreview ? (
-                <>
-                  {selectedFile?.type.startsWith('video/') ? (
-                    <video 
-                      src={imagePreview} 
-                      controls 
-                      className="w-full h-full object-contain bg-black" 
-                    />
-                  ) : (
-                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedFile(null); setImagePreview(null); setSuccess(false); }}
-                    className="absolute top-3 right-3 p-1.5 bg-black/80 hover:bg-black text-white rounded-full transition-colors border border-white/5"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-brand-500/5 transition-all p-6 text-center">
-                  <div className="flex gap-2 mb-3">
-                    <ImageIcon className="w-10 h-10 text-slate-700 animate-pulse" />
-                    <Video className="w-10 h-10 text-slate-700 animate-pulse" />
+          {/* Left Column: Drag & Drop / Multiple selection preview */}
+          <div className="p-5 sm:p-7 md:p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-white/[0.06] bg-black/20">
+            <div 
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-[20px] aspect-[4/3] md:aspect-square flex flex-col items-center justify-center relative overflow-hidden transition-all p-2.5 ${
+                isDragging 
+                  ? 'border-brand-500 bg-brand-500/[0.08] shadow-lg shadow-brand-500/10' 
+                  : 'border-[#2c2c4a] hover:border-brand-500 bg-[#050509]/60 hover:bg-brand-500/[0.03]'
+              }`}
+            >
+              {filePreviews.length > 0 ? (
+                <div className="w-full h-full flex flex-col gap-2 relative">
+                  {/* Grid or preview list */}
+                  <div className="w-full h-full flex-1 relative overflow-hidden rounded-[16px] bg-black flex items-center justify-center border border-white/5">
+                    {filePreviews[filePreviews.length - 1].type === 'video' ? (
+                      <video 
+                        src={filePreviews[filePreviews.length - 1].url} 
+                        controls 
+                        className="w-full h-full object-contain bg-black" 
+                      />
+                    ) : (
+                      <img 
+                        src={filePreviews[filePreviews.length - 1].url} 
+                        alt="Preview" 
+                        className="w-full h-full object-cover" 
+                      />
+                    )}
                   </div>
-                  <span className="text-sm font-bold text-slate-300">Select a photo or video</span>
-                  <span className="text-[10px] text-slate-655 mt-1.5 font-medium">Supports PNG, JPG, MP4, WebM</span>
+
+                  {/* Thumbnail bar for multiple files */}
+                  {filePreviews.length > 1 && (
+                    <div className="flex gap-2 overflow-x-auto p-1.5 max-h-16 bg-[#050509]/80 rounded-xl border border-white/5 backdrop-blur-sm">
+                      {filePreviews.map((item, idx) => (
+                        <div key={idx} className="w-12 h-12 rounded-lg overflow-hidden relative shrink-0 border border-white/10 bg-black">
+                          {item.type === 'video' ? (
+                            <video src={item.url} className="w-full h-full object-cover pointer-events-none" />
+                          ) : (
+                            <img src={item.url} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeFileAt(idx)}
+                            className="absolute top-0.5 right-0.5 p-0.5 bg-black/80 hover:bg-red-600 text-white rounded-full transition-colors flex items-center justify-center"
+                            title="Remove file"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add more files button & Reset */}
+                  <div className="absolute top-3 right-3 flex gap-2 z-10">
+                    <label 
+                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-black text-white rounded-full transition-all border border-white/10 flex items-center justify-center cursor-pointer shadow-lg active:scale-95" 
+                      title="Add more photos/videos"
+                    >
+                      <Plus className="w-4 h-4 text-white" />
+                      <input 
+                        type="file" 
+                        accept="image/*,video/*" 
+                        multiple
+                        onChange={handleFileChange} 
+                        className="hidden" 
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedFiles([]); setFilePreviews([]); setSuccess(false); }}
+                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-red-600 text-white rounded-full transition-all border border-white/10 flex items-center justify-center shadow-lg active:scale-95"
+                      title="Clear all"
+                    >
+                      <X className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer transition-all p-6 text-center group">
+                  <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mb-4 group-hover:-translate-y-1 transition-transform duration-200 shadow-md shadow-brand-500/5">
+                    <ImageIcon className="w-7 h-7" />
+                    <Video className="w-7 h-7 -ml-2" />
+                  </div>
+                  <span className="text-base font-semibold text-white tracking-wide">Select photos or videos</span>
+                  <span className="text-xs text-slate-400 mt-2 font-normal">Multiple selection allowed · Max 2 GB per file</span>
                   <input 
                     type="file" 
                     accept="image/*,video/*" 
+                    multiple
                     onChange={handleFileChange} 
                     className="hidden" 
                   />
@@ -170,55 +294,55 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
           </div>
 
           {/* Right Column: Post info */}
-          <div className="p-6 md:p-8 flex flex-col justify-between">
+          <div className="p-5 sm:p-7 md:p-8 flex flex-col justify-between h-full">
             <form onSubmit={handleSubmit} className="space-y-6 flex-1 flex flex-col justify-between">
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div>
-                  <h3 className="text-lg font-black text-white">New post</h3>
-                  <p className="text-xs text-slate-500 mt-1">Compose and publish updates directly to your feed.</p>
+                  <h2 className="text-xl font-bold text-white tracking-wide">New post</h2>
+                  <p className="text-xs text-slate-400 mt-1">Compose and publish updates directly to your feed.</p>
                 </div>
 
                 {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl font-bold">
+                  <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl font-medium animate-fade-in">
                     {error}
                   </div>
                 )}
 
                 {success && (
-                  <div className="p-3 bg-green-500/10 border border-green-500/20 text-green-400 text-xs rounded-xl font-bold flex items-center gap-2">
-                    <Check className="w-4 h-4" />
+                  <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl font-medium flex items-center gap-2 animate-fade-in">
+                    <Check className="w-4 h-4 flex-shrink-0" />
                     Post published successfully! Redirecting...
                   </div>
                 )}
 
                 {/* Caption Textarea */}
                 <div className="space-y-2">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Caption</label>
+                  <label className="block text-sm font-semibold text-slate-200">Caption</label>
                   <textarea
-                    rows={8}
+                    rows={7}
                     placeholder="Say something about this photo..."
                     value={caption}
                     onChange={(e) => setCaption(e.target.value)}
-                    className="w-full bg-slate-950/40 border border-slate-900 focus:border-brand-500 rounded-2xl p-4 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-colors resize-none"
+                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)]/40 rounded-2xl p-4 text-base md:text-sm text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all resize-none min-h-[140px] md:min-h-[180px]"
                   />
                 </div>
 
               </div>
 
-              {/* Submit share button */}
-              <div className="pt-6">
+              {/* Submit share button (pinned to bottom, glowing when enabled, clear disabled state) */}
+              <div className="mt-auto pt-6">
                 <button
                   type="submit"
-                  disabled={uploading || !selectedFile || success}
-                  className="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-2xl shadow-lg shadow-brand-500/10 active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
+                  disabled={uploading || selectedFiles.length === 0 || success}
+                  className="w-full min-h-[48px] py-3.5 px-6 font-bold rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm tracking-wide bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-[var(--shadow-accent)] active:scale-[0.99] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none disabled:bg-[var(--input)] disabled:border disabled:border-[var(--line)] disabled:text-[var(--muted)]"
                 >
                   {uploading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {selectedFile?.type.startsWith('video/') ? 'Uploading...' : 'Compressing & Sharing...'}
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      {uploadProgressText || 'Uploading & Sharing...'}
                     </>
                   ) : (
-                    'Share'
+                    `Share ${selectedFiles.length > 1 ? `(${selectedFiles.length} files)` : ''}`
                   )}
                 </button>
               </div>
@@ -233,8 +357,8 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
           file={fileToCrop}
           isAvatar={false}
           onCrop={(croppedFile) => {
-            setSelectedFile(croppedFile);
-            setImagePreview(URL.createObjectURL(croppedFile));
+            setSelectedFiles(prev => [...prev, croppedFile]);
+            setFilePreviews(prev => [...prev, { url: URL.createObjectURL(croppedFile), type: 'image', file: croppedFile }]);
             setFileToCrop(null);
           }}
           onCancel={() => setFileToCrop(null)}
@@ -243,6 +367,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
 
     </div>
   );
+  /* UI UPDATE END */
 };
 
 export default Create;
