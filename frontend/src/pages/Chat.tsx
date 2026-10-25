@@ -1719,8 +1719,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   };
 
   // ─── Camera helpers ──────────────────────────────────────────────────────
-  const openCamera = (mode: 'photo' | 'video') => {
-    setCameraMode(mode);
+  const openCamera = (modeOrOpts: 'photo' | 'video' | { destination?: 'chat'; conversationId?: string; replyTo?: any; mode?: 'photo' | 'video' } = 'photo') => {
+    if (typeof modeOrOpts === 'string') {
+      setCameraMode(modeOrOpts);
+    } else if (modeOrOpts && typeof modeOrOpts === 'object' && modeOrOpts.mode) {
+      setCameraMode(modeOrOpts.mode);
+    }
     setShowCameraModal(true);
   };
 
@@ -1729,6 +1733,14 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     const mediaType: 'image' | 'video' = mode === 'photo' ? 'image' : 'video';
     const baseType = blob.type.split(';')[0].trim() || (mode === 'photo' ? 'image/jpeg' : 'video/webm');
     await uploadAndSendSecureMedia(blob, mediaType, baseType);
+    setTimeout(() => {
+      if (messagesContainerRef.current) {
+        messagesContainerRef.current.scrollTo({
+          top: messagesContainerRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    }, 100);
   };
 
   // Game interaction helpers
@@ -4873,9 +4885,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         )}
       </div>
 
-      {/* ─── Social Media Camera Modal with 200 Filters ─────────────────── */}
+      {/* ─── Social Camera Modal ─────────────────── */}
       {showCameraModal && (
         <SocialCameraModal
+          destination="chat"
+          conversationId={activeConvo?.id}
+          replyTo={replyingToMessage}
           initialMode={cameraMode}
           onCapture={handleCameraCapture}
           onClose={() => setShowCameraModal(false)}

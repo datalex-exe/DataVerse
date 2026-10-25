@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
-import { Image as ImageIcon, X, Loader2, Check, Video, Plus, Camera, Sparkles } from 'lucide-react';
+import { Image as ImageIcon, X, Loader2, Check, Video, Plus, Camera } from 'lucide-react';
 import { ImageCropper } from '../components/ImageCropper';
 import { SocialCameraModal } from '../camera';
 
@@ -114,7 +114,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
     setShowCameraModal(false);
     const extension = mode === 'photo' ? 'jpg' : 'webm';
     const mimeType = blob.type.split(';')[0].trim() || (mode === 'photo' ? 'image/jpeg' : 'video/webm');
-    const filename = `filter_camera_${Date.now()}.${extension}`;
+    const filename = `camera_${Date.now()}.${extension}`;
     const file = new File([blob], filename, { type: mimeType });
     const previewUrl = URL.createObjectURL(file);
 
@@ -270,7 +270,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                       type="button"
                       onClick={() => setShowCameraModal(true)}
                       className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-black text-amber-300 rounded-full transition-all border border-amber-300/30 flex items-center justify-center shadow-lg active:scale-95"
-                      title="Open Social Camera with 200 Filters"
+                      title="Open Camera"
                     >
                       <Camera className="w-4 h-4" />
                     </button>
@@ -326,8 +326,8 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                     onClick={() => setShowCameraModal(true)}
                     className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
                   >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Open Social Camera (200 Filters)</span>
+                    <Camera className="w-4 h-4" />
+                    <span>Open Camera</span>
                   </button>
                 </div>
               )}
@@ -406,9 +406,10 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
         />
       )}
 
-      {/* ─── Social Media Camera Modal with 200 Filters ─────────────────── */}
+      {/* ─── Social Camera Modal ─────────────────── */}
       {showCameraModal && (
         <SocialCameraModal
+          destination="post"
           initialMode="photo"
           onCapture={handleCameraCapture}
           onClose={() => setShowCameraModal(false)}
@@ -417,7 +418,6 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
 
     </div>
   );
-  /* UI UPDATE END */
 };
 
 export default Create;
