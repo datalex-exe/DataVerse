@@ -231,6 +231,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onCancelReply
 }) => {
   const [text, setText] = useState(draftText);
+  // BUG 1 FIX: Use sending state on button instead of disabling input
+  const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -248,26 +250,32 @@ const ChatInput: React.FC<ChatInputProps> = ({
     el.style.height = `${Math.max(newHeight, 24)}px`;
   }, [text]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = (e?: React.SyntheticEvent) => {
     if (e) e.preventDefault();
-    if (!text.trim() || uploadingMedia) return;
-    onSend(text.trim());
+    if (!text.trim() || isSending || uploadingMedia) return;
+    const messageToSend = text.trim();
+    // Clear input
     setText('');
     onDraftChange?.('');
+    // BUG 1 FIX: Call input.focus({ preventScroll: true }) synchronously inside user gesture (no setTimeout)
     if (textareaRef.current) {
+      textareaRef.current.value = '';
       textareaRef.current.style.height = 'auto';
-      // Retain focus on textarea so virtual keyboard remains stable
-      textareaRef.current.focus();
+      textareaRef.current.focus({ preventScroll: true });
+    }
+    setIsSending(true);
+    try {
+      onSend(messageToSend);
+    } finally {
+      setIsSending(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Desktop Enter sends; Shift+Enter creates a new line
+    // BUG 1 FIX: Enter key sends the message, calls preventDefault(), and focus stays in the input
     if (e.key === 'Enter' && !e.shiftKey) {
-      if (window.innerWidth >= 768) {
-        e.preventDefault();
-        handleSubmit();
-      }
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -343,9 +351,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
       >
         {/* Media action buttons */}
         <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-          {/* Camera capture button */}
+          {/* BUG 1 FIX: Camera capture button with onPointerDown and onMouseDown calling preventDefault() to stop stealing focus */}
           <button
             type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => openCamera('photo')}
             className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
             title="Take photo or record video"
@@ -355,9 +365,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <Camera className="w-4 h-4" />
           </button>
 
-          {/* File selector icon trigger */}
+          {/* BUG 1 FIX: File selector button with onPointerDown and onMouseDown calling preventDefault() to stop stealing focus */}
           <button
             type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => fileInputRef.current?.click()}
             className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
             title="Send photos, videos, or files (multiple selection, up to 2GB each)"
@@ -378,9 +390,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
             multiple
           />
 
-          {/* Microphone icon trigger */}
+          {/* BUG 1 FIX: Mic button with onPointerDown and onMouseDown calling preventDefault() to stop stealing focus */}
           <button
             type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={startRecording}
             className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
             title="Record voice note"
@@ -391,11 +405,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </button>
         </div>
 
-        {/* Pill-shaped Message Input with send button inside on the right */}
+        {/* BUG 2 FIX: Pill container with overflow:hidden and border radius */}
         <div 
-          className="flex-1 min-w-0 flex items-center bg-[var(--input)] border border-[var(--line)] focus-within:border-[var(--accent-2)] focus-within:ring-2 focus-within:ring-[var(--accent-2)]/30 rounded-full pl-3 sm:pl-4 pr-1.5 py-1.5 transition-all"
-          style={{ minWidth: 0 }}
+          className="input-pill flex-1 min-w-0 flex items-center bg-[var(--input)] border border-[var(--line)] rounded-full pl-3 sm:pl-4 pr-1.5 py-1.5 transition-all overflow-hidden"
+          style={{ minWidth: 0, overflow: 'hidden', borderRadius: '9999px' }}
         >
+          {/* BUG 2 FIX: Style the field: border:0; outline:none; box-shadow:none; background:transparent; -webkit-appearance:none; appearance:none; border-radius:0; -webkit-tap-highlight-color:transparent; font-size:16px; caret-color:var(--accent-2) */}
           <textarea
             ref={textareaRef}
             rows={1}
@@ -407,23 +422,40 @@ const ChatInput: React.FC<ChatInputProps> = ({
             }}
             onKeyDown={handleKeyDown}
             onFocus={onFocus}
-            className="flex-1 min-w-0 bg-transparent border-0 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none pr-1.5 resize-none leading-relaxed py-1"
-            style={{ minWidth: 0, maxHeight: '120px', minHeight: '24px' }}
+            className="flex-1 min-w-0 text-[16px] text-[var(--text)] placeholder:text-[var(--muted)] resize-none leading-relaxed py-1"
+            style={{ 
+              border: 0, 
+              outline: 'none', 
+              boxShadow: 'none', 
+              background: 'transparent', 
+              WebkitAppearance: 'none', 
+              appearance: 'none', 
+              borderRadius: 0, 
+              WebkitTapHighlightColor: 'transparent', 
+              fontSize: '16px', 
+              caretColor: 'var(--accent-2)',
+              minWidth: 0, 
+              maxHeight: '120px', 
+              minHeight: '24px' 
+            }}
             disabled={uploadingMedia}
             autoComplete="off"
             autoCapitalize="sentences"
           />
 
+          {/* BUG 1 FIX: Send button with tabindex="-1", onPointerDown and onMouseDown calling preventDefault(), and disabled reflects sending state */}
           <button 
             type="submit"
+            tabIndex={-1}
+            onPointerDown={(e) => e.preventDefault()}
             onMouseDown={(e) => e.preventDefault()}
-            onTouchStart={(e) => {
+            onClick={(e) => {
               e.preventDefault();
               handleSubmit();
             }}
-            disabled={!text.trim() || uploadingMedia}
+            disabled={!text.trim() || isSending || uploadingMedia}
             className={`w-8 h-8 sm:w-9 sm:h-9 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] rounded-full flex items-center justify-center transition-all flex-shrink-0 ${
-              !text.trim() || uploadingMedia
+              !text.trim() || isSending || uploadingMedia
                 ? 'opacity-30 pointer-events-none bg-[var(--input)] text-[var(--muted)]'
                 : 'bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] active:scale-90 cursor-pointer'
             }`}
@@ -1104,7 +1136,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     if (isNearBottomRef.current) {
       setTimeout(() => {
         if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          messagesContainerRef.current.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: 'auto' });
         }
       }, 150);
     }
@@ -1128,52 +1160,45 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     const container = messagesContainerRef.current;
     if (!container || loadingMessages) return;
 
-    // If user sent a message: always scroll to bottom immediately
+    // BUG 3 FIX: After a message is sent or received, scroll the message list to the bottom with scrollTo({ top: list.scrollHeight, behavior: 'auto' }) without moving focus
     if (userSentMessageRef.current) {
       userSentMessageRef.current = false;
       isNearBottomRef.current = true;
-      requestAnimationFrame(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-        }
-      });
+      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
       return;
     }
 
     // If incoming message: only auto-scroll if user was already reading near bottom
     if (isNearBottomRef.current) {
-      requestAnimationFrame(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-        }
-      });
+      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
     }
   }, [messages, loadingMessages]);
 
-  // 3. Keep latest messages visible when virtual keyboard opens or viewport resizes
+  // 3. Keep latest messages visible when virtual keyboard opens or viewport resizes, and update --vvh fallback
   useEffect(() => {
-    if (!activeConvo) return;
-
-    const handleViewportResize = () => {
+    const updateViewportAndScroll = () => {
+      // BUG 3 FIX: Fallback window.visualViewport resize sets --vvh to visualViewport.height + "px"
+      const vv = window.visualViewport;
+      if (vv) {
+        document.documentElement.style.setProperty('--vvh', `${Math.round(vv.height)}px`);
+      }
       if (isNearBottomRef.current && messagesContainerRef.current) {
-        requestAnimationFrame(() => {
-          if (messagesContainerRef.current) {
-            messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
-          }
-        });
+        messagesContainerRef.current.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: 'auto' });
       }
     };
 
+    updateViewportAndScroll();
+
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportResize);
+      window.visualViewport.addEventListener('resize', updateViewportAndScroll);
     }
-    window.addEventListener('resize', handleViewportResize);
+    window.addEventListener('resize', updateViewportAndScroll);
 
     return () => {
       if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleViewportResize);
+        window.visualViewport.removeEventListener('resize', updateViewportAndScroll);
       }
-      window.removeEventListener('resize', handleViewportResize);
+      window.removeEventListener('resize', updateViewportAndScroll);
     };
   }, [activeConvo]);
 
@@ -3961,12 +3986,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     {/* UI UPDATE END */}
 
       {/* THEME START */}
-    {/* CHAT OVERFLOW FIX START */}
+    {/* BUG 3 FIX: Chat screen as flex column with height: 100dvh (fallback var(--vvh, 100dvh)), overflow: hidden, background: var(--bg) */}
     <div 
-      className="h-full min-h-0 md:h-screen flex flex-col md:flex-row bg-[var(--bg)] text-[var(--text)] overflow-hidden relative w-full max-w-full min-w-0 overflow-x-hidden"
-      style={{ height: 'var(--chat-viewport-height, 100%)' }}
+      className="chat-screen flex flex-col md:flex-row bg-[var(--bg)] text-[var(--text)] overflow-hidden relative w-full max-w-full min-w-0 overflow-x-hidden"
+      style={{ 
+        height: 'var(--vvh, 100dvh)', 
+        overflow: 'hidden', 
+        backgroundColor: 'var(--bg)' 
+      }}
     >
-    {/* CHAT OVERFLOW FIX END */}
       
       {/* LEFT PANEL: CONVERSATIONS LIST */}
       <div className={`w-full md:w-[360px] md:min-w-[360px] md:max-w-[360px] border-r border-[var(--line)] bg-[var(--side)] flex flex-col h-full flex-shrink-0 select-none ${activeConvo ? 'hidden md:flex' : 'flex'}`}>
@@ -4475,12 +4503,22 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               <>
 
             {/* Messages Bubbles Flow */}
-            {/* CHAT OVERFLOW FIX START */}
+            {/* BUG 3 FIX: Message list flex:1 with min-height:0 and overflow-y:auto, overscroll-behavior: contain */}
             <div 
               ref={messagesContainerRef} 
               onScroll={handleMessagesScroll}
-              className="chat-messages-container flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 max-w-full p-3 sm:p-4 space-y-4 bg-transparent scrollbar-thin overscroll-contain"
-              style={{ overflowX: 'hidden', width: '100%', minWidth: 0, WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+              className="chat-messages-container flex-1 min-h-0 overflow-y-auto overflow-x-hidden w-full min-w-0 max-w-full p-3 sm:p-4 space-y-4 bg-transparent scrollbar-thin overscroll-contain"
+              style={{ 
+                flex: 1, 
+                minHeight: 0, 
+                overflowY: 'auto', 
+                overflowX: 'hidden', 
+                width: '100%', 
+                minWidth: 0, 
+                overscrollBehavior: 'contain', 
+                WebkitOverflowScrolling: 'touch', 
+                touchAction: 'pan-y' 
+              }}
             >
               {loadingMessages ? (
                 <div className="flex justify-center py-10">
@@ -4865,12 +4903,17 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
             {/* Input Form Box (Recording Waveform & Secure Uploader) */}
             {/* Bottom message input box respecting safe area and border */}
-            {/* CHAT OVERFLOW FIX START */}
+            {/* BUG 3 FIX: Input bar sits at bottom with padding-bottom: env(safe-area-inset-bottom) */}
             <div 
-              className="chat-bottom-input-bar w-full max-w-full p-2.5 sm:p-3 border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md z-20 shrink-0 box-border pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
-              style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+              className="chat-bottom-input-bar w-full max-w-full p-2.5 sm:p-3 border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md z-20 flex-shrink-0 box-border"
+              style={{ 
+                width: '100%', 
+                maxWidth: '100%', 
+                boxSizing: 'border-box',
+                flexShrink: 0,
+                paddingBottom: 'env(safe-area-inset-bottom, 0px)' 
+              }}
             >
-            {/* CHAT OVERFLOW FIX END */}
               
               {isRecording ? (
                 // Recording Active state

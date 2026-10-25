@@ -477,7 +477,7 @@ body.messages-active {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
   flex-shrink: 0 !important;
 }
 
@@ -486,3 +486,68 @@ body.messages-active {
   padding-bottom: 0.625rem !important;
 }
 /* CHAT OVERFLOW FIX END */
+
+/* BUG 2 FIX: Pill container focus ring and style input field without native box/rectangle */
+.input-pill {
+  overflow: hidden !important;
+  border-radius: 9999px !important;
+}
+
+.input-pill:focus-within {
+  border-color: var(--accent-2) !important;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-2) 22%, transparent) !important;
+}
+
+.input-pill textarea,
+.input-pill input {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  border-radius: 0 !important;
+  -webkit-tap-highlight-color: transparent !important;
+  font-size: 16px !important;
+  caret-color: var(--accent-2) !important;
+}
+
+/* Remove default selection background inside the field */
+.input-pill textarea::selection,
+.input-pill input::selection {
+  background: color-mix(in srgb, var(--accent-2) 30%, transparent) !important;
+}
+
+/* Remove default autofill background inside the field */
+.input-pill textarea:-webkit-autofill,
+.input-pill textarea:-webkit-autofill:hover,
+.input-pill textarea:-webkit-autofill:focus,
+.input-pill input:-webkit-autofill,
+.input-pill input:-webkit-autofill:hover,
+.input-pill input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text) !important;
+  -webkit-box-shadow: 0 0 0px 1000px transparent inset !important;
+  box-shadow: 0 0 0px 1000px transparent inset !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+  background-color: transparent !important;
+}
+
+/* BUG 3 FIX: Viewport, body background, and chat layout rules */
+body {
+  background-color: var(--bg) !important;
+}
+
+.chat-screen {
+  height: 100dvh;
+  height: var(--vvh, 100dvh) !important;
+  overflow: hidden !important;
+  background-color: var(--bg) !important;
+}
+
+.chat-messages-container {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+}
+

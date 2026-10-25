@@ -37,11 +37,12 @@ const AppContent: React.FC = () => {
 
 
 
-  // Synchronize mobile visual viewport and keyboard height for chat view
+  // Synchronize mobile visualViewport and keyboard height for chat view
   React.useEffect(() => {
     if (activeView !== 'messages') {
       document.documentElement.classList.remove('messages-active', 'keyboard-open');
       document.body.classList.remove('messages-active');
+      document.documentElement.style.removeProperty('--vvh');
       document.documentElement.style.removeProperty('--chat-viewport-height');
       return;
     }
@@ -50,8 +51,10 @@ const AppContent: React.FC = () => {
     document.body.classList.add('messages-active');
 
     const updateViewport = () => {
+      // BUG 3 FIX: On visualViewport resize set --vvh to visualViewport.height + "px"
       const vv = window.visualViewport;
       const height = vv ? Math.round(vv.height) : window.innerHeight;
+      document.documentElement.style.setProperty('--vvh', `${height}px`);
       document.documentElement.style.setProperty('--chat-viewport-height', `${height}px`);
 
       // Detect if virtual keyboard is open (visible height is noticeably smaller than screen/window)
@@ -79,6 +82,7 @@ const AppContent: React.FC = () => {
       }
       document.documentElement.classList.remove('messages-active', 'keyboard-open');
       document.body.classList.remove('messages-active');
+      document.documentElement.style.removeProperty('--vvh');
       document.documentElement.style.removeProperty('--chat-viewport-height');
     };
   }, [activeView]);
@@ -232,10 +236,10 @@ const AppContent: React.FC = () => {
     <div 
       className={`bg-[var(--bg)] text-[var(--text)] flex flex-col md:flex-row relative overflow-x-hidden ${
         activeView === 'messages' 
-          ? 'h-[var(--chat-viewport-height,100dvh)] min-h-0 overflow-hidden' 
+          ? 'h-[var(--vvh,100dvh)] min-h-0 overflow-hidden' 
           : 'min-h-[100dvh]'
       }`}
-      style={activeView === 'messages' ? { height: 'var(--chat-viewport-height, 100dvh)' } : undefined}
+      style={activeView === 'messages' ? { height: 'var(--vvh, 100dvh)' } : undefined}
     >
       {/* Background Ambient Glow */}
       <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[140px] rounded-full pointer-events-none z-0"></div>
