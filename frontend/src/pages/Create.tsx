@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
-import { Image as ImageIcon, X, Loader2, Check, Video, Plus } from 'lucide-react';
+import { Image as ImageIcon, X, Loader2, Check, Video, Plus, Camera, Sparkles } from 'lucide-react';
 import { ImageCropper } from '../components/ImageCropper';
+import { SocialCameraModal } from '../camera';
 
 interface CreateProps {
   onNavigate: (view: string, param?: string) => void;
@@ -16,6 +17,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<{ url: string; type: string; file: File }[]>([]);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
+  const [showCameraModal, setShowCameraModal] = useState<boolean>(false);
   
   // UI states
   const [uploading, setUploading] = useState<boolean>(false);
@@ -106,6 +108,20 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
     }
     setFilePreviews(prev => prev.filter((_, i) => i !== index));
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCameraCapture = (blob: Blob, mode: 'photo' | 'video') => {
+    setShowCameraModal(false);
+    const extension = mode === 'photo' ? 'jpg' : 'webm';
+    const mimeType = blob.type.split(';')[0].trim() || (mode === 'photo' ? 'image/jpeg' : 'video/webm');
+    const filename = `filter_camera_${Date.now()}.${extension}`;
+    const file = new File([blob], filename, { type: mimeType });
+    const previewUrl = URL.createObjectURL(file);
+
+    setSelectedFiles(prev => [...prev, file]);
+    setFilePreviews(prev => [...prev, { url: previewUrl, type: mode === 'photo' ? 'image' : 'video', file }]);
+    setError(null);
+    setSuccess(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -248,8 +264,16 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                     </div>
                   )}
 
-                  {/* Add more files button & Reset */}
+                  {/* Add more files button, Camera button & Reset */}
                   <div className="absolute top-3 right-3 flex gap-2 z-10">
+                    <button
+                      type="button"
+                      onClick={() => setShowCameraModal(true)}
+                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-black text-amber-300 rounded-full transition-all border border-amber-300/30 flex items-center justify-center shadow-lg active:scale-95"
+                      title="Open Social Camera with 200 Filters"
+                    >
+                      <Camera className="w-4 h-4" />
+                    </button>
                     <label 
                       className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-black text-white rounded-full transition-all border border-white/10 flex items-center justify-center cursor-pointer shadow-lg active:scale-95" 
                       title="Add more photos/videos"
@@ -274,21 +298,38 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                   </div>
                 </div>
               ) : (
-                <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer transition-all p-6 text-center group">
-                  <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mb-4 group-hover:-translate-y-1 transition-transform duration-200 shadow-md shadow-brand-500/5">
-                    <ImageIcon className="w-7 h-7" />
-                    <Video className="w-7 h-7 -ml-2" />
+                <div className="flex flex-col items-center justify-center w-full h-full p-6 text-center">
+                  <label className="flex flex-col items-center justify-center cursor-pointer transition-all group mb-3">
+                    <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mb-3 group-hover:-translate-y-1 transition-transform duration-200 shadow-md shadow-brand-500/5">
+                      <ImageIcon className="w-7 h-7" />
+                      <Video className="w-7 h-7 -ml-2" />
+                    </div>
+                    <span className="text-base font-semibold text-white tracking-wide">Select photos or videos</span>
+                    <span className="text-xs text-slate-400 mt-1 font-normal">Multiple selection allowed · Max 2 GB per file</span>
+                    <input 
+                      type="file" 
+                      accept="image/*,video/*" 
+                      multiple
+                      onChange={handleFileChange} 
+                      className="hidden" 
+                    />
+                  </label>
+
+                  <div className="flex items-center gap-2 my-2 text-[11px] text-white/30 font-medium">
+                    <span className="w-10 h-px bg-white/10" />
+                    <span>OR</span>
+                    <span className="w-10 h-px bg-white/10" />
                   </div>
-                  <span className="text-base font-semibold text-white tracking-wide">Select photos or videos</span>
-                  <span className="text-xs text-slate-400 mt-2 font-normal">Multiple selection allowed · Max 2 GB per file</span>
-                  <input 
-                    type="file" 
-                    accept="image/*,video/*" 
-                    multiple
-                    onChange={handleFileChange} 
-                    className="hidden" 
-                  />
-                </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCameraModal(true)}
+                    className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Open Social Camera (200 Filters)</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -362,6 +403,15 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
             setFileToCrop(null);
           }}
           onCancel={() => setFileToCrop(null)}
+        />
+      )}
+
+      {/* ─── Social Media Camera Modal with 200 Filters ─────────────────── */}
+      {showCameraModal && (
+        <SocialCameraModal
+          initialMode="photo"
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCameraModal(false)}
         />
       )}
 

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
+import { SocialCameraModal } from '../camera';
 import { 
   Search, 
   Send, 
@@ -35,7 +36,6 @@ import {
   Club,
   Target,
   Grid,
-  RotateCw,
   CornerUpLeft,
   Maximize2,
   MoreVertical
@@ -518,14 +518,6 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   // Camera modal state
   const [showCameraModal, setShowCameraModal] = useState<boolean>(false);
   const [cameraMode, setCameraMode] = useState<'photo' | 'video'>('photo');
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
-  const [capturedPreviewUrl, setCapturedPreviewUrl] = useState<string | null>(null);
-  const [cameraRecording, setCameraRecording] = useState<boolean>(false);
-  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('environment');
-  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
-  const cameraRecorderRef = useRef<MediaRecorder | null>(null);
-  const cameraChunksRef = useRef<Blob[]>([]);
   const fetchedIdsRef = useRef<Set<string>>(new Set());
 
   // Audio Recording States
@@ -1727,124 +1719,16 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   };
 
   // ─── Camera helpers ──────────────────────────────────────────────────────
-  const openCamera = async (mode: 'photo' | 'video', facing?: 'user' | 'environment') => {
+  const openCamera = (mode: 'photo' | 'video') => {
     setCameraMode(mode);
-    setCapturedBlob(null);
-    setCapturedPreviewUrl(null);
-    setCameraRecording(false);
     setShowCameraModal(true);
-
-    const targetFacing = facing || cameraFacing;
-    if (facing) {
-      setCameraFacing(facing);
-    }
-
-    // Release current camera hardware before starting a new one
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(t => t.stop());
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: targetFacing, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: mode === 'video'
-      });
-      setCameraStream(stream);
-      if (cameraVideoRef.current) {
-        cameraVideoRef.current.srcObject = stream;
-        cameraVideoRef.current.play();
-      }
-    } catch (err) {
-      console.error('Camera access denied', err);
-      // Close modal only if there's no camera running at all
-      if (!cameraStream) {
-        setShowCameraModal(false);
-      }
-    }
   };
 
-  const toggleCameraFacing = () => {
-    const nextFacing = cameraFacing === 'environment' ? 'user' : 'environment';
-    openCamera(cameraMode, nextFacing);
-  };
-
-  const stopCameraStream = () => {
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(t => t.stop());
-      setCameraStream(null);
-    }
-  };
-
-  const closeCameraModal = () => {
-    stopCameraStream();
-    if (capturedPreviewUrl) URL.revokeObjectURL(capturedPreviewUrl);
-    setCapturedBlob(null);
-    setCapturedPreviewUrl(null);
-    setCameraRecording(false);
+  const handleCameraCapture = async (blob: Blob, mode: 'photo' | 'video') => {
     setShowCameraModal(false);
-  };
-
-  const takePhoto = () => {
-    if (!cameraVideoRef.current) return;
-    const video = cameraVideoRef.current;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Mirror horizontal canvas drawing if front camera is active to match the live stream preview
-    if (cameraFacing === 'user') {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-    }
-
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob(blob => {
-      if (!blob) return;
-      stopCameraStream();
-      setCapturedBlob(blob);
-      setCapturedPreviewUrl(URL.createObjectURL(blob));
-    }, 'image/jpeg', 0.92);
-  };
-
-  const startCameraRecording = () => {
-    if (!cameraStream) return;
-    cameraChunksRef.current = [];
-    const recorder = new MediaRecorder(cameraStream, { mimeType: 'video/webm;codecs=vp9,opus' });
-    recorder.ondataavailable = (e) => { if (e.data.size > 0) cameraChunksRef.current.push(e.data); };
-    recorder.onstop = () => {
-      const blob = new Blob(cameraChunksRef.current, { type: 'video/webm' });
-      stopCameraStream();
-      setCapturedBlob(blob);
-      setCapturedPreviewUrl(URL.createObjectURL(blob));
-      setCameraRecording(false);
-    };
-    cameraRecorderRef.current = recorder;
-    recorder.start();
-    setCameraRecording(true);
-  };
-
-  const stopCameraRecording = () => {
-    cameraRecorderRef.current?.stop();
-  };
-
-  const sendCameraCapture = async () => {
-    if (!capturedBlob) return;
-    const mediaType: 'image' | 'video' = cameraMode === 'photo' ? 'image' : 'video';
-    // Use base content-type only (strip codec params)
-    const baseType = capturedBlob.type.split(';')[0].trim() || (cameraMode === 'photo' ? 'image/jpeg' : 'video/webm');
-    closeCameraModal();
-    await uploadAndSendSecureMedia(capturedBlob, mediaType, baseType);
-  };
-
-  // Attach stream to video element once ref is ready after modal opens
-  const setCameraVideoRef = (el: HTMLVideoElement | null) => {
-    (cameraVideoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el;
-    if (el && cameraStream) {
-      el.srcObject = cameraStream;
-      el.play();
-    }
+    const mediaType: 'image' | 'video' = mode === 'photo' ? 'image' : 'video';
+    const baseType = blob.type.split(';')[0].trim() || (mode === 'photo' ? 'image/jpeg' : 'video/webm');
+    await uploadAndSendSecureMedia(blob, mediaType, baseType);
   };
 
   // Game interaction helpers
@@ -4989,162 +4873,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         )}
       </div>
 
-      {/* ─── Camera Modal Overlay ────────────────────────────────────── */}
+      {/* ─── Social Media Camera Modal with 200 Filters ─────────────────── */}
       {showCameraModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-between p-4 pb-6 md:p-8 select-none h-[100dvh]">
-          
-          {/* Header */}
-          <div className="w-full max-w-md flex items-center justify-between py-2 z-10">
-            <div className="flex bg-slate-900/80 p-0.5 rounded-full border border-white/[0.06]">
-              <button
-                onClick={() => { setCameraMode('photo'); }}
-                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-                  cameraMode === 'photo'
-                    ? 'bg-white text-black shadow-md border-transparent'
-                    : 'bg-transparent text-slate-400 border-transparent hover:text-slate-200'
-                }`}
-              >
-                Photo
-              </button>
-              <button
-                onClick={() => { setCameraMode('video'); }}
-                className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-                  cameraMode === 'video'
-                    ? 'bg-white text-black shadow-md border-transparent'
-                    : 'bg-transparent text-slate-400 border-transparent hover:text-slate-200'
-                }`}
-              >
-                Video
-              </button>
-            </div>
-            <button onClick={closeCameraModal} className="p-2 rounded-full bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 transition-all border border-white/[0.06]">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Preview / Viewfinder */}
-          <div className="w-full max-w-md aspect-[3/4] bg-black rounded-3xl overflow-hidden relative shadow-2xl mx-4 border border-white/[0.08] flex items-center justify-center">
-            {capturedPreviewUrl ? (
-              // Captured preview
-              cameraMode === 'photo' ? (
-                <img src={capturedPreviewUrl} className="w-full h-full object-cover" alt="Captured" />
-              ) : (
-                <video src={capturedPreviewUrl} controls playsInline className={`w-full h-full object-cover ${cameraFacing === 'user' ? '-scale-x-100' : ''}`} />
-              )
-            ) : (
-              // Live viewfinder
-              <video
-                ref={setCameraVideoRef}
-                autoPlay
-                muted
-                playsInline
-                className={`w-full h-full object-cover ${cameraFacing === 'user' ? '-scale-x-100' : ''}`}
-              />
-            )}
-
-            {/* Recording indicator */}
-            {cameraRecording && (
-              <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-red-600/90 backdrop-blur-md rounded-full px-3 py-1 border border-red-500/35">
-                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                <span className="text-[10px] font-black text-white uppercase tracking-widest">REC</span>
-              </div>
-            )}
-          </div>
-
-          {/* Controls */}
-          <div className="w-full max-w-md flex flex-col items-center justify-center py-4">
-            <div className="flex items-center justify-between w-full px-12 h-20">
-              {capturedPreviewUrl ? (
-                // Post-capture controls
-                <>
-                  <button
-                    onClick={() => {
-                      URL.revokeObjectURL(capturedPreviewUrl);
-                      setCapturedBlob(null);
-                      setCapturedPreviewUrl(null);
-                      // Reopen camera stream
-                      openCamera(cameraMode);
-                    }}
-                    className="flex flex-col items-center gap-1.5 text-slate-400 hover:text-white transition-all shrink-0"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-slate-900 border border-white/[0.08] flex items-center justify-center hover:bg-slate-800 active:scale-95 transition-all">
-                      <RotateCw className="w-5 h-5" />
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest">Retake</span>
-                  </button>
-
-                  <button
-                    onClick={sendCameraCapture}
-                    disabled={uploadingMedia}
-                    className="flex flex-col items-center gap-1.5 text-white transition-all shrink-0"
-                  >
-                    <div className="w-16 h-16 rounded-full bg-brand-600 hover:bg-brand-500 flex items-center justify-center shadow-lg shadow-brand-500/20 active:scale-[0.93] transition-all border border-brand-500/30">
-                      {uploadingMedia ? (
-                        <Loader2 className="w-6 h-6 animate-spin" />
-                      ) : (
-                        <Send className="w-5 h-5 translate-x-[1px] -translate-y-[1px]" />
-                      )}
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest">Send</span>
-                  </button>
-
-                  {/* Balanced Spacer */}
-                  <div className="w-12 h-12" />
-                </>
-              ) : (
-                // Live capture controls
-                <>
-                  {/* Balanced Spacer */}
-                  <div className="w-12 h-12" />
-
-                  {cameraMode === 'photo' ? (
-                    // Photo shutter
-                    <button
-                      onClick={takePhoto}
-                      className="w-16 h-16 rounded-full bg-white hover:bg-slate-200 border-4 border-slate-900 flex items-center justify-center shadow-2xl active:scale-90 transition-all shrink-0"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-white border border-slate-200 flex items-center justify-center" />
-                    </button>
-                  ) : (
-                    // Video record toggle
-                    <button
-                      onClick={cameraRecording ? stopCameraRecording : startCameraRecording}
-                      className={`w-16 h-16 rounded-full border-4 border-slate-900 flex items-center justify-center shadow-2xl active:scale-90 transition-all shrink-0 ${
-                        cameraRecording
-                          ? 'bg-red-650'
-                          : 'bg-white'
-                      }`}
-                    >
-                      {cameraRecording ? (
-                        <div className="w-5 h-5 rounded-md bg-white" />
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-red-600" />
-                      )}
-                    </button>
-                  )}
-
-                  {/* Flip camera button */}
-                  <button
-                    onClick={toggleCameraFacing}
-                    className="flex flex-col items-center gap-1.5 text-slate-400 hover:text-white transition-all shrink-0"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-slate-900 border border-white/[0.08] flex items-center justify-center hover:bg-slate-800 active:scale-95 transition-all">
-                      <RotateCw className="w-5 h-5" />
-                    </div>
-                    <span className="text-[9px] font-black uppercase tracking-widest">Flip</span>
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Bottom hint */}
-            {!capturedPreviewUrl && (
-              <p className="mt-4 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                {cameraMode === 'photo' ? 'Tap to capture photo' : cameraRecording ? 'Tap to stop recording' : 'Tap to start recording'}
-              </p>
-            )}
-          </div>
-        </div>
+        <SocialCameraModal
+          initialMode={cameraMode}
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCameraModal(false)}
+        />
       )}
 
     </div>
