@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
-import { SocialCameraModal } from '../camera';
+
+const SocialCameraModal = React.lazy(() => import('../camera/SocialCameraModal'));
 import { 
   Search, 
   Send, 
@@ -5163,14 +5164,16 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
       {/* ─── Social Camera Modal ─────────────────── */}
       {showCameraModal && (
-        <SocialCameraModal
-          destination="chat"
-          conversationId={activeConvo?.id}
-          replyTo={replyingToMessage}
-          initialMode={cameraMode}
-          onCapture={handleCameraCapture}
-          onClose={() => setShowCameraModal(false)}
-        />
+        <React.Suspense fallback={null}>
+          <SocialCameraModal
+            destination="chat"
+            conversationId={activeConvo?.id}
+            replyTo={replyingToMessage}
+            initialMode={cameraMode}
+            onCapture={handleCameraCapture}
+            onClose={() => setShowCameraModal(false)}
+          />
+        </React.Suspense>
       )}
 
     </div>

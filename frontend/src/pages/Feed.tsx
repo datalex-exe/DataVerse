@@ -61,9 +61,22 @@ interface FeedProps {
 export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => {
   const { user, token } = useAuth();
   
-  // Feed posts state
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Feed posts state with instant sessionStorage cache
+  const [posts, setPosts] = useState<Post[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('dv_cached_feed');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !sessionStorage.getItem('dv_cached_feed');
+    } catch {
+      return true;
+    }
+  });
   const [isSinglePostFiltered, setIsSinglePostFiltered] = useState<boolean>(false);
   
   // Comments drawer state
@@ -82,17 +95,21 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
   }, []);
   /* UI UPDATE END */
 
-  // Fetch feed posts
-  const fetchFeed = async () => {
+  // Fetch feed posts in background
+  const fetchFeed = async (showLoading = false) => {
     if (!token) return;
-    setLoading(true);
+    if (showLoading && posts.length === 0) setLoading(true);
     try {
       const res = await fetch('/api/posts/feed', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
-        setPosts(data.posts || []);
+        const incoming = data.posts || [];
+        setPosts(incoming);
+        try {
+          sessionStorage.setItem('dv_cached_feed', JSON.stringify(incoming.slice(0, 25)));
+        } catch {}
       }
     } catch (err) {
       console.error('Error fetching feed:', err);

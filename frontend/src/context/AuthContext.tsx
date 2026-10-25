@@ -33,9 +33,34 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Synchronously initialize token and user from localStorage for 0ms initial render
+  const [token, setToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('dataverse_token');
+    } catch {
+      return null;
+    }
+  });
+
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem('dataverse_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Only show a blocking spinner if there is a token but no cached user profile
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      const hasToken = !!localStorage.getItem('dataverse_token');
+      const hasUser = !!localStorage.getItem('dataverse_user');
+      return hasToken && !hasUser;
+    } catch {
+      return false;
+    }
+  });
 
   // Intercept all fetch responses to catch block status
   useEffect(() => {
@@ -49,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (data && (data.error === 'This account has been blocked' || data.error === 'Unauthorized: Account is blocked')) {
             alert('Your account has been blocked by the administrator.');
             localStorage.removeItem('dataverse_token');
+            localStorage.removeItem('dataverse_user');
             setToken(null);
             setUser(null);
             window.location.href = '/auth';
@@ -64,15 +90,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Initialize from localStorage
+  // Background session verification (stale-while-revalidate)
   useEffect(() => {
-    const fetchMe = async () => {
-      const storedToken = localStorage.getItem('dataverse_token');
-      if (!storedToken) {
-        setLoading(false);
-        return;
-      }
+    const storedToken = localStorage.getItem('dataverse_token');
+    if (!storedToken) {
+      setLoading(false);
+      return;
+    }
 
+    let isMounted = true;
+
+    const fetchMe = async () => {
       try {
         const res = await fetch('/api/auth/me', {
           headers: {
@@ -82,26 +110,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (res.ok) {
           const data = await res.json();
-          setToken(storedToken);
-          setUser(data.user);
-        } else {
+          if (isMounted) {
+            setToken(storedToken);
+            setUser(data.user);
+            try {
+              localStorage.setItem('dataverse_user', JSON.stringify(data.user));
+            } catch {}
+          }
+        } else if (res.status === 401 || res.status === 403) {
           // Token expired or invalid
           localStorage.removeItem('dataverse_token');
+          localStorage.removeItem('dataverse_user');
+          if (isMounted) {
+            setToken(null);
+            setUser(null);
+          }
         }
       } catch (err) {
         console.error('Failed to restore auth session:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchMe();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = (newToken: string, newUser: User) => {
-    localStorage.setItem('dataverse_token', newToken);
+    try {
+      localStorage.setItem('dataverse_token', newToken);
+      localStorage.setItem('dataverse_user', JSON.stringify(newUser));
+    } catch {}
     setToken(newToken);
     setUser(newUser);
+    setLoading(false);
   };
 
   const logout = async () => {
@@ -119,13 +167,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     localStorage.removeItem('dataverse_token');
+    localStorage.removeItem('dataverse_user');
     setToken(null);
     setUser(null);
   };
 
   const updateUser = (updatedFields: Partial<User>) => {
     if (user) {
-      setUser({ ...user, ...updatedFields });
+      const updated = { ...user, ...updatedFields };
+      setUser(updated);
+      try {
+        localStorage.setItem('dataverse_user', JSON.stringify(updated));
+      } catch {}
     }
   };
 

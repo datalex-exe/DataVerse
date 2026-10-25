@@ -1,13 +1,5 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Auth } from './pages/Auth';
-import { Feed } from './pages/Feed';
-import { Explore } from './pages/Explore';
-import { Profile } from './pages/Profile';
-import { Chat } from './pages/Chat';
-import { Create } from './pages/Create';
-import { Activity } from './pages/Activity';
-import { Admin } from './pages/Admin';
 import { 
   Home, 
   Search, 
@@ -21,6 +13,22 @@ import {
 /* THEME START */
 import { SidebarThemeSwitch, ThemeIconButton } from './utils/theme';
 /* THEME END */
+
+// Code splitting: Lazy-load individual pages on demand to minimize initial bundle size
+const Auth = React.lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })));
+const Feed = React.lazy(() => import('./pages/Feed').then(m => ({ default: m.Feed })));
+const Explore = React.lazy(() => import('./pages/Explore').then(m => ({ default: m.Explore })));
+const Profile = React.lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const Chat = React.lazy(() => import('./pages/Chat').then(m => ({ default: m.Chat })));
+const Create = React.lazy(() => import('./pages/Create').then(m => ({ default: m.Create })));
+const Activity = React.lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
+const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
+
+const ViewFallback = () => (
+  <div className="flex-1 flex items-center justify-center min-h-[50vh] text-[var(--muted)]">
+    <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
+  </div>
+);
 
 const AppContent: React.FC = () => {
   const { user, loading, logout, token } = useAuth();
@@ -119,8 +127,7 @@ const AppContent: React.FC = () => {
 
   React.useEffect(() => {
     if (!user) return;
-    fetchUnreadCount();
-    fetchUnreadChatsCount();
+    Promise.allSettled([fetchUnreadCount(), fetchUnreadChatsCount()]);
     const notificationInterval = setInterval(fetchUnreadCount, 30000);
     const chatsInterval = setInterval(fetchUnreadChatsCount, 15000);
 
@@ -227,7 +234,15 @@ const AppContent: React.FC = () => {
 
   // Unauthorized State (Show Login/Signup)
   if (!user) {
-    return <Auth />;
+    return (
+      <React.Suspense fallback={
+        <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-[var(--accent-2)]" />
+        </div>
+      }>
+        <Auth />
+      </React.Suspense>
+    );
   }
 
 
@@ -545,14 +560,15 @@ const AppContent: React.FC = () => {
           : 'min-h-[100dvh] md:pb-0 pb-16'
       }`}>
         <main className={`flex-1 relative z-10 flex flex-col ${activeView === 'messages' ? 'h-full min-h-0 overflow-hidden' : ''}`}>
-          {activeView === 'feed' && <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} />}
-
-          {activeView === 'messages' && <Chat onToggleBottomNav={setHideBottomNav} onNavigate={navigate} targetConvoId={messagesParam} />}
-          {activeView === 'search' && <Explore activeRoom="general" onNavigate={navigate} />}
-          {activeView === 'notifications' && <Activity onNavigate={navigate} />}
-          {activeView === 'create' && <Create onNavigate={navigate} />}
-          {activeView === 'profile' && <Profile targetUsername={profileParam} onNavigate={navigate} />}
-          {activeView === 'admin' && <Admin />}
+          <React.Suspense fallback={<ViewFallback />}>
+            {activeView === 'feed' && <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} />}
+            {activeView === 'messages' && <Chat onToggleBottomNav={setHideBottomNav} onNavigate={navigate} targetConvoId={messagesParam} />}
+            {activeView === 'search' && <Explore activeRoom="general" onNavigate={navigate} />}
+            {activeView === 'notifications' && <Activity onNavigate={navigate} />}
+            {activeView === 'create' && <Create onNavigate={navigate} />}
+            {activeView === 'profile' && <Profile targetUsername={profileParam} onNavigate={navigate} />}
+            {activeView === 'admin' && <Admin />}
+          </React.Suspense>
         </main>
       </div>
 

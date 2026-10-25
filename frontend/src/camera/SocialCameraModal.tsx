@@ -124,6 +124,9 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
   const startingRef = useRef<boolean>(false);
   const requestIdRef = useRef<number>(0);
   const isClosedRef = useRef<boolean>(false);
+  const currentFacingRef = useRef<CameraFacing>(getStoredFacingMode());
+  const pendingFacingRef = useRef<CameraFacing | null>(null);
+  const watchdogTimerRef = useRef<number | null>(null);
 
   // Shutter press-and-hold & Zoom tracking
   const shutterHoldTimerRef = useRef<number | null>(null);
@@ -213,18 +216,90 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
 
   // ─── Stop Camera Tracks Helper ─────────────────────────────────────────────
   const stopTracks = useCallback(() => {
+    if (watchdogTimerRef.current) {
+      clearTimeout(watchdogTimerRef.current);
+      watchdogTimerRef.current = null;
+    }
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((t) => {
+        try { t.stop(); } catch {}
+      });
       streamRef.current = null;
     }
     if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach((t) => t.stop());
+      audioStreamRef.current.getTracks().forEach((t) => {
+        try { t.stop(); } catch {}
+      });
       audioStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      try {
+        videoRef.current.srcObject = null;
+      } catch {}
     }
     setIsTorchOn(false);
   }, []);
 
-  // ─── STEP 1 & BUG 2: Initialize Camera Stream (Fast, Single Call) ──────────
+  // ─── Multi-tier MediaStream Request with Hardware Backoff ───────────────────
+  const requestStreamWithFallback = async (facing: CameraFacing): Promise<MediaStream> => {
+    // 1. Ideal 1080p with requested facingMode
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: facing },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 }
+        },
+        audio: false
+      });
+    } catch (err1: any) {
+      // If hardware was momentarily busy (NotReadableError during Android sensor flip), pause and retry
+      if (err1?.name === 'NotReadableError' || err1?.name === 'TrackStartError') {
+        await new Promise((r) => setTimeout(r, 120));
+        try {
+          return await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: facing },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          });
+        } catch {}
+      }
+
+      // 2. Standard 720p with requested facingMode
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+      } catch (err2) {
+        // 3. Exact or simple facingMode constraint
+        try {
+          return await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: facing
+            },
+            audio: false
+          });
+        } catch (err3) {
+          // 4. Ultimate fallback to ANY available video camera sensor on the device
+          return await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+        }
+      }
+    }
+  };
+
+  // ─── Initialize Camera Stream (Fast, Single Call, No Race Conditions) ──────
   const initCamera = useCallback(
     async (facing: CameraFacing) => {
       const currentRequestId = ++requestIdRef.current;
@@ -238,6 +313,7 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
           message: 'Camera requires a secure HTTPS connection. Please access this app over HTTPS.'
         });
         startingRef.current = false;
+        setIsFlipping(false);
         return;
       }
 
@@ -248,42 +324,32 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
           message: 'Camera API is not supported on this browser.'
         });
         startingRef.current = false;
+        setIsFlipping(false);
         return;
       }
 
-      // Stop previous tracks before starting new camera
+      // Check if previous stream was active; if so, cleanly release tracks and pause for hardware sensor switch
+      const hadPrevious = Boolean(streamRef.current);
       stopTracks();
+      if (hadPrevious) {
+        // Yield 80ms to let mobile OS camera hardware release previous sensor cleanly
+        await new Promise((r) => setTimeout(r, 80));
+      }
+
+      // Abort if superseded while yielding
+      if (currentRequestId !== requestIdRef.current || isClosedRef.current) {
+        startingRef.current = false;
+        return;
+      }
 
       try {
-        let stream: MediaStream;
-        try {
-          // Attempt ideal high quality (1080p, 30fps)
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: { ideal: facing },
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-              frameRate: { ideal: 30 }
-            },
-            audio: false // Only request audio when recording video starts
-          });
-        } catch (constraintErr: any) {
-          // If 1080p is rejected (OverconstrainedError), fallback to default resolution
-          if (constraintErr?.name === 'OverconstrainedError' || constraintErr?.name === 'ConstraintNotSatisfiedError') {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: {
-                facingMode: { ideal: facing }
-              },
-              audio: false
-            });
-          } else {
-            throw constraintErr;
-          }
-        }
+        const stream = await requestStreamWithFallback(facing);
 
         // Stale check: if another request won while this was pending, drop this stream
         if (currentRequestId !== requestIdRef.current || isClosedRef.current) {
-          stream.getTracks().forEach((t) => t.stop());
+          stream.getTracks().forEach((t) => {
+            try { t.stop(); } catch {}
+          });
           return;
         }
 
@@ -303,16 +369,33 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
           }
         }
 
-        // Attach stream directly to plain <video> element (no canvas pipeline)
+        // Attach stream directly to video element
         const video = videoRef.current;
         if (video) {
           video.srcObject = stream;
           try {
             await video.play();
-          } catch (playErr) {
-            console.warn('Video play interrupted or prevented:', playErr);
+          } catch (playErr: any) {
+            if (playErr?.name !== 'AbortError') {
+              console.warn('Video play interrupted or prevented:', playErr);
+            }
+          }
+
+          if (video.videoWidth > 0 || video.readyState >= 2) {
+            setHasFirstFrame(true);
+            setIsFlipping(false);
           }
         }
+
+        // Watchdog: If onPlaying event is delayed by browser, force reveal preview if stream is active
+        if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
+        watchdogTimerRef.current = window.setTimeout(() => {
+          if (currentRequestId === requestIdRef.current && !isClosedRef.current && streamRef.current?.active) {
+            setHasFirstFrame(true);
+            setIsFlipping(false);
+          }
+        }, 500);
+
       } catch (err: any) {
         if (currentRequestId !== requestIdRef.current) return;
 
@@ -339,16 +422,30 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
           });
         }
       } finally {
-        startingRef.current = false;
-        setIsFlipping(false);
+        if (currentRequestId === requestIdRef.current) {
+          startingRef.current = false;
+          setIsFlipping(false);
+
+          // Process queued flip if user rapidly clicked flip while camera was starting
+          if (pendingFacingRef.current && pendingFacingRef.current !== currentFacingRef.current) {
+            const nextQueued = pendingFacingRef.current;
+            pendingFacingRef.current = null;
+            currentFacingRef.current = nextQueued;
+            setCameraFacing(nextQueued);
+            storeFacingMode(nextQueued);
+            initCamera(nextQueued);
+          }
+        }
       }
     },
     [stopTracks]
   );
 
-  // Initialize camera immediately on mount
+  // Initialize camera once on mount
   useEffect(() => {
-    initCamera(cameraFacing);
+    const initialFacing = getStoredFacingMode();
+    currentFacingRef.current = initialFacing;
+    initCamera(initialFacing);
 
     // Stop tracks when tab is hidden, resume when visible
     const handleVisibilityChange = () => {
@@ -357,7 +454,7 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
         setHasFirstFrame(false);
       } else {
         if (!capturedPreviewUrl && !isClosedRef.current) {
-          initCamera(cameraFacing);
+          initCamera(currentFacingRef.current);
         }
       }
     };
@@ -368,20 +465,26 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopTracks();
     };
-  }, [cameraFacing, capturedPreviewUrl, initCamera, stopTracks]);
+  }, []); // Run on mount only - flipping camera is handled explicitly without teardown
 
   // ─── Flip Camera (Front / Back) ────────────────────────────────────────────
   const handleFlipCamera = useCallback(() => {
-    if (startingRef.current || isRecording) return;
+    if (isRecording) return;
+    const nextFacing: CameraFacing = currentFacingRef.current === 'user' ? 'environment' : 'user';
+    currentFacingRef.current = nextFacing;
+    setCameraFacing(nextFacing);
+    storeFacingMode(nextFacing);
     setIsFlipping(true);
     setHasFirstFrame(false);
 
-    const nextFacing: CameraFacing = cameraFacing === 'user' ? 'environment' : 'user';
-    setCameraFacing(nextFacing);
-    storeFacingMode(nextFacing);
+    if (startingRef.current) {
+      // Queue the flip so rapid taps transition cleanly to the last selected camera
+      pendingFacingRef.current = nextFacing;
+      return;
+    }
 
     initCamera(nextFacing);
-  }, [cameraFacing, initCamera, isRecording]);
+  }, [initCamera, isRecording]);
 
   // ─── Torch / Flash Toggle ──────────────────────────────────────────────────
   const toggleTorch = useCallback(async () => {
@@ -823,13 +926,28 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
           aspectRatio: aspectRatio === '9:16' ? '9/16' : aspectRatio === '4:5' ? '4/5' : '1/1'
         }}
       >
-        {/* Hidden plain HTML5 video for stream feed */}
+        {/* HTML5 video for stream feed */}
         <video
           ref={videoRef}
           playsInline
           muted
           autoPlay
-          onPlaying={() => setHasFirstFrame(true)}
+          onLoadedMetadata={() => {
+            setHasFirstFrame(true);
+            setIsFlipping(false);
+          }}
+          onLoadedData={() => {
+            setHasFirstFrame(true);
+            setIsFlipping(false);
+          }}
+          onCanPlay={() => {
+            setHasFirstFrame(true);
+            setIsFlipping(false);
+          }}
+          onPlaying={() => {
+            setHasFirstFrame(true);
+            setIsFlipping(false);
+          }}
           className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-150 ${
             hasFirstFrame && !capturedPreviewUrl ? 'opacity-100' : 'opacity-0'
           }`}

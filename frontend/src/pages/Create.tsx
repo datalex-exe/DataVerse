@@ -4,7 +4,8 @@ import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
 import { Image as ImageIcon, X, Loader2, Check, Video, Plus, Camera } from 'lucide-react';
 import { ImageCropper } from '../components/ImageCropper';
-import { SocialCameraModal } from '../camera';
+
+const SocialCameraModal = React.lazy(() => import('../camera/SocialCameraModal'));
 
 interface CreateProps {
   onNavigate: (view: string, param?: string) => void;
@@ -408,12 +409,14 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
 
       {/* ─── Social Camera Modal ─────────────────── */}
       {showCameraModal && (
-        <SocialCameraModal
-          destination="post"
-          initialMode="photo"
-          onCapture={handleCameraCapture}
-          onClose={() => setShowCameraModal(false)}
-        />
+        <React.Suspense fallback={null}>
+          <SocialCameraModal
+            destination="post"
+            initialMode="photo"
+            onCapture={handleCameraCapture}
+            onClose={() => setShowCameraModal(false)}
+          />
+        </React.Suspense>
       )}
 
     </div>
