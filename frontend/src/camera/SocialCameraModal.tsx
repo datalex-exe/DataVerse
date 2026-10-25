@@ -754,7 +754,7 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
   };
 
   // ─── BUG 1: Finish Capture & Send to Correct Destination ───────────────────
-  const handleFinishCapture = async () => {
+  const handleFinishCapture = () => {
     if (!capturedBlob || isSubmitting) return;
 
     const targetDestination = destination || getCameraDestination()?.destination;
@@ -768,7 +768,8 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      await onCapture(capturedBlob, cameraMode, targetDestination);
+      // Hand the captured media immediately to the recipient and close camera instantly
+      onCapture(capturedBlob, cameraMode, targetDestination);
       handleClose();
     } catch (err) {
       console.error('Failed to dispatch captured media to destination:', err);

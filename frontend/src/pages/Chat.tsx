@@ -38,7 +38,9 @@ import {
   Grid,
   CornerUpLeft,
   Maximize2,
-  MoreVertical
+  MoreVertical,
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 
 interface Member {
@@ -209,8 +211,6 @@ interface ChatInputProps {
   onSend: (text: string) => void;
   onFocus?: () => void;
   openCamera: (mode: 'photo' | 'video') => void;
-  uploadingMedia: boolean;
-  uploadProgress?: { current: number; total: number; percent: number } | null;
   handleSelectMedia: (e: React.ChangeEvent<HTMLInputElement>) => void;
   startRecording: () => void;
   replyingToMessage: Message | null;
@@ -223,8 +223,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onSend,
   onFocus,
   openCamera,
-  uploadingMedia,
-  uploadProgress,
   handleSelectMedia,
   startRecording,
   replyingToMessage,
@@ -252,7 +250,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSubmit = (e?: React.SyntheticEvent) => {
     if (e) e.preventDefault();
-    if (!text.trim() || isSending || uploadingMedia) return;
+    if (!text.trim() || isSending) return;
     const messageToSend = text.trim();
     // Clear input
     setText('');
@@ -296,22 +294,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className="flex flex-col w-full min-w-0 max-w-full gap-2">
-      {/* Upload Progress Indicator */}
-      {uploadingMedia && (
-        <div className="flex items-center justify-between bg-brand-500/10 border border-brand-500/20 rounded-xl px-3 py-1.5 text-xs text-brand-300 animate-fade-in select-none w-full min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400 flex-shrink-0" />
-            <span className="font-bold truncate">
-              {uploadProgress && uploadProgress.total > 1
-                ? `Uploading ${uploadProgress.current} of ${uploadProgress.total} files (${uploadProgress.percent}%)`
-                : uploadProgress
-                ? `Uploading (${uploadProgress.percent}%)`
-                : 'Uploading media...'}
-            </span>
-          </div>
-          <span className="text-[10px] text-brand-400/70 font-semibold uppercase tracking-wider flex-shrink-0 ml-2">Max 2 GB / file</span>
-        </div>
-      )}
 
       {/* CHAT OVERFLOW FIX START */}
       {/* Replying to Message Preview Box */}
@@ -360,7 +342,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
             className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
             title="Take photo or record video"
             aria-label="Take photo or record video"
-            disabled={uploadingMedia}
           >
             <Camera className="w-4 h-4" />
           </button>
@@ -374,13 +355,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
             className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
             title="Send photos, videos, or files (multiple selection, up to 2GB each)"
             aria-label="Send media or files"
-            disabled={uploadingMedia}
           >
-            {uploadingMedia ? (
-              <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-2)]" />
-            ) : (
-              <ImageIcon className="w-4 h-4" />
-            )}
+            <ImageIcon className="w-4 h-4" />
           </button>
           <input
             type="file"
@@ -399,7 +375,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
             className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
             title="Record voice note"
             aria-label="Record voice note"
-            disabled={uploadingMedia}
           >
             <Mic className="w-4 h-4" />
           </button>
@@ -438,7 +413,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
               maxHeight: '120px', 
               minHeight: '24px' 
             }}
-            disabled={uploadingMedia}
             autoComplete="off"
             autoCapitalize="sentences"
           />
@@ -453,9 +427,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
               e.preventDefault();
               handleSubmit();
             }}
-            disabled={!text.trim() || isSending || uploadingMedia}
+            disabled={!text.trim() || isSending}
             className={`w-8 h-8 sm:w-9 sm:h-9 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] rounded-full flex items-center justify-center transition-all flex-shrink-0 ${
-              !text.trim() || isSending || uploadingMedia
+              !text.trim() || isSending
                 ? 'opacity-30 pointer-events-none bg-[var(--input)] text-[var(--muted)]'
                 : 'bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] active:scale-90 cursor-pointer'
             }`}
@@ -512,8 +486,6 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
   // Secure Media State
   const [revealedMessages, setRevealedMessages] = useState<Record<string, boolean>>({});
-  const [uploadingMedia, setUploadingMedia] = useState<boolean>(false);
-  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; percent: number } | null>(null);
 
   // Camera modal state
   const [showCameraModal, setShowCameraModal] = useState<boolean>(false);
@@ -695,11 +667,29 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
-  const pendingForwardRef = useRef<string | null>(null);
+  const pendingForwardRef = useRef<{ conversationId: string; body: string } | null>(null);
+  const pendingMediaMapRef = useRef<Map<string, {
+    optimisticId: string;
+    blob: Blob | File;
+    mediaType: 'voice' | 'image' | 'video' | 'file';
+    contentType: string;
+    fileName: string;
+    conversationId: string;
+    localPreviewUrl: string;
+  }>>(new Map());
+  const objectUrlsRef = useRef<Set<string>>(new Set());
   const isNearBottomRef = useRef<boolean>(true);
   const userSentMessageRef = useRef<boolean>(false);
   const prevConvoIdRef = useRef<string | null>(null);
   const [draftsByConvo, setDraftsByConvo] = useState<{ [convoId: string]: string }>({});
+
+  // Revoke object URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      objectUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
+      objectUrlsRef.current.clear();
+    };
+  }, []);
 
   // Close three-dot header menu on outside click
   useEffect(() => {
@@ -866,20 +856,29 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         console.log('Chat WebSocket connected:', activeConvo.id);
         ws.send(JSON.stringify({ type: 'get_game_state' }));
 
-        if (pendingForwardRef.current) {
-          const body = pendingForwardRef.current;
+        if (pendingForwardRef.current && pendingForwardRef.current.conversationId === activeConvo.id) {
+          const forwardPayload = pendingForwardRef.current.body;
           pendingForwardRef.current = null;
-          try {
-            const parsed = JSON.parse(body);
-            parsed.allow_save = true;
-            parsed.allow_forward = true;
-            ws.send(JSON.stringify({
-              type: 'chat',
-              body: JSON.stringify(parsed)
-            }));
-          } catch (err) {
-            console.error('Failed to parse forwarded message:', err);
+          if (user) {
+            userSentMessageRef.current = true;
+            const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+            const optimisticMsg: Message = {
+              id: optimisticId,
+              conversation_id: activeConvo.id,
+              sender_id: user.id,
+              body: forwardPayload,
+              created_at: Date.now(),
+              username: user.username,
+              display_name: user.display_name || null,
+              avatar_url: user.avatar_url || null,
+              is_verified: user.is_verified
+            };
+            setMessages(prev => [...prev, optimisticMsg]);
           }
+          ws.send(JSON.stringify({
+            type: 'chat',
+            body: forwardPayload
+          }));
         }
       };
 
@@ -1026,7 +1025,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               const optimisticIdx = prev.findIndex(
                 m => m.id.startsWith('optimistic-') &&
                   m.sender_id === data.message.sender_id &&
-                  m.body === data.message.body
+                  (m.body === data.message.body || isMatchingMediaBody(m.body, data.message.body))
               );
               if (optimisticIdx !== -1) {
                 const next = [...prev];
@@ -1207,13 +1206,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         }
       };
 
-      mediaRecorder.onstop = async () => {
+      mediaRecorder.onstop = () => {
         const audioBlob = new Blob(recordingChunksRef.current, { type: 'audio/webm' });
         // Release mic stream
         stream.getTracks().forEach(track => track.stop());
 
-        // Upload and send voice note
-        await uploadAndSendSecureMedia(audioBlob, 'voice', 'audio/webm');
+        // Upload and send voice note optimistically
+        sendMediaOptimistic(audioBlob, 'voice', 'audio/webm', `voice_${Date.now()}.webm`);
       };
 
       mediaRecorderRef.current = mediaRecorder;
@@ -1257,14 +1256,133 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     }
   };
 
-  // Secure Media Upload & Send helper (Supports up to 2 GB with chunking and progress reporting)
-  const uploadAndSendSecureMedia = async (
-    blob: Blob,
+  // ─── Fast Non-blocking Media Pipeline ─────────────────────────────────────
+  const isMatchingMediaBody = (optBody: string, serverBody: string): boolean => {
+    try {
+      const o = JSON.parse(optBody);
+      const s = JSON.parse(serverBody);
+      if (o.type === 'secure_media' && s.type === 'secure_media') {
+        if (o.url === s.url) return true;
+        if (o.local_url && s.url && (o.file_name === s.file_name || o.media_type === s.media_type)) return true;
+      }
+    } catch {}
+    return false;
+  };
+
+  // Run background upload for optimistic media item
+  const runBackgroundUpload = async (optimisticId: string) => {
+    const item = pendingMediaMapRef.current.get(optimisticId);
+    if (!item || !token || !user) return;
+
+    const { blob, mediaType, contentType, fileName, conversationId, localPreviewUrl } = item;
+
+    try {
+      let uploadPayload: Blob | File = blob;
+      let uploadContentType = contentType;
+
+      // Fast async compression for images (resizes off-thread, skips <=800KB or GIFs)
+      if (mediaType === 'image') {
+        try {
+          uploadPayload = await compressImage(blob, 1440, 0.82);
+          uploadContentType = 'image/jpeg';
+        } catch (compErr) {
+          console.warn('Image compression fallback to original:', compErr);
+        }
+      }
+
+      const fileExt = (blob as File).name
+        ? (blob as File).name.split('.').pop()
+        : (uploadContentType.split('/')[1] || (mediaType === 'image' ? 'jpg' : 'bin'));
+      const r2Key = `secure/${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+
+      // Progress reporting directly to the message's visual indicator
+      const handleProgress = (pct: number) => {
+        setMessages(prev => prev.map(m => {
+          if (m.id === optimisticId) {
+            try {
+              const parsed = JSON.parse(m.body);
+              parsed.upload_progress = pct;
+              parsed.status = 'uploading';
+              return { ...m, body: JSON.stringify(parsed) };
+            } catch {
+              return m;
+            }
+          }
+          return m;
+        }));
+      };
+
+      // Upload directly using chunked or single uploadMediaFile
+      await uploadMediaFile(uploadPayload, r2Key, token, uploadContentType, handleProgress);
+
+      const finalServerBody = JSON.stringify({
+        type: 'secure_media',
+        media_type: mediaType,
+        url: r2Key,
+        allow_save: true,
+        allow_forward: true,
+        file_name: fileName
+      });
+
+      // Update optimistic message with final server url and mark as sent
+      setMessages(prev => prev.map(m => {
+        if (m.id === optimisticId) {
+          return {
+            ...m,
+            body: JSON.stringify({
+              type: 'secure_media',
+              media_type: mediaType,
+              url: r2Key,
+              local_url: localPreviewUrl || undefined,
+              status: 'sent',
+              upload_progress: 100,
+              allow_save: true,
+              allow_forward: true,
+              file_name: fileName
+            })
+          };
+        }
+        return m;
+      }));
+
+      // Broadcast over WebSocket if currently active for this conversation
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && activeConvo?.id === conversationId) {
+        userSentMessageRef.current = true;
+        wsRef.current.send(JSON.stringify({
+          type: 'chat',
+          body: finalServerBody
+        }));
+      }
+
+      // Cleanup pending item on success
+      pendingMediaMapRef.current.delete(optimisticId);
+    } catch (err: any) {
+      console.error('Background media upload failed:', err);
+      // Mark as failed with retry action
+      setMessages(prev => prev.map(m => {
+        if (m.id === optimisticId) {
+          try {
+            const parsed = JSON.parse(m.body);
+            parsed.status = 'failed';
+            return { ...m, body: JSON.stringify(parsed) };
+          } catch {
+            return m;
+          }
+        }
+        return m;
+      }));
+    }
+  };
+
+  // Instant optimistic media sender
+  const sendMediaOptimistic = (
+    blob: Blob | File,
     mediaType: 'voice' | 'image' | 'video' | 'file',
     contentType: string,
-    onProgress?: (percent: number) => void
+    providedFileName?: string,
+    existingOptimisticId?: string
   ) => {
-    if (!token || !user || !wsRef.current) return;
+    if (!token || !user || !activeConvo) return;
 
     if (blob.size > MAX_FILE_SIZE) {
       const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
@@ -1272,80 +1390,116 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       return;
     }
 
-    // Strip codec params before building key
-    const baseContentType = contentType.split(';')[0].trim() || 'application/octet-stream';
-    const fileExt = (blob as File).name ? (blob as File).name.split('.').pop() : (baseContentType.split('/')[1] || 'bin');
-    const r2Key = `secure/${user.id}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+    const optimisticId = existingOptimisticId || `optimistic-media-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const baseContentType = contentType.split(';')[0].trim() || (mediaType === 'image' ? 'image/jpeg' : 'application/octet-stream');
+    const fileExt = (blob as File).name
+      ? (blob as File).name.split('.').pop()
+      : (baseContentType.split('/')[1] || (mediaType === 'image' ? 'jpg' : 'bin'));
+    const fileName = providedFileName || (blob as File).name || `media-${Date.now()}.${fileExt}`;
 
-    // 1. Upload to storage using chunked upload utility (supporting up to 2 GB)
-    await uploadMediaFile(blob, r2Key, token, baseContentType, onProgress);
+    // Instant local preview URL
+    let localPreviewUrl = '';
+    if (mediaType === 'image' || mediaType === 'video') {
+      localPreviewUrl = URL.createObjectURL(blob);
+      objectUrlsRef.current.add(localPreviewUrl);
+    }
 
-    // 2. Format JSON secure message payload
-    const secureMsgBody = JSON.stringify({
+    const optimisticBody = JSON.stringify({
       type: 'secure_media',
       media_type: mediaType,
-      url: r2Key,
+      url: localPreviewUrl || `pending-${optimisticId}`,
+      local_url: localPreviewUrl || undefined,
+      status: 'uploading',
+      upload_progress: 0,
       allow_save: true,
       allow_forward: true,
-      file_name: (blob as File).name || `file.${fileExt}`
+      file_name: fileName
     });
 
-    // 3. Send over WebSocket
-    userSentMessageRef.current = true;
-    wsRef.current.send(JSON.stringify({
-      type: 'chat',
-      body: secureMsgBody
-    }));
+    const optimisticMsg: Message = {
+      id: optimisticId,
+      conversation_id: activeConvo.id,
+      sender_id: user.id,
+      body: optimisticBody,
+      created_at: Date.now(),
+      username: user.username,
+      display_name: user.display_name || null,
+      avatar_url: user.avatar_url || null,
+      is_verified: user.is_verified
+    };
+
+    pendingMediaMapRef.current.set(optimisticId, {
+      optimisticId,
+      blob,
+      mediaType,
+      contentType: baseContentType,
+      fileName,
+      conversationId: activeConvo.id,
+      localPreviewUrl
+    });
+
+    // Display in chat immediately
+    if (!existingOptimisticId) {
+      userSentMessageRef.current = true;
+      setMessages(prev => [...prev, optimisticMsg]);
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTo({
+            top: messagesContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 30);
+    }
+
+    // Launch background upload
+    runBackgroundUpload(optimisticId);
   };
 
-  // Select photo / video / file from device (Supports multiple selection & up to 2 GB per file)
-  const handleSelectMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Retry action for failed uploads
+  const handleRetryUpload = (optimisticId: string) => {
+    const item = pendingMediaMapRef.current.get(optimisticId);
+    if (!item) return;
+
+    // Reset status to uploading
+    setMessages(prev => prev.map(m => {
+      if (m.id === optimisticId) {
+        try {
+          const parsed = JSON.parse(m.body);
+          parsed.status = 'uploading';
+          parsed.upload_progress = 0;
+          return { ...m, body: JSON.stringify(parsed) };
+        } catch {
+          return m;
+        }
+      }
+      return m;
+    }));
+
+    runBackgroundUpload(optimisticId);
+  };
+
+
+  // Select photo / video / file from device (Supports multiple selection & non-blocking background uploads)
+  const handleSelectMedia = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const fileList = Array.from(files);
     e.target.value = ''; // Reset input so re-selecting same files works
 
-    setUploadingMedia(true);
-    setUploadProgress({ current: 1, total: fileList.length, percent: 0 });
-
-    try {
-      for (let idx = 0; idx < fileList.length; idx++) {
-        const file = fileList[idx];
-
-        if (file.size > MAX_FILE_SIZE) {
-          const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-          alert(`File "${file.name}" (${sizeMB} MB) exceeds the 2 GB maximum limit and will be skipped.`);
-          continue;
-        }
-
-        let type: 'image' | 'video' | 'file' = 'file';
-        if (file.type.startsWith('image/')) type = 'image';
-        else if (file.type.startsWith('video/')) type = 'video';
-
-        const updateProgress = (pct: number) => {
-          setUploadProgress({ current: idx + 1, total: fileList.length, percent: pct });
-        };
-
-        if (type === 'image' && file.size < 20 * 1024 * 1024) {
-          try {
-            const compressedBlob = await compressImage(file, 1080, 0.8);
-            const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
-            await uploadAndSendSecureMedia(compressedFile, 'image', 'image/jpeg', updateProgress);
-          } catch (err) {
-            console.error('Image compression failed, sending original:', err);
-            await uploadAndSendSecureMedia(file, 'image', file.type || 'image/jpeg', updateProgress);
-          }
-        } else {
-          await uploadAndSendSecureMedia(file, type, file.type || 'application/octet-stream', updateProgress);
-        }
+    for (const file of fileList) {
+      if (file.size > MAX_FILE_SIZE) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        alert(`File "${file.name}" (${sizeMB} MB) exceeds the 2 GB maximum limit and will be skipped.`);
+        continue;
       }
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Failed to upload media files.');
-    } finally {
-      setUploadingMedia(false);
-      setUploadProgress(null);
+
+      let type: 'image' | 'video' | 'file' = 'file';
+      if (file.type.startsWith('image/')) type = 'image';
+      else if (file.type.startsWith('video/')) type = 'video';
+
+      sendMediaOptimistic(file, type, file.type || 'application/octet-stream', file.name);
     }
   };
 
@@ -1446,11 +1600,61 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   };
 
   const handleSelectForwardTarget = (targetConvo: Conversation) => {
-    if (!forwardingMessageBody) return;
-    pendingForwardRef.current = forwardingMessageBody;
-    onNavigate?.('messages', targetConvo.id);
+    if (!forwardingMessageBody || !user) return;
+    const forwardBody = forwardingMessageBody;
     setShowForwardModal(false);
     setForwardingMessageBody(null);
+
+    // Reuse existing stored media reference without re-downloading or re-uploading
+    let finalBody = forwardBody;
+    try {
+      const parsed = JSON.parse(forwardBody);
+      if (parsed && parsed.type === 'secure_media') {
+        finalBody = JSON.stringify({
+          type: 'secure_media',
+          media_type: parsed.media_type,
+          url: parsed.url,
+          allow_save: true,
+          allow_forward: true,
+          file_name: parsed.file_name || 'Forwarded'
+        });
+      }
+    } catch {
+      // Plain text message forward
+    }
+
+    if (targetConvo.id === activeConvo?.id) {
+      // Forwarding directly to active chat
+      userSentMessageRef.current = true;
+      const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const optimisticMsg: Message = {
+        id: optimisticId,
+        conversation_id: targetConvo.id,
+        sender_id: user.id,
+        body: finalBody,
+        created_at: Date.now(),
+        username: user.username,
+        display_name: user.display_name || null,
+        avatar_url: user.avatar_url || null,
+        is_verified: user.is_verified
+      };
+      setMessages(prev => [...prev, optimisticMsg]);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'chat', body: finalBody }));
+      }
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTo({
+            top: messagesContainerRef.current.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }, 30);
+    } else {
+      // Forwarding to another conversation
+      pendingForwardRef.current = { conversationId: targetConvo.id, body: finalBody };
+      onNavigate?.('messages', targetConvo.id);
+    }
   };
 
   // Start DM
@@ -1728,19 +1932,14 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     setShowCameraModal(true);
   };
 
-  const handleCameraCapture = async (blob: Blob, mode: 'photo' | 'video') => {
+  const handleCameraCapture = (blob: Blob, mode: 'photo' | 'video') => {
     setShowCameraModal(false);
     const mediaType: 'image' | 'video' = mode === 'photo' ? 'image' : 'video';
     const baseType = blob.type.split(';')[0].trim() || (mode === 'photo' ? 'image/jpeg' : 'video/webm');
-    await uploadAndSendSecureMedia(blob, mediaType, baseType);
-    setTimeout(() => {
-      if (messagesContainerRef.current) {
-        messagesContainerRef.current.scrollTo({
-          top: messagesContainerRef.current.scrollHeight,
-          behavior: 'smooth'
-        });
-      }
-    }, 100);
+    const ext = mode === 'photo' ? 'jpg' : 'webm';
+    const fileName = `camera_${Date.now()}.${ext}`;
+
+    sendMediaOptimistic(blob, mediaType, baseType, fileName);
   };
 
   // Game interaction helpers
@@ -4501,7 +4700,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                   onContextMenu={(e) => !(secureMedia.allow_save || isAdmin) && e.preventDefault()}
                                 >
                                   <img 
-                                    src={`/api/media/file/${secureMedia.url}`} 
+                                    src={
+                                      secureMedia.local_url ||
+                                      (secureMedia.url?.startsWith('blob:') || secureMedia.url?.startsWith('data:') || secureMedia.url?.startsWith('http')
+                                        ? secureMedia.url
+                                        : `/api/media/file/${secureMedia.url}`)
+                                    } 
                                     alt="Secure media" 
                                     className={`w-full max-w-full max-h-60 object-cover transition-all duration-300 ${
                                       !isMe && !secureMedia.allow_save && !revealedMessages[msg.id] && !isAdmin
@@ -4510,6 +4714,35 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                     }`}
                                     draggable={secureMedia.allow_save || isAdmin}
                                   />
+
+                                  {/* Uploading progress overlay for sender */}
+                                  {isMe && (msg.id.startsWith('optimistic-') || secureMedia.status === 'uploading') && secureMedia.status !== 'failed' && (
+                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-1.5 z-10 transition-opacity">
+                                      <div className="w-9 h-9 rounded-full bg-black/70 border border-white/20 flex items-center justify-center text-white shadow-lg">
+                                        <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-2)]" />
+                                      </div>
+                                      <span className="text-[10px] font-bold text-white/90 font-mono tracking-wider">
+                                        {secureMedia.upload_progress && secureMedia.upload_progress > 0 && secureMedia.upload_progress < 100
+                                          ? `${secureMedia.upload_progress}%`
+                                          : 'Sending...'}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Upload failed overlay with Retry button for sender */}
+                                  {isMe && secureMedia.status === 'failed' && (
+                                    <div 
+                                      onClick={(e) => { e.stopPropagation(); handleRetryUpload(msg.id); }}
+                                      className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-1.5 z-10 cursor-pointer p-3 text-center transition-all hover:bg-black/90"
+                                      title="Upload failed. Tap to retry"
+                                    >
+                                      <div className="w-9 h-9 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+                                        <RefreshCw className="w-4 h-4" />
+                                      </div>
+                                      <span className="text-[11px] font-bold text-red-200">Upload failed</span>
+                                      <span className="text-[9px] text-white/70 underline">Tap to retry</span>
+                                    </div>
+                                  )}
                                   
                                   {/* Hold-to-reveal gesture blocker overlay (For Receiver only if protected) */}
                                   {!isMe && !secureMedia.allow_save && !isAdmin && (
@@ -4538,7 +4771,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                   onContextMenu={(e) => !(secureMedia.allow_save || isAdmin) && e.preventDefault()}
                                 >
                                   <video playsInline 
-                                    src={`/api/media/file/${secureMedia.url}`} 
+                                    src={
+                                      secureMedia.local_url ||
+                                      (secureMedia.url?.startsWith('blob:') || secureMedia.url?.startsWith('data:') || secureMedia.url?.startsWith('http')
+                                        ? secureMedia.url
+                                        : `/api/media/file/${secureMedia.url}`)
+                                    } 
                                     className={`w-full max-w-full max-h-60 object-cover transition-all duration-300 ${
                                       !isMe && !secureMedia.allow_save && !revealedMessages[msg.id] && !isAdmin
                                         ? 'blur-xl scale-95 pointer-events-none'
@@ -4565,6 +4803,35 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                        <Maximize2 className="w-3.5 h-3.5" />
                                      </button>
                                    )}
+
+                                  {/* Uploading progress overlay for video */}
+                                  {isMe && (msg.id.startsWith('optimistic-') || secureMedia.status === 'uploading') && secureMedia.status !== 'failed' && (
+                                    <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-1.5 z-10 transition-opacity pointer-events-none">
+                                      <div className="w-9 h-9 rounded-full bg-black/70 border border-white/20 flex items-center justify-center text-white shadow-lg">
+                                        <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-2)]" />
+                                      </div>
+                                      <span className="text-[10px] font-bold text-white/90 font-mono tracking-wider">
+                                        {secureMedia.upload_progress && secureMedia.upload_progress > 0 && secureMedia.upload_progress < 100
+                                          ? `${secureMedia.upload_progress}%`
+                                          : 'Sending...'}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {/* Upload failed overlay with Retry button for video */}
+                                  {isMe && secureMedia.status === 'failed' && (
+                                    <div 
+                                      onClick={(e) => { e.stopPropagation(); handleRetryUpload(msg.id); }}
+                                      className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-1.5 z-10 cursor-pointer p-3 text-center transition-all hover:bg-black/90"
+                                      title="Upload failed. Tap to retry"
+                                    >
+                                      <div className="w-9 h-9 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+                                        <RefreshCw className="w-4 h-4" />
+                                      </div>
+                                      <span className="text-[11px] font-bold text-red-200">Upload failed</span>
+                                      <span className="text-[9px] text-white/70 underline">Tap to retry</span>
+                                    </div>
+                                  )}
                                   
                                   {/* Hold-to-reveal gesture blocker overlay */}
                                   {!isMe && !secureMedia.allow_save && !isAdmin && (
@@ -4714,7 +4981,18 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           minWidth: 0,
                         }}
                       >
-                        <span className="text-[var(--muted)] font-normal flex-shrink-0">{formatTime(msg.created_at)}</span>
+                        <span className="text-[var(--muted)] font-normal flex-shrink-0 flex items-center gap-1">
+                          {formatTime(msg.created_at)}
+                          {isMe && msg.id.startsWith('optimistic-') && (
+                            secureMedia?.status === 'failed' ? (
+                              <span className="text-red-400 font-bold text-[9px] ml-1">Failed</span>
+                            ) : (
+                              <span className="text-[var(--accent-2)] flex items-center gap-0.5 text-[9px] ml-1" title="Sending...">
+                                <Clock className="w-2.5 h-2.5 animate-spin" />
+                              </span>
+                            )
+                          )}
+                        </span>
                         
                         {/* Sender Control Toggles */}
                         {isMe && secureMedia && (
@@ -4847,8 +5125,6 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   onSend={handleSendMessage}
                   onFocus={handleInputFocus}
                   openCamera={openCamera}
-                  uploadingMedia={uploadingMedia}
-                  uploadProgress={uploadProgress}
                   handleSelectMedia={handleSelectMedia}
                   startRecording={startRecording}
                   replyingToMessage={replyingToMessage}
