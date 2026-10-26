@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { Footer } from '../components/Footer';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { 
   Heart, 
@@ -60,6 +62,7 @@ interface FeedProps {
 
 export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => {
   const { user, token } = useAuth();
+  const { toast } = useToast();
   
   // Feed posts state with instant sessionStorage cache
   const [posts, setPosts] = useState<Post[]>(() => {
@@ -135,9 +138,10 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
 
       // Optimistically remove from feed state
       setPosts(prev => prev.filter(p => p.id !== postId));
+      toast.success('Post deleted successfully');
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'Failed to delete post');
+      toast.error(err.message || 'Failed to delete post');
     }
   };
 
@@ -226,9 +230,9 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
     } else {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        alert('Link copied to clipboard!');
+        toast.success('Link copied to clipboard!');
       } catch {
-        alert('Failed to copy link.');
+        toast.error('Failed to copy link to clipboard.');
       }
     }
   };
@@ -800,6 +804,17 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
             );
             /* THEME END */
           })
+        )}
+
+        {/* End of Feed Catch-up & Footer */}
+        {posts.length > 0 && (
+          <div className="py-8 text-center flex flex-col items-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card)] border border-[var(--line)] text-xs font-semibold text-[var(--muted)] shadow-sm">
+              <Check className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+              <span>You're all caught up!</span>
+            </div>
+            <Footer onNavigate={onNavigate} className="border-t-0 mt-6" />
+          </div>
         )}
       </div>
       {/* UI UPDATE END */}

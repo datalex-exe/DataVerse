@@ -4,6 +4,8 @@ import { Mail, Lock, User, AtSign, Eye, EyeOff } from 'lucide-react';
 /* THEME START */
 import { ThemeIconButton } from '../utils/theme';
 /* THEME END */
+import { Footer } from '../components/Footer';
+import { CookieBanner } from '../components/CookieBanner';
 
 export const Auth: React.FC = () => {
   const { login } = useAuth();
@@ -124,7 +126,7 @@ export const Auth: React.FC = () => {
 
 /* THEME START */
   return (
-    <main id="main-content" key={animationKey} className="min-h-screen w-full flex items-center justify-center bg-[var(--bg)] relative overflow-hidden px-4">
+    <main id="main-content" key={animationKey} className="min-h-screen w-full flex flex-col items-center justify-center bg-[var(--bg)] relative overflow-hidden px-4 py-8">
       {/* Theme Toggle Button in top right corner of Login/Sign Up */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-50">
         <ThemeIconButton />
@@ -478,6 +480,8 @@ export const Auth: React.FC = () => {
             <img 
               src="/logo.png?v=2" 
               alt="DataVerse Logo" 
+              width="64"
+              height="64"
               className="w-full h-full object-contain intro-logo"
             />
           </div>
@@ -709,12 +713,20 @@ export const Auth: React.FC = () => {
             <span className="relative z-10">{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
             <span className="intro-btn-shimmer" aria-hidden="true" />
           </button>
-          {/* THEME END */}
-          {/* ANIMATION END */}
+          {/* Legal / Policy Consent Notice */}
+          <p className="text-[11px] text-[var(--muted)] text-center mt-4 leading-relaxed">
+            By continuing, you agree to DataVerse's{' '}
+            <a href="#/terms" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
+            {' '}and{' '}
+            <a href="#/privacy" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
+          </p>
 
         </form>
 
       </div>
+
+      <Footer className="max-w-md mx-auto relative z-10 border-t-0 mt-6" />
+      <CookieBanner />
     </main>
   );
 };

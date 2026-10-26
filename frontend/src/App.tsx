@@ -14,6 +14,9 @@ import {
 import { SidebarThemeSwitch, ThemeIconButton } from './utils/theme';
 /* THEME END */
 
+import { ToastProvider } from './context/ToastContext';
+import { CookieBanner } from './components/CookieBanner';
+
 // Code splitting: Lazy-load individual pages on demand to minimize initial bundle size
 const Auth = React.lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })));
 const Feed = React.lazy(() => import('./pages/Feed').then(m => ({ default: m.Feed })));
@@ -23,6 +26,8 @@ const Chat = React.lazy(() => import('./pages/Chat').then(m => ({ default: m.Cha
 const Create = React.lazy(() => import('./pages/Create').then(m => ({ default: m.Create })));
 const Activity = React.lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
 const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
+const NotFound = React.lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
+const Legal = React.lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
 
 const ViewFallback = () => (
   <div className="flex-1 flex items-center justify-center min-h-[50vh] text-[var(--muted)]">
@@ -148,6 +153,28 @@ const AppContent: React.FC = () => {
   }, [user, fetchUnreadCount, fetchUnreadChatsCount]);
 
   React.useEffect(() => {
+    const titles: Record<string, string> = {
+      feed: 'DataVerse — Feed',
+      messages: 'DataVerse — Messages & Chat',
+      search: 'DataVerse — Explore Creators',
+      notifications: 'DataVerse — Activity & Notifications',
+      create: 'DataVerse — Create Post',
+      admin: 'DataVerse — Admin Console',
+      terms: 'Terms of Service — DataVerse',
+      privacy: 'Privacy Policy — DataVerse',
+      cookies: 'Cookies Policy — DataVerse',
+      refund: 'Refund Policy — DataVerse',
+      '404': '404: Page Not Found — DataVerse',
+    };
+
+    if (activeView === 'profile') {
+      document.title = profileParam ? `@${profileParam} — DataVerse` : 'Your Profile — DataVerse';
+    } else {
+      document.title = titles[activeView] || 'DataVerse — Social Network by Datalex';
+    }
+  }, [activeView, profileParam]);
+
+  React.useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash || '#/feed';
       
@@ -174,19 +201,24 @@ const AppContent: React.FC = () => {
         setActiveView('create');
       } else if (hash === '#/admin') {
         setActiveView('admin');
-      } else {
+      } else if (hash === '#/terms') {
+        setActiveView('terms');
+      } else if (hash === '#/privacy') {
+        setActiveView('privacy');
+      } else if (hash === '#/cookies') {
+        setActiveView('cookies');
+      } else if (hash === '#/refund') {
+        setActiveView('refund');
+      } else if (hash === '#/feed' || hash === '' || hash === '#') {
         setActiveView('feed');
+      } else {
+        setActiveView('404');
       }
       setHideBottomNav(false);
     };
 
     window.addEventListener('hashchange', handleHashChange);
-    
-    if (user) {
-      handleHashChange();
-    } else {
-      window.location.hash = '';
-    }
+    handleHashChange();
 
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
@@ -232,8 +264,16 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // Unauthorized State (Show Login/Signup)
+  // Unauthorized State (Show Login/Signup or Public Legal Docs)
   if (!user) {
+    if (activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') {
+      return (
+        <React.Suspense fallback={<ViewFallback />}>
+          <Legal type={activeView as any} onNavigate={navigate} />
+        </React.Suspense>
+      );
+    }
+
     return (
       <React.Suspense fallback={
         <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
@@ -278,6 +318,8 @@ const AppContent: React.FC = () => {
               <img 
                 src="/logo.png?v=2" 
                 alt="DataVerse Logo" 
+                width="32"
+                height="32"
                 className="w-full h-full object-contain"
               />
             </div>
@@ -289,7 +331,7 @@ const AppContent: React.FC = () => {
             <ThemeIconButton />
             <button
               onClick={() => logout()}
-              className="p-2 text-[var(--muted)] hover:text-[var(--danger)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)]"
+              className="p-2 text-[var(--muted)] hover:text-[var(--danger)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)] min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer"
               aria-label="Log Out"
             >
               <LogOut className="w-5 h-5" />
@@ -332,6 +374,8 @@ const AppContent: React.FC = () => {
                 <img 
                   src="/logo.png?v=2" 
                   alt="DataVerse Logo" 
+                  width="32"
+                  height="32"
                   className="w-8 h-8 object-contain"
                 />
               </div>
@@ -576,6 +620,10 @@ const AppContent: React.FC = () => {
             {activeView === 'create' && <Create onNavigate={navigate} />}
             {activeView === 'profile' && <Profile targetUsername={profileParam} onNavigate={navigate} />}
             {activeView === 'admin' && <Admin />}
+            {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (
+              <Legal type={activeView as any} onNavigate={navigate} />
+            )}
+            {activeView === '404' && <NotFound onNavigate={navigate} />}
           </React.Suspense>
         </main>
       </div>
@@ -677,6 +725,7 @@ const AppContent: React.FC = () => {
       {/* THEME END */}
       {/* UI UPDATE END */}
 
+      <CookieBanner onNavigate={navigate} />
     </div>
   );
 };
@@ -684,7 +733,9 @@ const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </AuthProvider>
   );
 };

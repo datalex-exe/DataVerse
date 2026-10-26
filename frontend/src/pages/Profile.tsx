@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { Footer } from '../components/Footer';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile } from '../utils/upload';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -82,6 +84,7 @@ interface ProfileProps {
 
 export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) => {
   const { user: currentUser, token, updateUser, logout } = useAuth();
+  const { toast } = useToast();
   
   const usernameToLoad = targetUsername || currentUser?.username;
   const isOwnProfile = !targetUsername || targetUsername.toLowerCase() === currentUser?.username.toLowerCase();
@@ -207,11 +210,13 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
         setIsBlocked(true);
         setViewerBlocked(false);
         fetchProfileData();
+        toast.success(`Blocked @${profile.username}`);
       } else {
-        alert('Failed to block user');
+        toast.error('Failed to block user');
       }
     } catch (err) {
       console.error(err);
+      toast.error('Network error blocking user');
     }
   };
 
@@ -226,11 +231,13 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
         setIsBlocked(false);
         setViewerBlocked(false);
         fetchProfileData();
+        toast.success(`Unblocked @${profile.username}`);
       } else {
-        alert('Failed to unblock user');
+        toast.error('Failed to unblock user');
       }
     } catch (err) {
       console.error(err);
+      toast.error('Network error unblocking user');
     }
   };
 
@@ -404,9 +411,10 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
       // Optimistically remove from state
       setPosts(prev => prev.filter(p => p.id !== postId));
+      toast.success('Post deleted successfully');
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'Failed to delete post');
+      toast.error(err.message || 'Failed to delete post');
     }
   };
 
@@ -567,7 +575,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file.');
+        toast.error('Please select an image file.');
         return;
       }
       setAvatarToCrop(file);
@@ -606,8 +614,9 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
       updateUser({ avatar_url: r2Key });
       setProfile({ ...profile, avatar_url: r2Key });
+      toast.success('Profile photo updated successfully');
     } catch (err: any) {
-      alert(err.message || 'Failed to update photo');
+      toast.error(err.message || 'Failed to update photo');
     } finally {
       setUploadingAvatar(false);
     }
@@ -2254,6 +2263,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
         />
       )}
 
+      <Footer onNavigate={onNavigate} className="border-t-0 mt-8" />
     </div>
   );
 };

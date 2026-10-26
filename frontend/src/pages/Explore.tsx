@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Search as SearchIcon, Loader2, UserPlus } from 'lucide-react';
+import { Search as SearchIcon, Loader2, UserPlus, X } from 'lucide-react';
 import { VerifiedBadge } from '../components/VerifiedBadge';
+import { Footer } from '../components/Footer';
 
 interface ExploreUser {
   id: string;
@@ -76,11 +77,20 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
             className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 rounded-2xl py-3.5 pl-12 pr-12 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all"
             autoFocus
           />
-          {loading && (
+          {loading ? (
             <div className="absolute right-4 top-1/2 -translate-y-1/2">
               <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-2)]" />
             </div>
-          )}
+          ) : searchQuery ? (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search input"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 rounded-full text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -154,6 +164,7 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
       )}
       {/* THEME END */}
 
+      <Footer onNavigate={onNavigate} className="border-t-0 mt-8" />
     </div>
   );
 };

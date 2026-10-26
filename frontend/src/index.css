@@ -392,8 +392,9 @@ button[class*="bg-brand-500"] * {
 
 /* CHAT OVERFLOW FIX START */
 html, body {
-  overflow-x: hidden !important;
-  max-width: 100vw;
+  overflow-x: clip !important;
+  max-width: 100% !important;
+  width: 100% !important;
 }
 
 /* Messages view mobile viewport lock to prevent document bouncing/scrolling */
