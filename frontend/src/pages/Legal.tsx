@@ -155,7 +155,7 @@ export const Legal: React.FC<LegalProps> = ({ type = 'terms', onNavigate }) => {
 
               <section>
                 <h2 className="text-base font-extrabold text-[var(--text)] mb-2">5. Contact Information</h2>
-                <p>For any legal inquiries regarding these Terms, contact our legal team at <a href="mailto:datalex.exe@gmail.com" className="text-[var(--accent-2)] underline">datalex.exe@gmail.com</a>.</p>
+                <p>For any legal inquiries regarding these Terms, contact our legal team at <a href="mailto:dataverse@datalexcloud.tech" className="text-[var(--accent-2)] underline">dataverse@datalexcloud.tech</a> or through our in-app Contact form.</p>
               </section>
             </div>
           )}
@@ -174,8 +174,8 @@ export const Legal: React.FC<LegalProps> = ({ type = 'terms', onNavigate }) => {
                 <h2 className="text-base font-extrabold text-[var(--text)] mb-2">2. Information We Collect</h2>
                 <ul className="list-disc pl-5 mt-2 space-y-1">
                   <li><strong className="text-[var(--text)]">Account Information:</strong> Username, email address, display name, and password hash (PBKDF2 HMAC-SHA256 with individual cryptographic salt). We never store raw passwords.</li>
-                  <li><strong className="text-[var(--text)]">User-Generated Content:</strong> Posts, photos, captions, comments, and direct chat messages created on the platform.</li>
-                  <li><strong className="text-[var(--text)]">Verification Metadata:</strong> Verification badge category and document URLs for users who optionally request identity verification.</li>
+                  <li><strong className="text-[var(--text)]">User-Generated Content:</strong> Posts, captions, and comments. Photos and direct chat messages are not saved for profiling or monetization; they are monitored strictly for legal actions and regulatory compliance.</li>
+                  <li><strong className="text-[var(--text)]">Verification Metadata:</strong> Verification badge category and document URLs for users who optionally request identity verification. This data will be reset in 30 days.</li>
                   <li><strong className="text-[var(--text)]">Technical Telemetry:</strong> IP addresses and sliding-window rate counters used exclusively to prevent brute-force attacks and abuse.</li>
                 </ul>
               </section>
@@ -183,7 +183,7 @@ export const Legal: React.FC<LegalProps> = ({ type = 'terms', onNavigate }) => {
               <section>
                 <h2 className="text-base font-extrabold text-[var(--text)] mb-2">3. Storage & Infrastructure</h2>
                 <p>
-                  DataVerse is hosted on Cloudflare's secure global edge network utilizing Cloudflare D1 (encrypted relational database storage) and Cloudflare Workers KV. Data is encrypted in transit via TLS 1.3 and protected by strict Content Security Policies.
+                  DataVerse is hosted on Cloudflare's secure global edge network utilizing Cloudflare D1 (encrypted relational database storage) and Cloudflare Workers KV. Photos and direct chat conversations are monitored strictly for legal actions and compliance rather than permanent profiling. Data is encrypted in transit via TLS 1.3 and protected by strict Content Security Policies.
                 </p>
               </section>
 
@@ -197,7 +197,7 @@ export const Legal: React.FC<LegalProps> = ({ type = 'terms', onNavigate }) => {
               <section>
                 <h2 className="text-base font-extrabold text-[var(--text)] mb-2">5. Your Data Rights & Account Deletion</h2>
                 <p>
-                  Under applicable privacy laws (including GDPR and CCPA), you have the right to access, rectify, export, or permanently delete your personal information. You may delete individual posts or request complete account erasure by contacting <a href="mailto:datalex.exe@gmail.com" className="text-[var(--accent-2)] underline">datalex.exe@gmail.com</a>.
+                  Under applicable privacy laws (including GDPR and CCPA), you have the right to access, rectify, export, or permanently delete your personal information. You may delete individual posts or request complete account erasure by contacting our team via the in-app Contact form or emailing <a href="mailto:dataverse@datalexcloud.tech" className="text-[var(--accent-2)] underline">dataverse@datalexcloud.tech</a>.
                 </p>
               </section>
             </div>
@@ -281,7 +281,7 @@ export const Legal: React.FC<LegalProps> = ({ type = 'terms', onNavigate }) => {
               <section>
                 <h2 className="text-base font-extrabold text-[var(--text)] mb-2">3. Processing Timelines & Contact</h2>
                 <p>
-                  Approved refunds are processed within 5–7 business days to the original payment method. For billing disputes or refund requests, please email <a href="mailto:datalex.exe@gmail.com" className="text-[var(--accent-2)] underline">datalex.exe@gmail.com</a> with your username and transaction reference.
+                  Approved refunds are processed within 5–7 business days to the original payment method. For billing disputes or refund requests, please email <a href="mailto:dataverse@datalexcloud.tech" className="text-[var(--accent-2)] underline">dataverse@datalexcloud.tech</a> or submit an inquiry through our in-app Contact form with your username and transaction reference.
                 </p>
               </section>
             </div>

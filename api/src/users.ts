@@ -350,7 +350,7 @@ usersApp.put('/profile/verify', authMiddleware, async (c) => {
                 to: [{ email: admin.email, name: admin.display_name || admin.username }]
               }],
               from: {
-                email: 'verification@dataverse-app.com',
+                email: 'dataverse@datalexcloud.tech',
                 name: 'DataVerse Verification'
               },
               subject: `[DataVerse Verification] Request from @${user.username}`,
@@ -1091,10 +1091,10 @@ usersApp.post('/report', authMiddleware, async (c) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personalizations: [{
-            to: [{ email: 'datalex.exe@gmail.com', name: 'DataVerse Admin' }]
+            to: [{ email: 'dataverse@datalexcloud.tech', name: 'DataVerse Admin' }]
           }],
           from: {
-            email: 'reports@dataverse-app.com',
+            email: 'dataverse@datalexcloud.tech',
             name: 'DataVerse Reports'
           },
           subject: `[DataVerse Report] ${escapeHtml(typeLabel)} — @${escapeHtml(reporter.username)}`,
@@ -1139,7 +1139,7 @@ usersApp.post('/report', authMiddleware, async (c) => {
             to: [{ email: reporter.email, name: reporter.display_name || reporter.username }]
           }],
           from: {
-            email: 'reports@dataverse-app.com',
+            email: 'dataverse@datalexcloud.tech',
             name: 'DataVerse Safety Team'
           },
           subject: `We received your report — DataVerse`,

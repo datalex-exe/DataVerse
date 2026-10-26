@@ -28,6 +28,7 @@ const Activity = React.lazy(() => import('./pages/Activity').then(m => ({ defaul
 const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const NotFound = React.lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 const Legal = React.lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
+const Contact = React.lazy(() => import('./pages/Contact').then(m => ({ default: m.Contact })));
 
 const ViewFallback = () => (
   <div className="flex-1 flex items-center justify-center min-h-[50vh] text-[var(--muted)]">
@@ -164,6 +165,7 @@ const AppContent: React.FC = () => {
       privacy: 'Privacy Policy — DataVerse',
       cookies: 'Cookies Policy — DataVerse',
       refund: 'Refund Policy — DataVerse',
+      contact: 'Contact Support — DataVerse',
       '404': '404: Page Not Found — DataVerse',
     };
 
@@ -209,6 +211,8 @@ const AppContent: React.FC = () => {
         setActiveView('cookies');
       } else if (hash === '#/refund') {
         setActiveView('refund');
+      } else if (hash === '#/contact') {
+        setActiveView('contact');
       } else if (hash === '#/feed' || hash === '' || hash === '#') {
         setActiveView('feed');
       } else {
@@ -264,12 +268,16 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // Unauthorized State (Show Login/Signup or Public Legal Docs)
+  // Unauthorized State (Show Login/Signup or Public Legal Docs / Contact)
   if (!user) {
-    if (activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') {
+    if (activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund' || activeView === 'contact') {
       return (
         <React.Suspense fallback={<ViewFallback />}>
-          <Legal type={activeView as any} onNavigate={navigate} />
+          {activeView === 'contact' ? (
+            <Contact onNavigate={navigate} />
+          ) : (
+            <Legal type={activeView as any} onNavigate={navigate} />
+          )}
         </React.Suspense>
       );
     }
@@ -623,6 +631,7 @@ const AppContent: React.FC = () => {
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (
               <Legal type={activeView as any} onNavigate={navigate} />
             )}
+            {activeView === 'contact' && <Contact onNavigate={navigate} />}
             {activeView === '404' && <NotFound onNavigate={navigate} />}
           </React.Suspense>
         </main>

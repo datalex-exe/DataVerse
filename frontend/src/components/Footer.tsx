@@ -58,7 +58,8 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, className = '' }) =>
           </a>
           <span aria-hidden="true" className="text-[var(--line)]">·</span>
           <a
-            href="mailto:datalex.exe@gmail.com"
+            href="#/contact"
+            onClick={(e) => handleLinkClick(e, 'contact')}
             className="hover:text-[var(--accent-2)] transition-colors cursor-pointer py-1"
           >
             Support & Contact

@@ -1489,7 +1489,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 {/* Disclaimer */}
                 <div className="p-3 bg-slate-950/50 border border-white/[0.03] rounded-xl">
                   <p className="text-[9px] text-slate-600 leading-relaxed">
-                    🔒 Your report is confidential. It will be forwarded to our safety team at <span className="text-slate-500 font-bold">datalex.exe@gmail.com</span> for review. False or malicious reports may result in account restrictions.
+                    🔒 Your report is confidential. It will be forwarded to our safety team at <span className="text-[var(--accent-2)] font-bold">dataverse@datalexcloud.tech</span> for review. False or malicious reports may result in account restrictions.
                   </p>
                 </div>
 
