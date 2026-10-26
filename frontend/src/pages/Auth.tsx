@@ -21,6 +21,7 @@ export const Auth: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [acceptedTerms, setAcceptedTerms] = useState<boolean>(false);
 
   /* ANIMATION START */
   const [animationKey, setAnimationKey] = useState<number>(0);
@@ -97,6 +98,12 @@ export const Auth: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!isLogin && !acceptedTerms) {
+      setError('You must accept the Terms of Service and Privacy Policy to create an account.');
+      return;
+    }
+
     setLoading(true);
 
     const url = isLogin ? '/api/auth/login' : '/api/auth/signup';
@@ -704,22 +711,45 @@ export const Auth: React.FC = () => {
           {/* ANIMATION END */}
 
           {/* THEME START */}
+          {/* Explicit Unchecked Consent Checkbox for Sign Up */}
+          {!isLogin && (
+            <div className="flex items-start gap-2.5 pt-1 text-left">
+              <input
+                id="auth-terms-consent"
+                type="checkbox"
+                required
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-[var(--line)] bg-[var(--input)] text-[var(--accent)] accent-[var(--accent)] cursor-pointer focus:ring-2 focus:ring-[var(--accent-2)]/30 flex-shrink-0"
+              />
+              <label htmlFor="auth-terms-consent" className="text-[11px] text-[var(--muted)] leading-snug cursor-pointer select-none">
+                I have read and agree to the{' '}
+                <a href="#/terms" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
+                {' '}and{' '}
+                <a href="#/privacy" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
+              </label>
+            </div>
+          )}
+
           {/* Submit Button - Spring pop + repeating shimmer */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-3 mt-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover intro-btn relative overflow-hidden"
+            disabled={loading || (!isLogin && !acceptedTerms)}
+            className="w-full py-3 mt-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover intro-btn relative overflow-hidden cursor-pointer disabled:cursor-not-allowed"
           >
             <span className="relative z-10">{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
             <span className="intro-btn-shimmer" aria-hidden="true" />
           </button>
-          {/* Legal / Policy Consent Notice */}
-          <p className="text-[11px] text-[var(--muted)] text-center mt-4 leading-relaxed">
-            By continuing, you agree to DataVerse's{' '}
-            <a href="#/terms" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
-            {' '}and{' '}
-            <a href="#/privacy" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
-          </p>
+
+          {/* Legal / Policy Consent Notice for Sign In */}
+          {isLogin && (
+            <p className="text-[11px] text-[var(--muted)] text-center mt-4 leading-relaxed">
+              By signing in, you agree to DataVerse's{' '}
+              <a href="#/terms" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
+              {' '}and{' '}
+              <a href="#/privacy" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
+            </p>
+          )}
 
         </form>
 
