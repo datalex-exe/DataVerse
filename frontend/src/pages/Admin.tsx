@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { Footer } from '../components/Footer';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { 
   Loader2, 
@@ -152,6 +154,7 @@ const AdminAvatar: React.FC<AdminAvatarProps> = ({
 
 export const Admin: React.FC = () => {
   const { token, user: currentUser } = useAuth();
+  const { toast } = useToast();
   
   const [activeTab, setActiveTab] = useState<'users' | 'chats' | 'restrictions' | 'verifications' | 'reports'>('users');
   const [users, setUsers] = useState<SystemUser[]>([]);
@@ -513,7 +516,7 @@ export const Admin: React.FC = () => {
   const handleToggleBlock = async (targetUser: SystemUser) => {
     if (!token) return;
     if (targetUser.id === currentUser?.id) {
-      alert('Cannot block yourself.');
+      toast.error('Cannot block yourself.');
       return;
     }
     const nextState = !targetUser.is_blocked;
@@ -531,9 +534,11 @@ export const Admin: React.FC = () => {
         body: JSON.stringify({ is_blocked: nextState })
       });
       if (!res.ok) throw new Error();
+      toast.success(nextState ? `Blocked @${targetUser.username}` : `Unblocked @${targetUser.username}`);
     } catch {
       // Revert state
       setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, is_blocked: !nextState } : u));
+      toast.error(`Failed to update block status for @${targetUser.username}`);
     }
   };
 
@@ -1569,6 +1574,7 @@ export const Admin: React.FC = () => {
         </div>
       )}
 
+      <Footer className="border-t-0 mt-8" />
     </div>
   );
 };

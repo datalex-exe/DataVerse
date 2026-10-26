@@ -72,12 +72,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const clone = response.clone();
           const data = await clone.json();
           if (data && (data.error === 'This account has been blocked' || data.error === 'Unauthorized: Account is blocked')) {
-            alert('Your account has been blocked by the administrator.');
+            try {
+              sessionStorage.setItem('dv_block_notice', 'Your account has been blocked by the administrator.');
+            } catch {}
             localStorage.removeItem('dataverse_token');
             localStorage.removeItem('dataverse_user');
             setToken(null);
             setUser(null);
-            window.location.href = '/auth';
+            window.location.hash = '';
           }
         } catch (e) {
           // ignore

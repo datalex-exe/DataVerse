@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { Footer } from '../components/Footer';
 import { 
   Heart, 
   MessageCircle, 
@@ -30,6 +32,7 @@ interface ActivityProps {
 
 export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
   const { token } = useAuth();
+  const { toast } = useToast();
   
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -276,14 +279,16 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                     });
                     if (res.ok) {
                       setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, type: 'follow', is_read: true } : n));
+                      toast.success(`Accepted @${notifierName}'s follow request`);
                     } else {
-                      alert('Failed to accept follow request');
+                      toast.error('Failed to accept follow request');
                     }
                   } catch (err) {
                     console.error(err);
+                    toast.error('Network error accepting follow request');
                   }
                 }}
-                className="min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-full shadow-md shadow-brand-600/20 active:scale-95 transition-all flex items-center justify-center"
+                className="min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-full shadow-md shadow-brand-600/20 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
               >
                 Accept
               </button>
@@ -298,14 +303,16 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                     });
                     if (res.ok) {
                       setNotifications(prev => prev.filter(n => n.id !== item.id));
+                      toast.info(`Rejected follow request`);
                     } else {
-                      alert('Failed to reject follow request');
+                      toast.error('Failed to reject follow request');
                     }
                   } catch (err) {
                     console.error(err);
+                    toast.error('Network error rejecting follow request');
                   }
                 }}
-                className="min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-4 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/10 text-xs font-medium rounded-full active:scale-95 transition-all flex items-center justify-center"
+                className="min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-4 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/10 text-xs font-medium rounded-full active:scale-95 transition-all flex items-center justify-center cursor-pointer"
               >
                 Reject
               </button>
@@ -415,6 +422,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
       )}
       {/* THEME END */}
 
+      <Footer onNavigate={onNavigate} className="border-t-0 mt-8" />
     </div>
   );
   /* UI UPDATE END */
