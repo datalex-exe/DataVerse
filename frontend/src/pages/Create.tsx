@@ -29,6 +29,11 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   /* UI UPDATE END */
 
+  // Preload SocialCameraModal chunk so opening camera is instantaneous
+  useEffect(() => {
+    import('../camera/SocialCameraModal');
+  }, []);
+
   // Clean up object URLs to prevent memory leaks
   useEffect(() => {
     return () => {

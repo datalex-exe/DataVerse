@@ -31,8 +31,8 @@ const Legal = React.lazy(() => import('./pages/Legal').then(m => ({ default: m.L
 const Contact = React.lazy(() => import('./pages/Contact').then(m => ({ default: m.Contact })));
 
 const ViewFallback = () => (
-  <div className="flex-1 flex items-center justify-center min-h-[50vh] text-[var(--muted)]">
-    <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
+  <div className="flex-1 flex items-center justify-center min-h-[30vh] text-[var(--muted)] animate-in fade-in duration-150">
+    <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-2)]" />
   </div>
 );
 
@@ -47,11 +47,41 @@ const AppContent: React.FC = () => {
   const [messagesParam, setMessagesParam] = useState<string | undefined>(undefined);
   const [hideBottomNav, setHideBottomNav] = useState<boolean>(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState<boolean>(false);
+  // Track visited primary tabs to keep them mounted in DOM for 0ms instantaneous tab switching
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['feed']));
 
+  React.useEffect(() => {
+    const primaryViews = ['feed', 'messages', 'search', 'notifications', 'create'];
+    if (primaryViews.includes(activeView)) {
+      setVisitedTabs((prev) => {
+        if (prev.has(activeView)) return prev;
+        const next = new Set(prev);
+        next.add(activeView);
+        return next;
+      });
+    }
+  }, [activeView]);
 
+  // Eagerly preload all primary page components in the background so tab switching is instantaneous
+  React.useEffect(() => {
+    if (user) {
+      const preloadViews = () => {
+        import('./pages/Feed');
+        import('./pages/Explore');
+        import('./pages/Chat');
+        import('./pages/Activity');
+        import('./pages/Create');
+        import('./pages/Profile');
+        import('./camera/SocialCameraModal');
+      };
 
-
-  // Synchronize mobile visualViewport and keyboard height for chat view
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(preloadViews);
+      } else {
+        setTimeout(preloadViews, 100);
+      }
+    }
+  }, [user]);  // Synchronize mobile visualViewport and keyboard height for chat view
   React.useEffect(() => {
     if (activeView !== 'messages') {
       document.documentElement.classList.remove('messages-active', 'keyboard-open');
@@ -621,11 +651,38 @@ const AppContent: React.FC = () => {
       }`}>
         <main id="main-content" tabIndex={-1} className={`flex-1 relative z-10 flex flex-col focus:outline-none ${activeView === 'messages' ? 'h-full min-h-0 overflow-hidden' : ''}`}>
           <React.Suspense fallback={<ViewFallback />}>
-            {activeView === 'feed' && <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} />}
-            {activeView === 'messages' && <Chat onToggleBottomNav={setHideBottomNav} onNavigate={navigate} targetConvoId={messagesParam} />}
-            {activeView === 'search' && <Explore activeRoom="general" onNavigate={navigate} />}
-            {activeView === 'notifications' && <Activity onNavigate={navigate} />}
-            {activeView === 'create' && <Create onNavigate={navigate} />}
+            {/* Primary Core Views - Kept mounted once visited for 0ms instant tab switching */}
+            {visitedTabs.has('feed') && (
+              <div className={activeView === 'feed' ? 'block w-full flex-1' : 'hidden'}>
+                <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} />
+              </div>
+            )}
+
+            {visitedTabs.has('messages') && (
+              <div className={activeView === 'messages' ? 'h-full min-h-0 flex-1 flex flex-col' : 'hidden'}>
+                <Chat onToggleBottomNav={setHideBottomNav} onNavigate={navigate} targetConvoId={messagesParam} />
+              </div>
+            )}
+
+            {visitedTabs.has('search') && (
+              <div className={activeView === 'search' ? 'block w-full flex-1' : 'hidden'}>
+                <Explore activeRoom="general" onNavigate={navigate} />
+              </div>
+            )}
+
+            {visitedTabs.has('notifications') && (
+              <div className={activeView === 'notifications' ? 'block w-full flex-1' : 'hidden'}>
+                <Activity onNavigate={navigate} />
+              </div>
+            )}
+
+            {visitedTabs.has('create') && (
+              <div className={activeView === 'create' ? 'block w-full flex-1' : 'hidden'}>
+                <Create onNavigate={navigate} />
+              </div>
+            )}
+
+            {/* Dynamic / Parameter-based Views */}
             {activeView === 'profile' && <Profile targetUsername={profileParam} onNavigate={navigate} />}
             {activeView === 'admin' && <Admin />}
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (

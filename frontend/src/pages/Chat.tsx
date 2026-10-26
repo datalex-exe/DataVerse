@@ -696,6 +696,11 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     };
   }, []);
 
+  // Preload SocialCameraModal chunk so opening camera in chat is instantaneous
+  useEffect(() => {
+    import('../camera/SocialCameraModal');
+  }, []);
+
   // Close three-dot header menu on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
