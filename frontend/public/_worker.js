@@ -3,6 +3,15 @@
 
 const WORKER_URL = 'https://dataverse-api.24216287.workers.dev';
 
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
+};
+
+const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; connect-src 'self' https://dataverse-api.24216287.workers.dev wss://dataverse-api.24216287.workers.dev https://*.workers.dev wss://*.workers.dev; frame-ancestors 'none';";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -27,9 +36,14 @@ export default {
 
       const response = await fetch(proxyRequest);
 
-      // Add CORS headers to allow the Pages origin
+      // Add CORS and security headers to allow the Pages origin
       const newHeaders = new Headers(response.headers);
       newHeaders.set('Access-Control-Allow-Origin', '*');
+      for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+        if (!newHeaders.has(key)) {
+          newHeaders.set(key, value);
+        }
+      }
 
       return new Response(response.body, {
         status: response.status,
@@ -40,22 +54,24 @@ export default {
 
     // For all other requests, fall through to static assets (handled by Pages)
     const response = await env.ASSETS.fetch(request);
+    const newHeaders = new Headers(response.headers);
+    for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+      newHeaders.set(key, value);
+    }
 
-    // Disable caching for HTML files so phone/mobile browsers always get the latest build
+    // Disable caching and enforce CSP for HTML files so browsers always get the latest build securely
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('text/html')) {
-      const newHeaders = new Headers(response.headers);
       newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       newHeaders.set('Pragma', 'no-cache');
       newHeaders.set('Expires', '0');
-
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: newHeaders,
-      });
+      newHeaders.set('Content-Security-Policy', CSP_HEADER);
     }
 
-    return response;
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
   },
 };

@@ -48,9 +48,25 @@ export async function hashPassword(password: string, salt: string): Promise<stri
 }
 
 /**
- * Verifies a password against a hash and salt.
+ * Constant-time comparison between two strings to prevent timing attacks.
+ */
+export function timingSafeEqualStr(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const aLen = a.length;
+  const bLen = b.length;
+  let diff = aLen ^ bLen;
+  for (let i = 0; i < Math.max(aLen, bLen); i++) {
+    const charA = i < aLen ? a.charCodeAt(i) : 0;
+    const charB = i < bLen ? b.charCodeAt(i) : 0;
+    diff |= charA ^ charB;
+  }
+  return diff === 0;
+}
+
+/**
+ * Verifies a password against a hash and salt using constant-time comparison.
  */
 export async function verifyPassword(password: string, salt: string, hash: string): Promise<boolean> {
   const computedHash = await hashPassword(password, salt);
-  return computedHash === hash;
+  return timingSafeEqualStr(computedHash, hash);
 }

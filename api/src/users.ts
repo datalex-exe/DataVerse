@@ -3,6 +3,15 @@ import { Bindings, Variables } from './types';
 import { authMiddleware, verifyToken } from './auth';
 import { generateSalt, hashPassword } from './crypto';
 
+function escapeHtml(str: string): string {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const usersApp = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ─── SEARCH USERS ──────────────────────────────────────────────────────────────
@@ -133,7 +142,7 @@ usersApp.put('/profile', authMiddleware, async (c) => {
 
   try {
     // Fetch current user details if username/email/avatar are not provided
-    const currentUser = await c.env.DB.prepare('SELECT username, email, avatar_url FROM users WHERE id = ?')
+    const currentUser = await c.env.DB.prepare('SELECT username, email, display_name, bio, avatar_url FROM users WHERE id = ?')
       .bind(userId)
       .first<any>();
 
@@ -141,9 +150,36 @@ usersApp.put('/profile', authMiddleware, async (c) => {
       return c.json({ error: 'User not found' }, 404);
     }
 
-    const targetUsername = (username && username.trim() !== '') ? username.trim().toLowerCase() : currentUser.username;
-    const targetEmail = (email && email.trim() !== '') ? email.trim().toLowerCase() : currentUser.email;
+    const targetUsername = (username && String(username).trim() !== '') ? String(username).trim().toLowerCase() : currentUser.username;
+    const targetEmail = (email && String(email).trim() !== '') ? String(email).trim().toLowerCase() : currentUser.email;
     const targetAvatarUrl = (avatar_url !== undefined && avatar_url !== null) ? avatar_url : currentUser.avatar_url;
+
+    // Validate username syntax if changed
+    if (username && String(username).trim() !== '') {
+      const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+      if (!usernameRegex.test(targetUsername)) {
+        return c.json({ error: 'Username must be 3-30 characters long and contain only letters, numbers, and underscores.' }, 400);
+      }
+    }
+
+    // Validate email format if changed
+    if (email && String(email).trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(targetEmail) || targetEmail.length > 255) {
+        return c.json({ error: 'Please enter a valid email address.' }, 400);
+      }
+    }
+
+    // Validate password if provided
+    if (new_password && String(new_password).trim() !== '') {
+      const passStr = String(new_password).trim();
+      if (passStr.length < 8) {
+        return c.json({ error: 'New password must be at least 8 characters long.' }, 400);
+      }
+      if (passStr.length > 128) {
+        return c.json({ error: 'Password cannot exceed 128 characters.' }, 400);
+      }
+    }
 
     // Validate username uniqueness if changed
     if (targetUsername.toLowerCase() !== currentUser.username.toLowerCase()) {
@@ -167,19 +203,22 @@ usersApp.put('/profile', authMiddleware, async (c) => {
       }
     }
 
-    if (new_password && new_password.trim() !== '') {
+    const safeDisplayName = display_name !== undefined ? String(display_name).trim().substring(0, 50) : (currentUser.display_name || '');
+    const safeBio = bio !== undefined ? String(bio).trim().substring(0, 500) : (currentUser.bio || '');
+
+    if (new_password && String(new_password).trim() !== '') {
       const salt = await generateSalt();
-      const passwordHash = await hashPassword(new_password.trim(), salt);
+      const passwordHash = await hashPassword(String(new_password).trim(), salt);
       await c.env.DB.prepare(
         'UPDATE users SET username = ?, email = ?, display_name = ?, bio = ?, avatar_url = ?, password_hash = ?, password_salt = ? WHERE id = ?'
       )
-        .bind(targetUsername, targetEmail, display_name || '', bio || '', targetAvatarUrl || '', passwordHash, salt, userId)
+        .bind(targetUsername, targetEmail, safeDisplayName, safeBio, targetAvatarUrl || '', passwordHash, salt, userId)
         .run();
     } else {
       await c.env.DB.prepare(
         'UPDATE users SET username = ?, email = ?, display_name = ?, bio = ?, avatar_url = ? WHERE id = ?'
       )
-        .bind(targetUsername, targetEmail, display_name || '', bio || '', targetAvatarUrl || '', userId)
+        .bind(targetUsername, targetEmail, safeDisplayName, safeBio, targetAvatarUrl || '', userId)
         .run();
     }
 
@@ -369,6 +408,14 @@ usersApp.put('/:id/admin', authMiddleware, async (c) => {
       .bind(is_admin ? 1 : 0, targetUserId)
       .run();
 
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+        .bind(crypto.randomUUID(), callerId, is_admin ? 'grant_admin' : 'revoke_admin', targetUserId, JSON.stringify({ is_admin: !!is_admin }), Date.now())
+        .run();
+    } catch (_) {}
+
     return c.json({ success: true, message: 'User admin rights updated' });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -396,6 +443,14 @@ usersApp.put('/:id/verify-admin', authMiddleware, async (c) => {
     await c.env.DB.prepare('UPDATE users SET is_verified = ?, verification_status = ? WHERE id = ?')
       .bind(finalVerified, finalStatus, targetUserId)
       .run();
+
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+        .bind(crypto.randomUUID(), callerId, 'toggle_verification', targetUserId, JSON.stringify({ is_verified: !!is_verified, verification_status: finalStatus }), Date.now())
+        .run();
+    } catch (_) {}
 
     return c.json({ success: true, message: 'User verification status updated' });
   } catch (err: any) {
@@ -434,6 +489,14 @@ usersApp.put('/:id/block', authMiddleware, async (c) => {
     await c.env.DB.prepare('UPDATE users SET is_blocked = ? WHERE id = ?')
       .bind(is_blocked ? 1 : 0, targetUserId)
       .run();
+
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+        .bind(crypto.randomUUID(), callerId, is_blocked ? 'block_user' : 'unblock_user', targetUserId, JSON.stringify({ is_blocked: !!is_blocked }), Date.now())
+        .run();
+    } catch (_) {}
 
     return c.json({ success: true, message: 'User blocked status updated' });
   } catch (err: any) {
@@ -501,6 +564,14 @@ usersApp.put('/:id/chat-restrict', authMiddleware, async (c) => {
         )
         .run();
     }
+
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+        .bind(crypto.randomUUID(), callerId, 'chat_restrict', targetUserId, JSON.stringify({ minutes, restrictUntil }), Date.now())
+        .run();
+    } catch (_) {}
 
     return c.json({ success: true, chat_restricted_until: restrictUntil, message: 'User chat restriction updated' });
   } catch (err: any) {
@@ -1026,7 +1097,7 @@ usersApp.post('/report', authMiddleware, async (c) => {
             email: 'reports@dataverse-app.com',
             name: 'DataVerse Reports'
           },
-          subject: `[DataVerse Report] ${typeLabel} — @${reporter.username}`,
+          subject: `[DataVerse Report] ${escapeHtml(typeLabel)} — @${escapeHtml(reporter.username)}`,
           content: [{
             type: 'text/html',
             value: `
@@ -1034,17 +1105,17 @@ usersApp.post('/report', authMiddleware, async (c) => {
                 <h2 style="color:#a78bfa;margin:0 0 4px;">⚠️ New User Report</h2>
                 <p style="color:#64748b;font-size:12px;margin:0 0 24px;">Submitted via DataVerse in-app reporting system</p>
                 <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                  <tr><td style="padding:8px 0;color:#64748b;width:140px;">Report ID</td><td style="padding:8px 0;color:#e2e8f0;font-family:monospace;">${reportId}</td></tr>
-                  <tr><td style="padding:8px 0;color:#64748b;">Type</td><td style="padding:8px 0;color:#f97316;font-weight:bold;">${typeLabel}</td></tr>
-                  <tr><td style="padding:8px 0;color:#64748b;">Reported By</td><td style="padding:8px 0;color:#e2e8f0;">@${reporter.username} (${reporter.email})</td></tr>
-                  ${reported_username ? `<tr><td style="padding:8px 0;color:#64748b;">Reported User</td><td style="padding:8px 0;color:#e2e8f0;">@${reported_username}</td></tr>` : ''}
-                  <tr><td style="padding:8px 0;color:#64748b;">Date</td><td style="padding:8px 0;color:#e2e8f0;">${dateStr}</td></tr>
+                  <tr><td style="padding:8px 0;color:#64748b;width:140px;">Report ID</td><td style="padding:8px 0;color:#e2e8f0;font-family:monospace;">${escapeHtml(reportId)}</td></tr>
+                  <tr><td style="padding:8px 0;color:#64748b;">Type</td><td style="padding:8px 0;color:#f97316;font-weight:bold;">${escapeHtml(typeLabel)}</td></tr>
+                  <tr><td style="padding:8px 0;color:#64748b;">Reported By</td><td style="padding:8px 0;color:#e2e8f0;">@${escapeHtml(reporter.username)} (${escapeHtml(reporter.email)})</td></tr>
+                  ${reported_username ? `<tr><td style="padding:8px 0;color:#64748b;">Reported User</td><td style="padding:8px 0;color:#e2e8f0;">@${escapeHtml(reported_username)}</td></tr>` : ''}
+                  <tr><td style="padding:8px 0;color:#64748b;">Date</td><td style="padding:8px 0;color:#e2e8f0;">${escapeHtml(dateStr)}</td></tr>
                 </table>
                 <div style="margin-top:20px;padding:16px;background:#0f172a;border-radius:8px;border-left:3px solid #a78bfa;">
                   <p style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Description</p>
-                  <p style="color:#e2e8f0;font-size:14px;line-height:1.6;margin:0;">${description.trim()}</p>
+                  <p style="color:#e2e8f0;font-size:14px;line-height:1.6;margin:0;">${escapeHtml(description.trim())}</p>
                 </div>
-                <p style="margin-top:24px;font-size:11px;color:#334155;">This report has been logged in the DataVerse D1 database with ID <code>${reportId}</code>. Please review and take appropriate action.</p>
+                <p style="margin-top:24px;font-size:11px;color:#334155;">This report has been logged in the DataVerse D1 database with ID <code>${escapeHtml(reportId)}</code>. Please review and take appropriate action.</p>
               </div>
             `
           }]
@@ -1077,19 +1148,19 @@ usersApp.post('/report', authMiddleware, async (c) => {
             value: `
               <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#09090d;color:#e2e8f0;border-radius:12px;border:1px solid #1e293b;">
                 <h2 style="color:#a78bfa;margin:0 0 4px;">Thank you for your report</h2>
-                <p style="color:#64748b;font-size:12px;margin:0 0 24px;">Reference ID: ${reportId}</p>
+                <p style="color:#64748b;font-size:12px;margin:0 0 24px;">Reference ID: ${escapeHtml(reportId)}</p>
                 <p style="font-size:14px;line-height:1.6;color:#e2e8f0;">
-                  Hello @${reporter.username},
+                  Hello @${escapeHtml(reporter.username)},
                 </p>
                 <p style="font-size:14px;line-height:1.6;color:#e2e8f0;">
-                  We have received your safety report regarding <strong>${typeLabel}</strong> and our team is actively reviewing it. 
+                  We have received your safety report regarding <strong>${escapeHtml(typeLabel)}</strong> and our team is actively reviewing it. 
                   Keeping DataVerse safe for everyone is our top priority.
                 </p>
                 <div style="margin-top:20px;padding:16px;background:#0f172a;border-radius:8px;border-left:3px solid #a78bfa;">
                   <p style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">Your report details</p>
-                  <p style="color:#e2e8f0;font-size:13px;line-height:1.6;margin:0;"><strong>Type:</strong> ${typeLabel}</p>
-                  ${reported_username ? `<p style="color:#e2e8f0;font-size:13px;line-height:1.6;margin:0;"><strong>Reported User:</strong> @${reported_username}</p>` : ''}
-                  <p style="color:#e2e8f0;font-size:13px;line-height:1.6;margin:0;"><strong>Date:</strong> ${dateStr}</p>
+                  <p style="color:#e2e8f0;font-size:13px;line-height:1.6;margin:0;"><strong>Type:</strong> ${escapeHtml(typeLabel)}</p>
+                  ${reported_username ? `<p style="color:#e2e8f0;font-size:13px;line-height:1.6;margin:0;"><strong>Reported User:</strong> @${escapeHtml(reported_username)}</p>` : ''}
+                  <p style="color:#e2e8f0;font-size:13px;line-height:1.6;margin:0;"><strong>Date:</strong> ${escapeHtml(dateStr)}</p>
                 </div>
                 <p style="font-size:12px;color:#64748b;margin-top:24px;line-height:1.6;">
                   If we need further details or take actions on your report, we will notify you. Thank you for being a valued member of the DataVerse community!
@@ -1158,6 +1229,14 @@ usersApp.delete('/admin/reports/:id', authMiddleware, async (c) => {
   await c.env.DB.prepare('DELETE FROM reports WHERE id = ?')
     .bind(reportId)
     .run();
+
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+      .bind(crypto.randomUUID(), callerId, 'resolve_report', reportId, JSON.stringify({ reportId }), Date.now())
+      .run();
+  } catch (_) {}
 
   return c.json({ success: true });
 });

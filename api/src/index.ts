@@ -1,19 +1,55 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { Bindings, Variables } from './types';
-import authApp, { authMiddleware } from './auth';
+import authApp, { authMiddleware, verifyToken } from './auth';
 import usersApp from './users';
 import postsApp from './posts';
 import conversationsApp from './conversations';
+import { checkRateLimit } from './rateLimit';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-// Enable CORS
+// Global Security Headers Middleware
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  c.header('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
+});
+
+// General API Rate Limiting Middleware (120 req/min per IP, excluding static file streams and websockets)
+app.use('/api/*', async (c, next) => {
+  if (c.req.path.startsWith('/api/media/file') || c.req.path.startsWith('/api/chat/ws')) {
+    return next();
+  }
+  const rl = await checkRateLimit(c, { prefix: 'api_general', limit: 120, windowSeconds: 60 });
+  if (!rl.allowed) {
+    c.header('Retry-After', rl.retryAfter.toString());
+    return c.json({ error: 'Too many requests. Please slow down.' }, 429);
+  }
+  await next();
+});
+
+// Enable CORS with Origin Validation
 app.use('*', cors({
-  origin: '*', // We can restrict this in production
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: (origin) => {
+    if (!origin) return '*';
+    if (
+      origin === 'https://dataverse-datalex.pages.dev' ||
+      origin.endsWith('.dataverse-datalex.pages.dev') ||
+      origin.endsWith('.pages.dev') ||
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:')
+    ) {
+      return origin;
+    }
+    return 'https://dataverse-datalex.pages.dev';
+  },
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
-  exposeHeaders: ['Content-Length'],
+  exposeHeaders: ['Content-Length', 'Retry-After'],
   maxAge: 600,
   credentials: true,
 }));
@@ -28,9 +64,22 @@ app.route('/api/conversations', conversationsApp);
 app.get('/api/chat/ws/:id', async (c) => {
   const conversationId = c.req.param('id');
   const userId = c.req.query('userId');
+  const token = c.req.query('token') || c.req.header('Authorization')?.replace('Bearer ', '');
 
   if (!userId) {
     return c.text('Missing userId query parameter', 400);
+  }
+
+  // Verify authentication token
+  if (token) {
+    const payload = await verifyToken(token, c.env.JWT_SECRET);
+    if (!payload || payload.userId !== userId) {
+      return c.text('Unauthorized: Invalid session token', 401);
+    }
+    const cachedUserId = await c.env.SESSION_KV.get(`session:${token}`);
+    if (!cachedUserId || cachedUserId !== userId) {
+      return c.text('Unauthorized: Session expired or revoked', 401);
+    }
   }
 
   // Check if user is blocked in DB
@@ -42,8 +91,19 @@ app.get('/api/chat/ws/:id', async (c) => {
     return c.text('Unauthorized: Account is blocked', 403);
   }
 
-  // Ensure public rooms exist in D1
-  if (conversationId.startsWith('room_')) {
+  // Verify membership for private chats
+  if (!conversationId.startsWith('room_')) {
+    const membership = await c.env.DB.prepare(
+      'SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?'
+    )
+      .bind(conversationId, userId)
+      .first();
+
+    if (!membership) {
+      return c.text('Forbidden: You are not a participant in this conversation', 403);
+    }
+  } else {
+    // Ensure public rooms exist in D1
     try {
       await c.env.DB.prepare(
         'INSERT OR IGNORE INTO conversations (id, is_group, created_at) VALUES (?, 1, ?)'
@@ -76,15 +136,36 @@ app.get('/api/chat/ws/:id', async (c) => {
 
 // DATABASE & KV MEDIA UPLOAD ROUTE (Protected)
 app.post('/api/media/upload', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+
+  // Rate limit: 60 uploads per hour per user
+  const rl = await checkRateLimit(c, { prefix: `upload:${userId}`, limit: 60, windowSeconds: 3600 });
+  if (!rl.allowed) {
+    c.header('Retry-After', rl.retryAfter.toString());
+    return c.json({ error: 'Upload rate limit exceeded. Please wait before uploading more files.' }, 429);
+  }
+
   const key = c.req.query('key');
-  if (!key) {
-    return c.json({ error: 'Missing key parameter' }, 400);
+  if (!key || !/^[a-zA-Z0-9_\-\.]{1,120}$/.test(key) || key.includes('..')) {
+    return c.json({ error: 'Invalid file key parameter' }, 400);
   }
 
   const chunkIndexParam = c.req.query('chunkIndex');
   const totalChunksParam = c.req.query('totalChunks');
   const totalSizeParam = c.req.query('totalSize');
-  const contentType = c.req.header('Content-Type') || 'application/octet-stream';
+  const rawContentType = c.req.header('Content-Type') || 'application/octet-stream';
+  const contentType = rawContentType.split(';')[0].trim().toLowerCase();
+
+  const ALLOWED_MIME_TYPES = [
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic',
+    'video/mp4', 'video/webm', 'video/quicktime',
+    'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/webm', 'audio/wav',
+    'application/pdf', 'application/octet-stream'
+  ];
+
+  if (!ALLOWED_MIME_TYPES.includes(contentType)) {
+    return c.json({ error: 'Unsupported media file type.' }, 400);
+  }
   
   try {
     const body = await c.req.arrayBuffer();
@@ -300,8 +381,14 @@ app.get('/api/media/file/*', async (c) => {
       headers.set('Access-Control-Allow-Origin', '*');
       headers.set('Cache-Control', 'public, max-age=31536000');
       headers.set('Accept-Ranges', 'bytes');
+      headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Content-Range', `bytes ${start}-${end}/${finalContent.byteLength}`);
       headers.set('Content-Length', chunk.byteLength.toString());
+      if (contentType.startsWith('image/') || contentType.startsWith('video/') || contentType.startsWith('audio/')) {
+        headers.set('Content-Disposition', 'inline');
+      } else {
+        headers.set('Content-Disposition', 'attachment');
+      }
 
       return new Response(chunk, {
         status: 206,
@@ -313,7 +400,13 @@ app.get('/api/media/file/*', async (c) => {
       headers.set('Access-Control-Allow-Origin', '*');
       headers.set('Cache-Control', 'public, max-age=31536000');
       headers.set('Accept-Ranges', 'bytes');
+      headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Content-Length', finalContent.byteLength.toString());
+      if (contentType.startsWith('image/') || contentType.startsWith('video/') || contentType.startsWith('audio/')) {
+        headers.set('Content-Disposition', 'inline');
+      } else {
+        headers.set('Content-Disposition', 'attachment');
+      }
 
       return new Response(finalContent, {
         headers,

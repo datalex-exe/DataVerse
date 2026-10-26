@@ -2,10 +2,14 @@ import { Hono, Context } from 'hono';
 import { SignJWT, jwtVerify } from 'jose';
 import { Bindings, Variables, User } from './types';
 import { generateSalt, hashPassword, verifyPassword } from './crypto';
+import { checkRateLimit, checkLoginLockout, recordFailedLogin, resetFailedLogin } from './rateLimit';
 
 const authApp = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const getSecret = (secret?: string) => {
+  if (!secret) {
+    console.warn('[SECURITY WARNING] JWT_SECRET is not configured. Please set JWT_SECRET via wrangler secret put.');
+  }
   return new TextEncoder().encode(secret || 'dataverse-fallback-secret-key-123456');
 };
 
@@ -76,14 +80,41 @@ export async function authMiddleware(c: Context<{ Bindings: Bindings; Variables:
 // SIGNUP
 authApp.post('/signup', async (c) => {
   try {
+    // Rate limit: 5 signups per 15 minutes per IP
+    const rl = await checkRateLimit(c, { prefix: 'signup', limit: 5, windowSeconds: 900 });
+    if (!rl.allowed) {
+      c.header('Retry-After', rl.retryAfter.toString());
+      return c.json({ error: 'Too many signup attempts. Please try again later.' }, 429);
+    }
+
     const { username, email, password, display_name } = await c.req.json();
 
     if (!username || !email || !password) {
       return c.json({ error: 'Missing required fields' }, 400);
     }
 
-    const cleanUsername = username.trim().toLowerCase();
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = String(username).trim().toLowerCase();
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    // Strict Input Validation
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+    if (!usernameRegex.test(cleanUsername)) {
+      return c.json({
+        error: 'Username must be 3-30 characters long and contain only letters, numbers, and underscores.'
+      }, 400);
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail) || cleanEmail.length > 255) {
+      return c.json({ error: 'Please enter a valid email address.' }, 400);
+    }
+
+    if (typeof password !== 'string' || password.length < 8) {
+      return c.json({ error: 'Password must be at least 8 characters long.' }, 400);
+    }
+    if (password.length > 128) {
+      return c.json({ error: 'Password cannot exceed 128 characters.' }, 400);
+    }
 
     // Check if user already exists
     const existing = await c.env.DB.prepare(
@@ -103,9 +134,10 @@ authApp.post('/signup', async (c) => {
 
     const userCountResult = await c.env.DB.prepare('SELECT COUNT(*) AS count FROM users').first<any>();
     const isFirstUser = !userCountResult || userCountResult.count === 0;
-    const isDatalexEmail = cleanEmail.toLowerCase() === 'datalex.exe@gmail.com';
-    const isAdmin = (isFirstUser || isDatalexEmail) ? 1 : 0;
-    const isTopAdmin = (isFirstUser || isDatalexEmail) ? 1 : 0;
+    const isAdmin = isFirstUser ? 1 : 0;
+    const isTopAdmin = isFirstUser ? 1 : 0;
+
+    const safeDisplayName = display_name ? String(display_name).trim().substring(0, 50) : cleanUsername;
 
     await c.env.DB.prepare(
       'INSERT INTO users (id, username, email, password_hash, password_salt, display_name, bio, avatar_url, is_admin, is_top_admin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -116,7 +148,7 @@ authApp.post('/signup', async (c) => {
         cleanEmail,
         passwordHash,
         salt,
-        display_name || cleanUsername,
+        safeDisplayName,
         '',
         '',
         isAdmin,
@@ -125,7 +157,7 @@ authApp.post('/signup', async (c) => {
       )
       .run();
 
-    // 2. Insert welcome notification in SQLite DB
+    // Insert welcome notification in SQLite DB
     const welcomeNotificationId = crypto.randomUUID();
     await c.env.DB.prepare(
       "INSERT INTO notifications (id, user_id, notifier_id, type, created_at, is_read) VALUES (?, ?, NULL, 'welcome', ?, 0)"
@@ -139,7 +171,7 @@ authApp.post('/signup', async (c) => {
       id,
       username: cleanUsername,
       email: cleanEmail,
-      display_name: display_name || cleanUsername,
+      display_name: safeDisplayName,
       bio: '',
       avatar_url: '',
       is_verified: false,
@@ -159,13 +191,29 @@ authApp.post('/signup', async (c) => {
 // LOGIN
 authApp.post('/login', async (c) => {
   try {
+    // General IP rate limit: 10 login attempts per 5 minutes
+    const rl = await checkRateLimit(c, { prefix: 'login_ip', limit: 10, windowSeconds: 300 });
+    if (!rl.allowed) {
+      c.header('Retry-After', rl.retryAfter.toString());
+      return c.json({ error: 'Too many login attempts from this network. Please wait before trying again.' }, 429);
+    }
+
     const { login_id, password } = await c.req.json(); // login_id can be email or username
 
     if (!login_id || !password) {
       return c.json({ error: 'Missing credentials' }, 400);
     }
 
-    const cleanLoginId = login_id.trim().toLowerCase();
+    const cleanLoginId = String(login_id).trim().toLowerCase();
+
+    // Check account-level lockout for repeated failed attempts
+    const lockout = await checkLoginLockout(c, cleanLoginId);
+    if (lockout.isLocked) {
+      c.header('Retry-After', lockout.retryAfter.toString());
+      return c.json({
+        error: `Account temporarily locked due to multiple failed login attempts. Please try again in ${Math.ceil(lockout.retryAfter / 60)} minute(s).`
+      }, 429);
+    }
 
     const user = await c.env.DB.prepare(
       'SELECT * FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?'
@@ -174,17 +222,30 @@ authApp.post('/login', async (c) => {
       .first<any>();
 
     if (!user) {
-      return c.json({ error: 'No User Found' }, 400);
+      await recordFailedLogin(c, cleanLoginId);
+      // Unified error message to prevent user enumeration
+      return c.json({ error: 'Invalid username/email or password' }, 400);
     }
 
     if (user.is_blocked) {
       return c.json({ error: 'Account blocked by administrator' }, 403);
     }
 
-    const isMatch = await verifyPassword(password, user.password_salt, user.password_hash);
+    const isMatch = await verifyPassword(String(password), user.password_salt, user.password_hash);
     if (!isMatch) {
-      return c.json({ error: 'Invalid credentials' }, 400);
+      const failInfo = await recordFailedLogin(c, cleanLoginId);
+      if (failInfo.locked) {
+        c.header('Retry-After', failInfo.retryAfter.toString());
+        return c.json({
+          error: 'Too many failed login attempts. Your account has been temporarily locked for 15 minutes.'
+        }, 429);
+      }
+      // Unified error message to prevent user enumeration
+      return c.json({ error: 'Invalid username/email or password' }, 400);
     }
+
+    // Reset failed login tracking on successful authentication
+    await resetFailedLogin(c, cleanLoginId);
 
     const token = await signToken(user.id, c.env.JWT_SECRET);
     // Cache session in KV for 30 days

@@ -854,7 +854,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/${activeConvo.id}?userId=${user.id}`;
+      const token = localStorage.getItem('token') || '';
+      const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/${activeConvo.id}?userId=${user.id}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
