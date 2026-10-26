@@ -66,13 +66,13 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, className = '' }) =>
           </a>
         </nav>
 
-        {/* Dynamic Copyright with owner Datalex */}
-        <div className="text-[11px] font-medium text-[var(--muted)] flex items-center gap-1.5 flex-wrap justify-center">
-          <span>&copy; {currentYear}</span>
-          <span className="font-bold text-[var(--text)]">Datalex</span>
-          <span aria-hidden="true">·</span>
+        {/* Dynamic Copyright with owner Datalex - Single line guaranteed */}
+        <p className="text-[10px] sm:text-[11px] font-medium text-[var(--muted)] whitespace-nowrap tracking-tight text-center max-w-full">
+          <span>&copy; {currentYear}</span>{' '}
+          <span className="font-bold text-[var(--text)]">Datalex</span>{' '}
+          <span aria-hidden="true" className="mx-0.5 text-[var(--line)]">·</span>{' '}
           <span>DataVerse Social Network. All rights reserved.</span>
-        </div>
+        </p>
       </div>
     </footer>
   );
