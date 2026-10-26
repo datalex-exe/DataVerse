@@ -256,12 +256,20 @@ const AppContent: React.FC = () => {
       }`}
       style={activeView === 'messages' ? { height: 'var(--vvh, 100dvh)' } : undefined}
     >
+      {/* Skip to Main Content Link for Keyboard and Screen Reader Accessibility */}
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-[var(--accent)] focus:text-[var(--on-accent)] focus:font-bold focus:rounded-xl focus:shadow-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent-2)] transition-all"
+      >
+        Skip to main content
+      </a>
+
       {/* Background Ambient Glow */}
       <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[140px] rounded-full pointer-events-none z-0"></div>
 
       {/* MOBILE SLIM TOP BAR (below 768px) - Hidden in Messages view so Chats header is the single top bar */}
       {!hideBottomNav && activeView !== 'messages' && (
-        <header className="md:hidden sticky top-0 left-0 right-0 h-14 bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border-b border-[var(--line)] flex items-center justify-between px-4 z-40 flex-shrink-0">
+        <header aria-label="Mobile Top Bar" className="md:hidden sticky top-0 left-0 right-0 h-14 bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border-b border-[var(--line)] flex items-center justify-between px-4 z-40 flex-shrink-0">
           <div 
             onClick={() => navigate('feed')}
             className="flex items-center gap-2 cursor-pointer active:scale-95 transition-transform"
@@ -282,7 +290,6 @@ const AppContent: React.FC = () => {
             <button
               onClick={() => logout()}
               className="p-2 text-[var(--muted)] hover:text-[var(--danger)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)]"
-              title="Log Out"
               aria-label="Log Out"
             >
               <LogOut className="w-5 h-5" />
@@ -297,6 +304,7 @@ const AppContent: React.FC = () => {
       {/* LEFT SIDEBAR: Collapsed by default (w-20 icon rail), smoothly expands to w-64 on mouse hover / drag into */}
       {/* THEME START */}
       <aside 
+        aria-label="Desktop Sidebar"
         onMouseEnter={() => setIsSidebarHovered(true)}
         onMouseLeave={() => setIsSidebarHovered(false)}
         onDragEnter={() => setIsSidebarHovered(true)}
@@ -338,7 +346,7 @@ const AppContent: React.FC = () => {
           </div>
 
           {/* Menu Items List */}
-          <nav className="space-y-1.5 w-full">
+          <nav aria-label="Main Navigation" className="space-y-1.5 w-full">
             
             {/* Home */}
             <button
@@ -482,7 +490,7 @@ const AppContent: React.FC = () => {
             >
               <div className="w-6 h-6 rounded-full overflow-hidden border border-[var(--line)] flex-shrink-0 flex items-center justify-center bg-[var(--input)]">
                 {user.avatar_url ? (
-                  <img src={`/api/media/file/${user.avatar_url}`} alt="Me" className="w-full h-full object-cover" />
+                  <img src={`/api/media/file/${user.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-[8px] font-bold text-[var(--accent-2)] uppercase">{user.username.substring(0, 2)}</span>
                 )}
@@ -559,7 +567,7 @@ const AppContent: React.FC = () => {
           ? 'h-full min-h-0 overflow-hidden' 
           : 'min-h-[100dvh] md:pb-0 pb-16'
       }`}>
-        <main className={`flex-1 relative z-10 flex flex-col ${activeView === 'messages' ? 'h-full min-h-0 overflow-hidden' : ''}`}>
+        <main id="main-content" tabIndex={-1} className={`flex-1 relative z-10 flex flex-col focus:outline-none ${activeView === 'messages' ? 'h-full min-h-0 overflow-hidden' : ''}`}>
           <React.Suspense fallback={<ViewFallback />}>
             {activeView === 'feed' && <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} />}
             {activeView === 'messages' && <Chat onToggleBottomNav={setHideBottomNav} onNavigate={navigate} targetConvoId={messagesParam} />}
@@ -575,7 +583,7 @@ const AppContent: React.FC = () => {
       {/* MOBILE BOTTOM NAVIGATION BAR */}
       {/* THEME START */}
       {!hideBottomNav && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[color-mix(in_srgb,var(--side)_90%,transparent)] backdrop-blur-lg border-t border-[var(--line)] flex justify-around items-center px-2 py-1 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-2xl">
+        <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[color-mix(in_srgb,var(--side)_90%,transparent)] backdrop-blur-lg border-t border-[var(--line)] flex justify-around items-center px-2 py-1 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-2xl">
         
         {/* Home */}
         <button
@@ -644,7 +652,7 @@ const AppContent: React.FC = () => {
             activeView === 'profile' ? 'border-[var(--accent-2)] ring-2 ring-[var(--accent-2)]/30 scale-105' : 'border-[var(--line)]'
           }`}>
             {user.avatar_url ? (
-              <img src={`/api/media/file/${user.avatar_url}`} alt="Me" className="w-full h-full object-cover" />
+              <img src={`/api/media/file/${user.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-[var(--input)] flex items-center justify-center text-[8px] font-bold text-[var(--accent-2)] uppercase">
                 {user.username.substring(0, 2)}

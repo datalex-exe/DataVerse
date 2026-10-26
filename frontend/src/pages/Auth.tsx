@@ -124,7 +124,7 @@ export const Auth: React.FC = () => {
 
 /* THEME START */
   return (
-    <div key={animationKey} className="min-h-screen w-full flex items-center justify-center bg-[var(--bg)] relative overflow-hidden px-4">
+    <main id="main-content" key={animationKey} className="min-h-screen w-full flex items-center justify-center bg-[var(--bg)] relative overflow-hidden px-4">
       {/* Theme Toggle Button in top right corner of Login/Sign Up */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-50">
         <ThemeIconButton />
@@ -486,9 +486,9 @@ export const Auth: React.FC = () => {
 
           {/* ANIMATION START - 3. Title split into letters flip up + gold shine */}
           <h1 
-            aria-label="DataVerse" 
-            className="text-3xl font-black tracking-tight text-white intro-title whitespace-nowrap"
+            className="text-3xl font-black tracking-tight text-[var(--text)] intro-title whitespace-nowrap"
           >
+            <span className="sr-only">DataVerse</span>
             <span aria-hidden="true" className="intro-title-text inline-flex">
               {"DataVerse".split('').map((char, index) => (
                 <span
@@ -513,12 +513,23 @@ export const Auth: React.FC = () => {
           </p>
         </div>
 
+        {/* Section Heading for screen readers */}
+        <h2 className="sr-only">{isLogin ? 'Sign In to Your Account' : 'Create a New Account'}</h2>
+
         {/* Auth Toggle Tab - Expands from center */}
-        <div className="flex bg-[var(--input)] rounded-xl p-1 mb-6 border border-[var(--line)] intro-tabs">
+        <div 
+          role="tablist" 
+          aria-label="Authentication Options"
+          className="flex bg-[var(--input)] rounded-xl p-1 mb-6 border border-[var(--line)] intro-tabs"
+        >
           <button
             type="button"
+            role="tab"
+            aria-selected={isLogin}
+            aria-controls="auth-form"
+            id="tab-login"
             onClick={() => { setIsLogin(true); setError(null); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
               isLogin ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'
             }`}
           >
@@ -526,8 +537,12 @@ export const Auth: React.FC = () => {
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={!isLogin}
+            aria-controls="auth-form"
+            id="tab-signup"
             onClick={() => { setIsLogin(false); setError(null); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 ${
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
               !isLogin ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'
             }`}
           >
@@ -539,44 +554,68 @@ export const Auth: React.FC = () => {
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs text-center font-medium animate-shake">
+          <div 
+            id="auth-error"
+            role="alert"
+            aria-live="assertive"
+            className="mb-4 p-3 rounded-lg bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)] text-xs text-center font-semibold animate-shake"
+          >
             {error}
           </div>
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form 
+          id="auth-form" 
+          onSubmit={handleSubmit} 
+          className="space-y-4"
+          aria-labelledby={isLogin ? 'tab-login' : 'tab-signup'}
+        >
           
           {/* User Fields (Signup only) */}
           {!isLogin && (
-            <>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Display Name</label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. John Doe"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full bg-slate-950/40 border border-slate-900 focus:border-brand-500 rounded-xl py-3 pl-11 pr-4 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-all focus:ring-1 focus:ring-brand-500/10"
-                  />
-                </div>
+            <div>
+              <label 
+                htmlFor="auth-display-name" 
+                className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
+              >
+                Display Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
+                <input
+                  id="auth-display-name"
+                  name="name"
+                  type="text"
+                  required
+                  autoComplete="name"
+                  placeholder="e.g. John Doe"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "auth-error" : undefined}
+                  className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                />
               </div>
-            </>
+            </div>
           )}
 
           {/* Username / Email field - ANIMATION START - 6. Slides in from left + glow line + typewriter */}
           <div className="intro-field-left">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+            <label 
+              htmlFor="auth-username" 
+              className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
+            >
               {isLogin ? 'Username or Email' : 'Username'}
             </label>
             <div className="relative">
-              <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
               <input
+                id="auth-username"
+                name="username"
                 type="text"
                 required
+                autoComplete={isLogin ? "username" : "username"}
                 placeholder={placeholderText || (isLogin ? "your_username or mail@domain.com" : "username (letters, numbers, _)")}
                 value={username}
                 onFocus={() => { isInputInteractingRef.current = true; }}
@@ -584,7 +623,9 @@ export const Auth: React.FC = () => {
                   isInputInteractingRef.current = true;
                   setUsername(e.target.value); 
                 }}
-                className="w-full bg-slate-950/40 border border-slate-900 focus:border-brand-500 rounded-xl py-3 pl-11 pr-4 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-all focus:ring-1 focus:ring-brand-500/10"
+                aria-invalid={!!error}
+                aria-describedby={error ? "auth-error" : undefined}
+                className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
               />
               <span className="intro-field-glow" aria-hidden="true" />
             </div>
@@ -594,16 +635,26 @@ export const Auth: React.FC = () => {
           {/* Email field (Signup only) */}
           {!isLogin && (
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
+              <label 
+                htmlFor="auth-email" 
+                className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
+              >
+                Email Address
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
                 <input
+                  id="auth-email"
+                  name="email"
                   type="email"
                   required
+                  autoComplete="email"
                   placeholder="name@domain.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-slate-950/40 border border-slate-900 focus:border-brand-500 rounded-xl py-3 pl-11 pr-4 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-all focus:ring-1 focus:ring-brand-500/10"
+                  aria-invalid={!!error}
+                  aria-describedby={error ? "auth-error" : undefined}
+                  className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
                 />
               </div>
             </div>
@@ -612,24 +663,36 @@ export const Auth: React.FC = () => {
           {/* Password field - ANIMATION START - 6. Slides in from right + glow line */}
           <div className="intro-field-right">
             <div className="flex justify-between items-center mb-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Password</label>
+              <label 
+                htmlFor="auth-password" 
+                className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider"
+              >
+                Password
+              </label>
             </div>
             <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
               <input
+                id="auth-password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 required
+                autoComplete={isLogin ? "current-password" : "new-password"}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-950/40 border border-slate-900 focus:border-brand-500 rounded-xl py-3 pl-11 pr-11 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-all focus:ring-1 focus:ring-brand-500/10"
+                aria-invalid={!!error}
+                aria-describedby={error ? "auth-error" : undefined}
+                className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-11 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] focus-visible:text-[var(--text)] focus-visible:outline-none transition-colors p-1 rounded-md"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
               </button>
               <span className="intro-field-glow" aria-hidden="true" />
             </div>
@@ -641,7 +704,7 @@ export const Auth: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 mt-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover intro-btn relative overflow-hidden"
+            className="w-full py-3 mt-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover intro-btn relative overflow-hidden"
           >
             <span className="relative z-10">{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
             <span className="intro-btn-shimmer" aria-hidden="true" />
@@ -652,6 +715,6 @@ export const Auth: React.FC = () => {
         </form>
 
       </div>
-    </div>
+    </main>
   );
 };

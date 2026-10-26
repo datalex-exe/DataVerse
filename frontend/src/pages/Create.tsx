@@ -236,7 +236,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                     ) : (
                       <img 
                         src={filePreviews[filePreviews.length - 1].url} 
-                        alt="Preview" 
+                        alt="Selected media preview" 
                         className="w-full h-full object-cover" 
                       />
                     )}
@@ -250,15 +250,15 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                           {item.type === 'video' ? (
                             <video src={item.url} className="w-full h-full object-cover pointer-events-none" />
                           ) : (
-                            <img src={item.url} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+                            <img src={item.url} alt={`Preview thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
                           )}
                           <button
                             type="button"
                             onClick={() => removeFileAt(idx)}
                             className="absolute top-0.5 right-0.5 p-0.5 bg-black/80 hover:bg-red-600 text-white rounded-full transition-colors flex items-center justify-center"
-                            title="Remove file"
+                            aria-label={`Remove media file ${idx + 1}`}
                           >
-                            <X className="w-2.5 h-2.5" />
+                            <X className="w-2.5 h-2.5" aria-hidden="true" />
                           </button>
                         </div>
                       ))}
@@ -270,64 +270,67 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                     <button
                       type="button"
                       onClick={() => setShowCameraModal(true)}
-                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-black text-amber-300 rounded-full transition-all border border-amber-300/30 flex items-center justify-center shadow-lg active:scale-95"
-                      title="Open Camera"
+                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-black text-amber-300 rounded-full transition-all border border-amber-300/30 flex items-center justify-center shadow-lg active:scale-95 focus-visible:ring-2 focus-visible:ring-amber-400"
+                      aria-label="Open Camera"
                     >
-                      <Camera className="w-4 h-4" />
+                      <Camera className="w-4 h-4" aria-hidden="true" />
                     </button>
                     <label 
-                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-black text-white rounded-full transition-all border border-white/10 flex items-center justify-center cursor-pointer shadow-lg active:scale-95" 
-                      title="Add more photos/videos"
+                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-black text-white rounded-full transition-all border border-white/10 flex items-center justify-center cursor-pointer shadow-lg active:scale-95 focus-within:ring-2 focus-within:ring-[var(--accent-2)]" 
+                      aria-label="Add more photos or videos"
                     >
-                      <Plus className="w-4 h-4 text-white" />
+                      <Plus className="w-4 h-4 text-white" aria-hidden="true" />
                       <input 
                         type="file" 
                         accept="image/*,video/*" 
                         multiple
+                        aria-label="Select additional photos or videos"
                         onChange={handleFileChange} 
-                        className="hidden" 
+                        className="sr-only" 
                       />
                     </label>
                     <button
                       type="button"
                       onClick={() => { setSelectedFiles([]); setFilePreviews([]); setSuccess(false); }}
-                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-red-600 text-white rounded-full transition-all border border-white/10 flex items-center justify-center shadow-lg active:scale-95"
-                      title="Clear all"
+                      className="min-w-[44px] min-h-[44px] p-2 bg-black/80 hover:bg-red-600 text-white rounded-full transition-all border border-white/10 flex items-center justify-center shadow-lg active:scale-95 focus-visible:ring-2 focus-visible:ring-red-400"
+                      aria-label="Clear all selected media"
                     >
-                      <X className="w-4 h-4 text-white" />
+                      <X className="w-4 h-4 text-white" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center w-full h-full p-6 text-center">
-                  <label className="flex flex-col items-center justify-center cursor-pointer transition-all group mb-3">
-                    <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mb-3 group-hover:-translate-y-1 transition-transform duration-200 shadow-md shadow-brand-500/5">
-                      <ImageIcon className="w-7 h-7" />
-                      <Video className="w-7 h-7 -ml-2" />
+                  <label className="flex flex-col items-center justify-center cursor-pointer transition-all group mb-3 focus-within:ring-2 focus-within:ring-[var(--accent-2)] rounded-2xl p-2">
+                    <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-[var(--accent-2)] flex items-center justify-center mb-3 group-hover:-translate-y-1 transition-transform duration-200 shadow-md shadow-brand-500/5">
+                      <ImageIcon className="w-7 h-7" aria-hidden="true" />
+                      <Video className="w-7 h-7 -ml-2" aria-hidden="true" />
                     </div>
-                    <span className="text-base font-semibold text-white tracking-wide">Select photos or videos</span>
-                    <span className="text-xs text-slate-400 mt-1 font-normal">Multiple selection allowed · Max 2 GB per file</span>
+                    <span className="text-base font-semibold text-[var(--text)] tracking-wide">Select photos or videos</span>
+                    <span className="text-xs text-[var(--muted)] mt-1 font-normal">Multiple selection allowed · Max 2 GB per file</span>
                     <input 
                       type="file" 
                       accept="image/*,video/*" 
                       multiple
+                      aria-label="Select photos or videos to upload"
                       onChange={handleFileChange} 
-                      className="hidden" 
+                      className="sr-only" 
                     />
                   </label>
 
-                  <div className="flex items-center gap-2 my-2 text-[11px] text-white/30 font-medium">
-                    <span className="w-10 h-px bg-white/10" />
+                  <div className="flex items-center gap-2 my-2 text-[11px] text-[var(--muted)] font-medium">
+                    <span className="w-10 h-px bg-[var(--line)]" />
                     <span>OR</span>
-                    <span className="w-10 h-px bg-white/10" />
+                    <span className="w-10 h-px bg-[var(--line)]" />
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setShowCameraModal(true)}
-                    className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+                    aria-label="Open Camera to capture photo or video"
+                    className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
-                    <Camera className="w-4 h-4" />
+                    <Camera className="w-4 h-4" aria-hidden="true" />
                     <span>Open Camera</span>
                   </button>
                 </div>
@@ -340,27 +343,38 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
             <form onSubmit={handleSubmit} className="space-y-6 flex-1 flex flex-col justify-between">
               <div className="space-y-5">
                 <div>
-                  <h2 className="text-xl font-bold text-white tracking-wide">New post</h2>
-                  <p className="text-xs text-slate-400 mt-1">Compose and publish updates directly to your feed.</p>
+                  <h1 className="text-xl font-bold text-[var(--text)] tracking-wide">New Post</h1>
+                  <p className="text-xs text-[var(--muted)] mt-1">Compose and publish updates directly to your feed.</p>
                 </div>
 
                 {error && (
-                  <div className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl font-medium animate-fade-in">
+                  <div 
+                    role="alert"
+                    aria-live="assertive"
+                    className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl font-medium animate-fade-in"
+                  >
                     {error}
                   </div>
                 )}
 
                 {success && (
-                  <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl font-medium flex items-center gap-2 animate-fade-in">
-                    <Check className="w-4 h-4 flex-shrink-0" />
+                  <div 
+                    role="status"
+                    aria-live="polite"
+                    className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl font-medium flex items-center gap-2 animate-fade-in"
+                  >
+                    <Check className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                     Post published successfully! Redirecting...
                   </div>
                 )}
 
                 {/* Caption Textarea */}
                 <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-slate-200">Caption</label>
+                  <label htmlFor="create-post-caption" className="block text-sm font-semibold text-[var(--text)]">
+                    Caption
+                  </label>
                   <textarea
+                    id="create-post-caption"
                     rows={7}
                     placeholder="Say something about this photo..."
                     value={caption}

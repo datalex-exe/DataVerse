@@ -120,6 +120,7 @@ const AdminAvatar: React.FC<AdminAvatarProps> = ({
       }}
     >
       <span
+        aria-hidden="true"
         className="font-bold uppercase text-[var(--accent-2)] select-none pointer-events-none"
         style={{ fontSize: `${Math.max(9, Math.round(size * 0.35))}px`, lineHeight: 1 }}
       >
@@ -128,7 +129,8 @@ const AdminAvatar: React.FC<AdminAvatarProps> = ({
       {resolvedUrl && !hasError && (
         <img
           src={resolvedUrl}
-          alt={name}
+          alt=""
+          aria-hidden="true"
           loading="lazy"
           decoding="async"
           onError={() => setHasError(true)}
@@ -565,14 +567,17 @@ export const Admin: React.FC = () => {
             <Shield className="w-5.5 h-5.5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-[var(--text)] tracking-wide uppercase">Admin Console</h2>
+            <h1 className="text-base font-black text-[var(--text)] tracking-wide uppercase">Admin Console</h1>
             <p className="text-[10px] text-[var(--muted)] mt-0.5">Global DataVerse platform directory and message logs audit system.</p>
           </div>
         </div>
 
         {/* Tab Selector */}
-        <div className="flex flex-wrap gap-1.5 w-full sm:w-auto pb-1">
+        <div role="tablist" aria-label="Admin Console Sections" className="flex flex-wrap gap-1.5 w-full sm:w-auto pb-1">
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'users'}
             onClick={() => setActiveTab('users')}
             className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === 'users'
@@ -585,6 +590,9 @@ export const Admin: React.FC = () => {
           </button>
           {currentUser?.is_top_admin && (
             <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'chats'}
               onClick={() => setActiveTab('chats')}
               className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
                 activeTab === 'chats'
@@ -597,6 +605,9 @@ export const Admin: React.FC = () => {
             </button>
           )}
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'restrictions'}
             onClick={() => setActiveTab('restrictions')}
             className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
               activeTab === 'restrictions'
@@ -610,6 +621,9 @@ export const Admin: React.FC = () => {
           {currentUser?.is_top_admin && (
             <>
               <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'verifications'}
                 onClick={() => setActiveTab('verifications')}
                 className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
                   activeTab === 'verifications'
@@ -621,6 +635,9 @@ export const Admin: React.FC = () => {
                 Verifications
               </button>
               <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'reports'}
                 onClick={() => setActiveTab('reports')}
                 className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
                   activeTab === 'reports'
@@ -667,13 +684,15 @@ export const Admin: React.FC = () => {
                 
                 {/* Search filter bar */}
                 <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <label htmlFor="admin-search-users-input" className="sr-only">Search users</label>
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
                   <input
+                    id="admin-search-users-input"
                     type="text"
                     placeholder="Search users..."
                     value={searchUserQuery}
                     onChange={(e) => setSearchUserQuery(e.target.value)}
-                    className="w-full bg-[#060608]/40 border border-white/5 rounded-2xl pl-11 pr-4 py-3 text-xs text-white placeholder:text-slate-655 focus:border-brand-500 focus:outline-none transition-colors"
+                    className="w-full bg-[#060608]/40 border border-white/5 rounded-2xl pl-11 pr-4 py-3 text-xs text-white placeholder:text-[var(--muted)] focus:border-brand-500 focus:outline-none transition-colors"
                   />
                 </div>
 
@@ -968,15 +987,19 @@ export const Admin: React.FC = () => {
                 </div>
                 <form onSubmit={handleSendNotification} className="space-y-3.5">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-wide">Target Recipient</label>
+                    <label htmlFor="admin-filter-notif-user" className="text-[9px] font-black text-[var(--muted)] uppercase tracking-wide">Target Recipient</label>
                     <input
+                      id="admin-filter-notif-user"
                       type="text"
                       placeholder="Filter by username..."
+                      aria-label="Filter recipient by username"
                       value={searchNotifUser}
                       onChange={(e) => setSearchNotifUser(e.target.value)}
-                      className="w-full bg-slate-950/80 border border-slate-900 rounded-xl px-3 py-1.5 text-[11px] text-slate-200 outline-none focus:border-brand-500 transition-all placeholder:text-slate-800"
+                      className="w-full bg-slate-950/80 border border-slate-900 rounded-xl px-3 py-1.5 text-[11px] text-slate-200 outline-none focus:border-brand-500 transition-all placeholder:text-[var(--muted)]"
                     />
+                    <label htmlFor="admin-select-notif-user" className="sr-only">Choose Target Recipient</label>
                     <select
+                      id="admin-select-notif-user"
                       value={selectedUserForNotif}
                       onChange={(e) => setSelectedUserForNotif(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
@@ -993,8 +1016,9 @@ export const Admin: React.FC = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-500 tracking-wide">Sender Identity</label>
+                    <label htmlFor="admin-notif-sender-type" className="text-[9px] font-black text-[var(--muted)] tracking-wide">Sender Identity</label>
                     <select
+                      id="admin-notif-sender-type"
                       value={senderType}
                       onChange={(e) => setSenderType(e.target.value as 'admin' | 'system')}
                       className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
@@ -1005,13 +1029,14 @@ export const Admin: React.FC = () => {
                   </div>
                   
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-wide">Message Text</label>
+                    <label htmlFor="admin-notif-text" className="text-[9px] font-black text-[var(--muted)] uppercase tracking-wide">Message Text</label>
                     <textarea
+                      id="admin-notif-text"
                       placeholder="Type notification alert..."
                       value={notifText}
                       onChange={(e) => setNotifText(e.target.value)}
                       rows={3}
-                      className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder:text-slate-700 outline-none focus:border-brand-500 transition-colors resize-none"
+                      className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder:text-[var(--muted)] outline-none focus:border-brand-500 transition-colors resize-none"
                       required
                     />
                   </div>
@@ -1043,15 +1068,19 @@ export const Admin: React.FC = () => {
                   
                   <div className="space-y-3.5">
                     <div className="space-y-1.5">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-wide">Select User</label>
+                      <label htmlFor="admin-filter-restrict-user" className="text-[9px] font-black text-[var(--muted)] uppercase tracking-wide">Select User</label>
                       <input
+                        id="admin-filter-restrict-user"
                         type="text"
                         placeholder="Filter by username..."
+                        aria-label="Filter user by username"
                         value={searchRestrictUser}
                         onChange={(e) => setSearchRestrictUser(e.target.value)}
-                        className="w-full bg-[#060608]/40 border border-slate-900 rounded-xl px-3 py-1.5 text-[11px] text-slate-200 outline-none focus:border-brand-500 transition-all placeholder:text-slate-800"
+                        className="w-full bg-[#060608]/40 border border-slate-900 rounded-xl px-3 py-1.5 text-[11px] text-slate-200 outline-none focus:border-brand-500 transition-all placeholder:text-[var(--muted)]"
                       />
+                      <label htmlFor="admin-select-restrict-user" className="sr-only">Choose User for Restriction</label>
                       <select
+                        id="admin-select-restrict-user"
                         value={selectedUserForRestrict}
                         onChange={(e) => setSelectedUserForRestrict(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
@@ -1069,8 +1098,9 @@ export const Admin: React.FC = () => {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-wide">Restriction Duration</label>
+                      <label htmlFor="admin-restrict-duration" className="text-[9px] font-black text-[var(--muted)] uppercase tracking-wide">Restriction Duration</label>
                       <select
+                        id="admin-restrict-duration"
                         value={restrictDuration}
                         onChange={(e) => setRestrictDuration(Number(e.target.value))}
                         className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
@@ -1086,8 +1116,9 @@ export const Admin: React.FC = () => {
 
                     {restrictDuration > 0 && (
                       <div className="space-y-1.5 animate-fade-in">
-                        <label className="text-[9px] font-black text-slate-500 tracking-wide">Sender Identity</label>
+                        <label htmlFor="admin-restrict-sender-type" className="text-[9px] font-black text-[var(--muted)] tracking-wide">Sender Identity</label>
                         <select
+                          id="admin-restrict-sender-type"
                           value={restrictSenderType}
                           onChange={(e) => setRestrictSenderType(e.target.value as 'admin' | 'system')}
                           className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
@@ -1365,20 +1396,27 @@ export const Admin: React.FC = () => {
       {/* READ-ONLY AUDIT CHAT MODAL DIALOG */}
       {auditingConvo && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in select-none">
-          <div className="w-full max-w-2xl bg-[#030303] border border-white/5 rounded-3xl overflow-hidden flex flex-col h-[90vh] sm:h-[80vh] max-h-[92vh] sm:max-h-[580px] shadow-2xl">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-audit-title"
+            className="w-full max-w-2xl bg-[#030303] border border-white/5 rounded-3xl overflow-hidden flex flex-col h-[90vh] sm:h-[80vh] max-h-[92vh] sm:max-h-[580px] shadow-2xl"
+          >
             
             {/* Modal Header */}
             <div className="p-4 border-b border-white/[0.04] flex items-center justify-between bg-slate-950/40">
               <div>
-                <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                <h3 id="admin-audit-title" className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                   <Shield className="w-4 h-4 text-brand-400" />
                   Audit: {getCleanLabel(auditingConvo)}
                 </h3>
-                <p className="text-[9px] text-slate-550 mt-0.5">Audit log view. Read-only monitor mode.</p>
+                <p className="text-[9px] text-[var(--muted)] mt-0.5">Audit log view. Read-only monitor mode.</p>
               </div>
               <button 
+                type="button"
                 onClick={() => setAuditingConvo(null)}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                aria-label="Close audit log"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
               >
                 <X className="w-5 h-5" />
               </button>

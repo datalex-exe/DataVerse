@@ -164,16 +164,23 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[100] overflow-y-auto flex justify-center items-start sm:items-center p-4 select-none animate-fade-in">
-      <div className="w-full max-w-sm bg-[#030303] border border-white/5 rounded-3xl shadow-2xl flex flex-col overflow-hidden my-auto">
+      <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adjust-photo-title"
+        className="w-full max-w-sm bg-[#030303] border border-white/5 rounded-3xl shadow-2xl flex flex-col overflow-hidden my-auto"
+      >
         
         {/* Header */}
         <div className="p-4 border-b border-white/[0.04] flex items-center justify-between bg-slate-950/40">
-          <h3 className="text-xs font-black text-white uppercase tracking-wider">
+          <h3 id="adjust-photo-title" className="text-xs font-black text-white uppercase tracking-wider">
             Adjust Photo
           </h3>
           <button 
+            type="button"
             onClick={onCancel}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+            aria-label="Cancel adjust photo"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
           >
             <X className="w-4 h-4" />
           </button>
@@ -195,7 +202,7 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
               <img
                 ref={imageRef}
                 src={imgSrc}
-                alt="Crop Target"
+                alt="Crop preview target"
                 onLoad={handleImageLoad}
                 className="absolute top-1/2 left-1/2 max-w-none max-h-none pointer-events-none origin-center"
                 style={{
@@ -219,16 +226,20 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
         <div className="px-6 pb-6 space-y-5">
           {/* Zoom Slider */}
           <div className="space-y-1.5">
-            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              <span className="flex items-center gap-1"><ZoomIn className="w-3.5 h-3.5" /> Zoom</span>
-              <span>{Math.round(zoom * 100)}%</span>
+            <div className="flex justify-between text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">
+              <label htmlFor="crop-zoom-slider" className="flex items-center gap-1 cursor-pointer">
+                <ZoomIn className="w-3.5 h-3.5" /> Zoom
+              </label>
+              <span aria-hidden="true">{Math.round(zoom * 100)}%</span>
             </div>
             <input
+              id="crop-zoom-slider"
               type="range"
               min="1"
               max="3"
               step="0.01"
               value={zoom}
+              aria-label={`Image zoom: ${Math.round(zoom * 100)} percent`}
               onChange={(e) => setZoom(parseFloat(e.target.value))}
               className="w-full h-1 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-brand-500"
             />
@@ -236,16 +247,20 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
 
           {/* Rotate Slider */}
           <div className="space-y-1.5">
-            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              <span className="flex items-center gap-1"><RotateCw className="w-3.5 h-3.5" /> Rotation</span>
-              <span>{rotation}°</span>
+            <div className="flex justify-between text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">
+              <label htmlFor="crop-rotate-slider" className="flex items-center gap-1 cursor-pointer">
+                <RotateCw className="w-3.5 h-3.5" /> Rotation
+              </label>
+              <span aria-hidden="true">{rotation}°</span>
             </div>
             <input
+              id="crop-rotate-slider"
               type="range"
               min="0"
               max="360"
               step="1"
               value={rotation}
+              aria-label={`Image rotation: ${rotation} degrees`}
               onChange={(e) => setRotation(parseInt(e.target.value))}
               className="w-full h-1 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-brand-500"
             />
@@ -254,14 +269,16 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
           {/* Preset Rotate Buttons */}
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setRotation((prev) => (prev + 90) % 360)}
-              className="flex-1 py-1.5 bg-slate-950 border border-slate-900 hover:border-white/10 hover:bg-slate-900 text-slate-400 hover:text-white text-[10px] font-bold rounded-xl transition-all uppercase tracking-wider"
+              className="flex-1 py-1.5 bg-slate-950 border border-slate-900 hover:border-white/10 hover:bg-slate-900 text-slate-300 hover:text-white text-[10px] font-bold rounded-xl transition-all uppercase tracking-wider"
             >
               Rotate 90°
             </button>
             <button
+              type="button"
               onClick={() => { setZoom(1); setRotation(0); setPanX(0); setPanY(0); }}
-              className="flex-1 py-1.5 bg-slate-950 border border-slate-900 hover:border-white/10 hover:bg-slate-900 text-slate-400 hover:text-white text-[10px] font-bold rounded-xl transition-all uppercase tracking-wider"
+              className="flex-1 py-1.5 bg-slate-950 border border-slate-900 hover:border-white/10 hover:bg-slate-900 text-slate-300 hover:text-white text-[10px] font-bold rounded-xl transition-all uppercase tracking-wider"
             >
               Reset
             </button>
@@ -269,8 +286,9 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({
 
           {/* Save Action */}
           <button
+            type="button"
             onClick={handleSave}
-            className="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold rounded-2xl shadow-lg shadow-brand-500/10 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider"
+            className="w-full py-2.5 bg-brand-500 hover:bg-brand-400 text-slate-950 text-xs font-bold rounded-2xl shadow-lg shadow-brand-500/10 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider"
           >
             <Check className="w-4 h-4" />
             Apply & Save

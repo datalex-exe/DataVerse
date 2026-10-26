@@ -169,11 +169,11 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
           <div className="relative flex-shrink-0">
             <div className="w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm">
               {!item.notifier_id ? (
-                <img src="/logo.png?v=2" alt="System Logo" className="w-full h-full object-cover" />
+                <img src="/logo.png?v=2" alt="" aria-hidden="true" className="w-full h-full object-cover" />
               ) : isWelcome ? (
                 <div className="w-full h-full bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] flex items-center justify-center text-[var(--accent-2)] font-extrabold text-sm sm:text-base">D</div>
               ) : item.avatar_url ? (
-                <img src={`/api/media/file/${item.avatar_url}`} alt={notifierName} className="w-full h-full object-cover" />
+                <img src={`/api/media/file/${item.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
               ) : (
                 notifierName.substring(0, 2).toUpperCase()
               )}
@@ -248,8 +248,8 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
               </p>
             )}
 
-            {/* Time on second line: small muted gray, regular weight */}
-            <span className="text-xs text-[#6b7090] font-normal block mt-1">
+            {/* Time on second line: high-contrast token */}
+            <span className="text-xs text-[var(--muted)] font-normal block mt-1">
               {formatTime(item.created_at)}
             </span>
           </div>
@@ -266,6 +266,8 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
           {item.type === 'follow_request' ? (
             <div className="flex items-center gap-1.5 sm:gap-2">
               <button
+                type="button"
+                aria-label={`Accept follow request from ${notifierName}`}
                 onClick={async () => {
                   try {
                     const res = await fetch(`/api/users/follow-requests/${item.id}/accept`, {
@@ -286,6 +288,8 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                 Accept
               </button>
               <button
+                type="button"
+                aria-label={`Reject follow request from ${notifierName}`}
                 onClick={async () => {
                   try {
                     const res = await fetch(`/api/users/follow-requests/${item.id}/reject`, {
@@ -311,6 +315,8 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
               {/* Profile link button - Outlined pill filling with accent on hover */}
               {!isWelcome && item.username && (
                 <button
+                  type="button"
+                  aria-label={`View ${item.type === 'verification_request' ? 'admin verification' : `${notifierName}'s profile`}`}
                   onClick={() => {
                     if (item.type === 'verification_request') {
                       onNavigate('admin');
@@ -354,20 +360,10 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
       {/* Faint radial glow behind the header */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      {/* Phone: Slim sticky top bar with blurred background */}
-      <div className="md:hidden sticky top-0 z-30 bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border-b border-[var(--line)] px-4 py-3 -mx-4 -mt-6 mb-4 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-[var(--text)] tracking-tight">Notifications</h1>
-        {unreadCount > 0 && (
-          <span className="text-[10px] font-semibold text-[var(--on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-2 py-0.5 rounded-full shadow-sm">
-            {unreadCount} new
-          </span>
-        )}
-      </div>
-
-      {/* Desktop Header: 28px semibold title in sentence case */}
-      <div className="hidden md:flex items-center justify-between">
+      {/* Unified Main Heading */}
+      <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
         <div className="flex items-center gap-3">
-          <h1 className="text-[28px] font-semibold text-[var(--text)] tracking-tight">Notifications</h1>
+          <h1 className="text-xl sm:text-2xl md:text-[28px] font-semibold text-[var(--text)] tracking-tight">Notifications</h1>
           {unreadCount > 0 && (
             <span className="text-xs font-semibold text-[var(--on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-2.5 py-0.5 rounded-full shadow-md shadow-[var(--shadow-accent)]">
               {unreadCount} new
@@ -382,7 +378,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
             <Heart className="w-6 h-6 text-[var(--muted)]" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-[var(--text)]">No notifications yet</h4>
+            <h2 className="text-sm font-semibold text-[var(--text)]">No notifications yet</h2>
             <p className="text-xs text-[var(--muted)] max-w-xs mx-auto mt-2 leading-relaxed font-normal">
               When people follow your account, like your posts, or comment on updates, they will appear here in real-time.
             </p>
@@ -392,28 +388,28 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
         <div className="space-y-6 sm:space-y-8">
           {/* New (within 24 hours) */}
           {newActivities.length > 0 && (
-            <div className="space-y-3">
+            <section aria-labelledby="heading-new-notifications" className="space-y-3">
               <div className="flex items-center gap-3 py-1">
-                <span className="text-xs font-medium text-[var(--muted)]">New</span>
+                <h2 id="heading-new-notifications" className="text-xs font-medium text-[var(--muted)]">New</h2>
                 <div className="flex-1 h-[1px] bg-[var(--line)]" />
               </div>
               <div className="bg-[var(--card)] border border-[var(--line)] rounded-2xl sm:rounded-3xl shadow-xl shadow-[var(--shadow-card)] overflow-hidden divide-y divide-[var(--line)]">
                 {newActivities.map((item, idx) => renderItem(item, idx))}
               </div>
-            </div>
+            </section>
           )}
 
           {/* Earlier (older than 24 hours) */}
           {earlierActivities.length > 0 && (
-            <div className="space-y-3">
+            <section aria-labelledby="heading-earlier-notifications" className="space-y-3">
               <div className="flex items-center gap-3 py-1">
-                <span className="text-xs font-medium text-[var(--muted)]">Earlier</span>
+                <h2 id="heading-earlier-notifications" className="text-xs font-medium text-[var(--muted)]">Earlier</h2>
                 <div className="flex-1 h-[1px] bg-[var(--line)]" />
               </div>
               <div className="bg-[var(--card)] border border-[var(--line)] rounded-2xl sm:rounded-3xl shadow-xl shadow-[var(--shadow-card)] overflow-hidden divide-y divide-[var(--line)]">
                 {earlierActivities.map((item, idx) => renderItem(item, idx))}
               </div>
-            </div>
+            </section>
           )}
         </div>
       )}

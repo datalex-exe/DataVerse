@@ -940,9 +940,9 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
           <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-white/[0.04] bg-slate-950/20 p-5 flex flex-col justify-between">
             <div className="space-y-6">
               <div className="px-2">
-                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Settings</h3>
+                <h1 className="text-xs font-black text-white uppercase tracking-widest">Settings</h1>
               </div>
-              <nav className="space-y-1">
+              <nav aria-label="Settings navigation" className="space-y-1">
                 <button
                   onClick={() => { setSettingsTab('edit_profile'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
                   className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
@@ -1081,13 +1081,15 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
               <form onSubmit={handleSaveProfile} className="space-y-6 max-w-md">
                 <div>
                   <h2 className="text-base font-black text-white">Edit Profile</h2>
-                  <p className="text-[11px] text-slate-500 mt-1">Update your username, email, display name and biography details.</p>
+                  <p className="text-[11px] text-[var(--muted)] mt-1">Update your username, email, display name and biography details.</p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Username</label>
+                  <label htmlFor="profile-username" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Username</label>
                   <input
+                    id="profile-username"
                     type="text"
+                    autoComplete="username"
                     value={usernameInput}
                     onChange={(e) => setUsernameInput(e.target.value)}
                     className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-700 outline-none transition-all font-bold"
@@ -1097,9 +1099,11 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Email Address</label>
+                  <label htmlFor="profile-email" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Email Address</label>
                   <input
+                    id="profile-email"
                     type="email"
+                    autoComplete="email"
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-700 outline-none transition-all font-bold"
@@ -1109,9 +1113,11 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Display Name</label>
+                  <label htmlFor="profile-display-name" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Display Name</label>
                   <input
+                    id="profile-display-name"
                     type="text"
+                    autoComplete="name"
                     value={displayNameInput}
                     onChange={(e) => setDisplayNameInput(e.target.value)}
                     className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-700 outline-none transition-all font-bold"
@@ -1120,8 +1126,9 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Biography</label>
+                  <label htmlFor="profile-bio" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Biography</label>
                   <textarea
+                    id="profile-bio"
                     rows={4}
                     value={bioInput}
                     onChange={(e) => setBioInput(e.target.value)}
@@ -1201,16 +1208,18 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Username</label>
+                      <label htmlFor="verified-username-display" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Username</label>
                       <input
+                        id="verified-username-display"
                         type="text"
                         value={`@${profile?.username}`}
                         disabled
-                        className="w-full bg-slate-950/40 border border-white/[0.02] rounded-xl py-2.5 px-4 text-xs text-slate-500 font-bold outline-none cursor-not-allowed"
+                        className="w-full bg-slate-950/40 border border-white/[0.02] rounded-xl py-2.5 px-4 text-xs text-[var(--muted)] font-bold outline-none cursor-not-allowed"
                       />
                     </div>
 
                     <button
+                      type="button"
                       onClick={handlePayVerification}
                       disabled={payingVerification}
                       className="w-full py-3 bg-brand-600 hover:bg-brand-500 disabled:bg-slate-900 disabled:text-slate-600 text-white rounded-xl text-xs font-black shadow-lg shadow-brand-500/10 transition-all uppercase tracking-wider flex items-center justify-center gap-2"
@@ -1250,8 +1259,9 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Category</label>
+                      <label htmlFor="verified-category-select" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Category</label>
                       <select
+                        id="verified-category-select"
                         value={categoryInput}
                         onChange={(e) => setCategoryInput(e.target.value)}
                         className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white outline-none transition-all font-bold"
@@ -1265,15 +1275,17 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Supporting Document (ID Card)</label>
+                      <label htmlFor="verified-doc-upload" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Supporting Document (ID Card)</label>
                       <div className="border border-dashed border-white/10 rounded-2xl p-6 text-center hover:border-brand-500/50 transition-colors cursor-pointer relative bg-slate-950/20">
                         <Sparkles className="w-6 h-6 text-brand-400 mx-auto mb-2" />
-                        <p className="text-[10px] text-slate-400 font-bold">
+                        <p className="text-[10px] text-slate-300 font-bold">
                           {verificationDocFile ? verificationDocFile.name : 'Upload Government Photo ID or Business License'}
                         </p>
-                        <p className="text-[8px] text-slate-650 mt-1 uppercase font-semibold">PDF, PNG, JPG accepted</p>
+                        <p className="text-[8px] text-[var(--muted)] mt-1 uppercase font-semibold">PDF, PNG, JPG accepted</p>
                         <input 
+                          id="verified-doc-upload"
                           type="file" 
+                          aria-label="Upload Government Photo ID or Business License"
                           className="absolute inset-0 opacity-0 cursor-pointer" 
                           accept="image/*,application/pdf" 
                           onChange={(e) => setVerificationDocFile(e.target.files?.[0] || null)}
@@ -1281,15 +1293,16 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                         />
                       </div>
                       {profile.verification_document_url && (
-                        <p className="text-[9px] text-slate-550 pl-1 font-semibold">
+                        <p className="text-[9px] text-[var(--muted)] pl-1 font-semibold">
                           📄 Current Document: <a href={`/api/media/file/${encodeURIComponent(profile.verification_document_url)}`} target="_blank" rel="noreferrer" className="text-brand-400 hover:underline">View Uploaded ID File</a>
                         </p>
                       )}
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Reason for Verification</label>
+                      <label htmlFor="verified-reason-input" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Reason for Verification</label>
                       <textarea
+                        id="verified-reason-input"
                         rows={3}
                         value={reasonInput}
                         onChange={(e) => setReasonInput(e.target.value)}
@@ -1353,13 +1366,15 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
               <form onSubmit={handleChangePassword} className="space-y-6 max-w-md">
                 <div>
                   <h2 className="text-lg font-black text-white">Change Password</h2>
-                  <p className="text-[11px] text-slate-500 mt-1">Enter a new secure password below to update your login credentials.</p>
+                  <p className="text-[11px] text-[var(--muted)] mt-1">Enter a new secure password below to update your login credentials.</p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">New Password</label>
+                  <label htmlFor="settings-new-password" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">New Password</label>
                   <input
+                    id="settings-new-password"
                     type="password"
+                    autoComplete="new-password"
                     value={newPasswordInput}
                     onChange={(e) => setNewPasswordInput(e.target.value)}
                     className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-700 outline-none transition-all font-bold"
@@ -1369,9 +1384,11 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Confirm Password</label>
+                  <label htmlFor="settings-confirm-password" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Confirm Password</label>
                   <input
+                    id="settings-confirm-password"
                     type="password"
+                    autoComplete="new-password"
                     value={confirmPasswordInput}
                     onChange={(e) => setConfirmPasswordInput(e.target.value)}
                     className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-700 outline-none transition-all font-bold"
@@ -1397,7 +1414,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                     <Flag className="w-4 h-4 text-red-400" />
                     <h2 className="text-base font-black text-white">Report a Problem</h2>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
+                  <p className="text-[11px] text-[var(--muted)] mt-1">
                     Report inappropriate content, abusive behaviour, or any safety concern. Your report is confidential and will be reviewed by our safety team.
                   </p>
                 </div>
@@ -1416,8 +1433,9 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 )}
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Report Type</label>
+                  <label htmlFor="report-type-select" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Report Type</label>
                   <select
+                    id="report-type-select"
                     value={reportTypeInput}
                     onChange={(e) => setReportTypeInput(e.target.value)}
                     className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white outline-none transition-all font-bold"
@@ -1435,8 +1453,9 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Reported Username <span className="normal-case font-medium">(optional)</span></label>
+                  <label htmlFor="reported-username-input" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Reported Username <span className="normal-case font-medium">(optional)</span></label>
                   <input
+                    id="reported-username-input"
                     type="text"
                     value={reportedUsernameInput}
                     onChange={(e) => setReportedUsernameInput(e.target.value)}
@@ -1446,15 +1465,16 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Description <span className="normal-case font-medium text-slate-600">(min 10 chars)</span></label>
+                  <label htmlFor="report-description-textarea" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Description <span className="normal-case font-medium text-[var(--muted)]">(min 10 chars)</span></label>
                   <textarea
+                    id="report-description-textarea"
                     rows={5}
                     value={reportDescInput}
                     onChange={(e) => setReportDescInput(e.target.value)}
                     className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-700 outline-none transition-all font-medium resize-none"
                     placeholder="Please describe the issue in detail. Include any relevant context, links, or usernames..."
                   />
-                  <p className="text-[9px] text-slate-600 pl-1">{reportDescInput.length} characters</p>
+                  <p className="text-[9px] text-[var(--muted)] pl-1">{reportDescInput.length} characters</p>
                 </div>
 
                 {/* Disclaimer */}
@@ -1592,11 +1612,14 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
             {/* Camera badge at bottom right */}
             {isOwnProfile && (
               <label 
+                htmlFor="profile-avatar-file-input"
                 className="absolute bottom-1 right-1 p-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-full transition-all border-2 border-[#050508] shadow-lg shadow-brand-600/40 cursor-pointer active:scale-95" 
                 title="Change Avatar"
               >
                 <Camera className="w-4 h-4" />
                 <input 
+                  id="profile-avatar-file-input"
+                  aria-label="Upload profile avatar"
                   type="file" 
                   accept="image/*" 
                   onChange={handleAvatarChange} 
@@ -1789,11 +1812,14 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
               {/* Camera badge */}
               {isOwnProfile && (
                 <label 
+                  htmlFor="profile-avatar-mobile-file-input"
                   className="absolute bottom-0 right-0 p-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-full transition-all border-2 border-[#050508] shadow-md cursor-pointer active:scale-95" 
                   title="Change Avatar"
                 >
                   <Camera className="w-3.5 h-3.5" />
                   <input 
+                    id="profile-avatar-mobile-file-input"
+                    aria-label="Upload profile avatar"
                     type="file" 
                     accept="image/*" 
                     onChange={handleAvatarChange} 
@@ -2047,7 +2073,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                         ) : (
                           <img 
                             src={`/api/media/file/${post.media[0].r2_key}`} 
-                            alt="Thumbnail" 
+                            alt={post.caption ? `Post: ${post.caption}` : `Post by ${profile.username}`} 
                             className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
                             loading="lazy"
                           />
@@ -2073,6 +2099,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                         {(isOwnProfile || currentUser?.is_admin || currentUser?.is_top_admin) && (
                           <button
                             type="button"
+                            aria-label="Delete Post"
                             onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
                             className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-red-650/90 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-all active:scale-90 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                             title="Delete Post"
@@ -2120,7 +2147,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                         ) : (
                           <img 
                             src={`/api/media/file/${post.media[0].r2_key}`} 
-                            alt={post.caption || ''} 
+                            alt={post.caption ? `Saved post: ${post.caption}` : 'Saved post'} 
                             className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
                             loading="lazy"
                           />
@@ -2150,16 +2177,23 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
       {/* FOLLOWERS / FOLLOWING CONNECTIONS LIST MODAL */}
       {showConnectionsModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in select-none">
-          <div className="w-full max-w-sm bg-[#030303] border border-white/5 rounded-3xl overflow-hidden flex flex-col h-[60vh] max-h-[450px] shadow-2xl animate-scale-up">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="connections-modal-title"
+            className="w-full max-w-sm bg-[#030303] border border-white/5 rounded-3xl overflow-hidden flex flex-col h-[60vh] max-h-[450px] shadow-2xl animate-scale-up"
+          >
             
             {/* Modal Header */}
             <div className="p-4 border-b border-white/[0.04] flex items-center justify-between bg-slate-950/40">
-              <h3 className="text-xs font-black text-white uppercase tracking-wider">
+              <h3 id="connections-modal-title" className="text-xs font-black text-white uppercase tracking-wider">
                 {modalTitle}
               </h3>
               <button 
+                type="button"
                 onClick={() => setShowConnectionsModal(false)}
-                className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                aria-label="Close connections list"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2173,7 +2207,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                   <span className="text-xs">Loading {modalTitle.toLowerCase()}...</span>
                 </div>
               ) : modalUsersList.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-550 text-xs font-semibold text-center px-6">
+                <div className="h-full flex items-center justify-center text-[var(--muted)] text-xs font-semibold text-center px-6">
                   No users found in this list.
                 </div>
               ) : (
@@ -2189,7 +2223,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[10px] font-extrabold text-slate-400 overflow-hidden flex-shrink-0 select-none">
                         {u.avatar_url ? (
-                          <img src={`/api/media/file/${u.avatar_url}`} alt={u.username} className="w-full h-full object-cover" />
+                          <img src={`/api/media/file/${u.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
                         ) : (
                           u.username.substring(0, 2).toUpperCase()
                         )}
@@ -2199,7 +2233,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
                           {u.display_name || u.username}
                           {!!u.is_verified && <VerifiedBadge size={11} />}
                         </span>
-                        <span className="text-[10px] text-slate-555 block truncate">@{u.username}</span>
+                        <span className="text-[10px] text-[var(--muted)] block truncate">@{u.username}</span>
                       </div>
                     </div>
                   </div>

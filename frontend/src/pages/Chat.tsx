@@ -360,6 +360,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <ImageIcon className="w-4 h-4" />
           </button>
           <input
+            id="chat-media-file-input"
+            aria-label="Send media or files"
             type="file"
             ref={fileInputRef}
             onChange={handleSelectMedia}
@@ -386,8 +388,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
           className="input-pill flex-1 min-w-0 flex items-center bg-[var(--input)] border border-[var(--line)] rounded-full pl-3 sm:pl-4 pr-1.5 py-1.5 transition-all overflow-hidden"
           style={{ minWidth: 0, overflow: 'hidden', borderRadius: '9999px' }}
         >
+          <label htmlFor="chat-message-textarea" className="sr-only">Type a message</label>
           {/* BUG 2 FIX: Style the field: border:0; outline:none; box-shadow:none; background:transparent; -webkit-appearance:none; appearance:none; border-radius:0; -webkit-tap-highlight-color:transparent; font-size:16px; caret-color:var(--accent-2) */}
           <textarea
+            id="chat-message-textarea"
             ref={textareaRef}
             rows={1}
             placeholder="Type a message..."
@@ -3574,12 +3578,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             {/* Left Inputs panel */}
             <div className="w-full md:w-64 space-y-4 bg-slate-950/45 border border-white/[0.02] p-5 rounded-2xl">
               <div>
-                <label className="text-[8px] font-black uppercase text-slate-500 block tracking-widest mb-1.5">Question / Topic</label>
+                <label htmlFor="wheel-question-input" className="text-[8px] font-black uppercase text-[var(--muted)] block tracking-widest mb-1.5">Question / Topic</label>
                 <input
+                  id="wheel-question-input"
                   type="text"
                   value={wheelQuestion}
                   onChange={(e) => setWheelQuestion(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-slate-700 outline-none focus:border-brand-500"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-[var(--muted)] outline-none focus:border-brand-500"
                   placeholder="Enter topic"
                   maxLength={50}
                   disabled={wheelIsSpinning}
@@ -3587,7 +3592,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               </div>
 
               <div>
-                <label className="text-[8px] font-black uppercase text-slate-500 block tracking-widest mb-1.5">Options ({wheelOptions.length}/8)</label>
+                <span className="text-[8px] font-black uppercase text-[var(--muted)] block tracking-widest mb-1.5">Options ({wheelOptions.length}/8)</span>
                 <div className="space-y-1.5 max-h-36 overflow-y-auto mb-3 scrollbar-thin">
                   {wheelOptions.map((opt, i) => (
                     <div key={i} className="flex justify-between items-center bg-slate-900/60 border border-white/[0.01] px-2.5 py-1 rounded-lg text-xs">
@@ -3597,8 +3602,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       </div>
                       <button
                         type="button"
+                        aria-label={`Remove option ${opt}`}
                         onClick={() => setWheelOptions(prev => prev.filter((_, idx) => idx !== i))}
-                        className="text-[10px] text-slate-550 hover:text-red-400 font-black px-1"
+                        className="text-[10px] text-slate-400 hover:text-red-400 font-black px-1"
                         disabled={wheelIsSpinning || wheelOptions.length <= 2}
                       >
                         ✕
@@ -3609,18 +3615,21 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
                 {wheelOptions.length < 8 && (
                   <div className="flex gap-1.5">
+                    <label htmlFor="new-wheel-option-input" className="sr-only">Add wheel option</label>
                     <input
+                      id="new-wheel-option-input"
                       type="text"
                       value={newWheelOption}
                       onChange={(e) => setNewWheelOption(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && addWheelOption()}
-                      className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white placeholder:text-slate-700 outline-none focus:border-brand-500"
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white placeholder:text-[var(--muted)] outline-none focus:border-brand-500"
                       placeholder="Add option..."
                       maxLength={30}
                       disabled={wheelIsSpinning}
                     />
                     <button
                       type="button"
+                      aria-label="Add option"
                       onClick={addWheelOption}
                       className="px-2.5 bg-brand-650 hover:bg-brand-600 rounded-lg text-xs font-bold text-white"
                       disabled={wheelIsSpinning}
@@ -4097,9 +4106,10 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         
         {/* Header */}
         <div className="px-4 py-3.5 border-b border-[var(--line)] flex justify-between items-center bg-[var(--side)] select-none flex-shrink-0">
-          <h2 className="text-base font-semibold text-[var(--text)] tracking-tight">Chats</h2>
+          <h1 className="text-base font-semibold text-[var(--text)] tracking-tight">Chats</h1>
           <div className="flex items-center gap-2">
             <button 
+              type="button"
               onClick={() => setIsSearchMode(!isSearchMode)}
               className={`w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border ${
                 isSearchMode
@@ -4112,6 +4122,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               <Plus className="w-4 h-4" />
             </button>
             <button 
+              type="button"
               onClick={() => { setShowCreateGroup(true); setIsSearchMode(false); }}
               className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--muted)] hover:text-[var(--accent-2)] active:scale-95"
               title="Create group chat"
@@ -4126,8 +4137,10 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         {!isSearchMode && (
           <div className="px-3.5 pt-3 pb-1 select-none flex-shrink-0">
             <div className="relative">
+              <label htmlFor="chat-filter-conversations-input" className="sr-only">Search chats</label>
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
               <input
+                id="chat-filter-conversations-input"
                 type="text"
                 placeholder="Search chats..."
                 value={chatFilterQuery}
@@ -4155,15 +4168,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-[var(--text)]">New Conversation</span>
               <button 
+                type="button"
                 onClick={() => setIsSearchMode(false)}
+                aria-label="Close new conversation search"
                 className="p-1 text-[var(--muted)] hover:text-[var(--text)] rounded-lg hover:bg-[var(--hover)]"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="relative">
+              <label htmlFor="chat-search-username-input" className="sr-only">Search username to chat</label>
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
               <input
+                id="chat-search-username-input"
                 type="text"
                 placeholder="Search username to chat..."
                 value={searchQuery}
@@ -4316,7 +4333,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   ) : (
                     <div className="w-12 h-12 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden flex-shrink-0 text-sm font-semibold text-[var(--accent-2)] transition-transform group-hover:scale-105">
                       {partner.avatar_url ? (
-                        <img src={`/api/media/file/${partner.avatar_url}`} alt={partner.username} className="w-full h-full object-cover" />
+                        <img src={`/api/media/file/${partner.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
                       ) : (
                         partner.username.substring(0, 2).toUpperCase()
                       )}
@@ -4422,7 +4439,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden text-xs font-semibold text-[var(--accent-2)] cursor-pointer hover:opacity-85 transition-opacity flex-shrink-0"
                   >
                     {getChatPartner(activeConvo).avatar_url ? (
-                      <img src={`/api/media/file/${getChatPartner(activeConvo).avatar_url}`} alt="Active Partner" className="w-full h-full object-cover" />
+                      <img src={`/api/media/file/${getChatPartner(activeConvo).avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
                     ) : (
                       getChatPartner(activeConvo).username.substring(0, 2).toUpperCase()
                     )}
@@ -4470,6 +4487,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               {/* Header Right: Three-dot menu */}
               <div className="relative flex items-center gap-1" ref={headerMenuRef}>
                 <button
+                  type="button"
+                  aria-haspopup="true"
+                  aria-expanded={showHeaderMenu}
                   onClick={() => setShowHeaderMenu(prev => !prev)}
                   className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--muted)] hover:text-[var(--text)]"
                   title="More options"
@@ -5181,7 +5201,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       {/* ─── Create Group Modal ───────────────────────────────────────────────── */}
       {showCreateGroup && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0c0c10] border border-white/[0.06] rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-group-chat-title"
+            className="bg-[#0c0c10] border border-white/[0.06] rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden"
+          >
             
             {/* Modal Header */}
             <div className="p-5 border-b border-white/[0.05] flex items-center justify-between">
@@ -5190,13 +5215,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   <Users className="w-5 h-5 text-brand-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">New Group Chat</h3>
-                  <p className="text-[10px] text-slate-500 font-medium">Add a name and members to start</p>
+                  <h3 id="new-group-chat-title" className="text-sm font-black text-white">New Group Chat</h3>
+                  <p className="text-[10px] text-[var(--muted)] font-medium">Add a name and members to start</p>
                 </div>
               </div>
               <button
+                type="button"
+                aria-label="Close new group chat dialog"
                 onClick={() => { setShowCreateGroup(false); setGroupName(''); setGroupMemberSearch(''); setGroupSelectedMembers([]); setGroupMemberResults([]); }}
-                className="p-1.5 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 transition-all"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -5206,28 +5233,30 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               
               {/* Group Name */}
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Group Name</label>
+                <label htmlFor="chat-new-group-name" className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Group Name</label>
                 <input
+                  id="chat-new-group-name"
                   type="text"
                   placeholder="e.g. Friday Squad, Design Team..."
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-brand-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-600 outline-none transition-colors"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-brand-500 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder:text-[var(--muted)] outline-none transition-colors"
                   maxLength={60}
                 />
               </div>
 
               {/* Member Search */}
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add Members</label>
+                <label htmlFor="chat-add-members-search" className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Add Members</label>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" />
                   <input
+                    id="chat-add-members-search"
                     type="text"
                     placeholder="Search username..."
                     value={groupMemberSearch}
                     onChange={(e) => setGroupMemberSearch(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-brand-500 rounded-xl py-2.5 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-600 outline-none transition-colors"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-brand-500 rounded-xl py-2.5 pl-9 pr-3 text-sm text-slate-200 placeholder:text-[var(--muted)] outline-none transition-colors"
                   />
                 </div>
 
@@ -5317,7 +5346,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       {/* ─── Group Members Modal ───────────────────────────────────────────────── */}
       {showMembersModal && activeConvo && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0c0c10] border border-white/[0.06] rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh] overflow-hidden">
+          <div 
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="group-members-modal-title"
+            className="bg-[#0c0c10] border border-white/[0.06] rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh] overflow-hidden"
+          >
             
             {/* Modal Header */}
             <div className="p-5 border-b border-white/[0.05] flex items-center justify-between">
@@ -5326,13 +5360,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   <Users className="w-5 h-5 text-brand-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">Group Members</h3>
-                  <p className="text-[10px] text-slate-500 font-medium">{activeConvo.members.length} participants</p>
+                  <h3 id="group-members-modal-title" className="text-sm font-black text-white">Group Members</h3>
+                  <p className="text-[10px] text-[var(--muted)] font-medium">{activeConvo.members.length} participants</p>
                 </div>
               </div>
               <button
+                type="button"
+                aria-label="Close group members dialog"
                 onClick={() => { setShowMembersModal(false); setEditingMemberId(null); setNewNickname(''); }}
-                className="p-1.5 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 transition-all"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -5363,7 +5399,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       {/* User Avatar */}
                       <div className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-slate-400">
                         {member.avatar_url ? (
-                          <img src={`/api/media/file/${member.avatar_url}`} alt={member.username} className="w-full h-full object-cover" />
+                          <img src={`/api/media/file/${member.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
                         ) : (
                           member.username.substring(0, 2).toUpperCase()
                         )}
@@ -5387,31 +5423,36 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           )}
                         </div>
                         
-                        <div className="text-[10px] text-slate-500">@{member.username}</div>
+                        <div className="text-[10px] text-[var(--muted)]">@{member.username}</div>
                         
                         {/* Nickname display */}
                         {editingMemberId === member.id ? (
                           <div className="flex gap-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
+                            <label htmlFor={`nickname-${member.id}`} className="sr-only">Set custom nickname</label>
                             <input
+                              id={`nickname-${member.id}`}
                               type="text"
                               placeholder="Set custom nickname..."
                               value={newNickname}
                               onChange={(e) => setNewNickname(e.target.value)}
-                              className="flex-1 bg-slate-950 border border-slate-800 focus:border-brand-500 rounded-lg px-2.5 py-1 text-xs text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
+                              className="flex-1 bg-slate-950 border border-slate-800 focus:border-brand-500 rounded-lg px-2.5 py-1 text-xs text-slate-200 placeholder:text-[var(--muted)] outline-none transition-colors"
                               maxLength={30}
                               autoFocus
                             />
                             <button
+                              type="button"
                               onClick={() => handleUpdateNickname(member.id, newNickname)}
                               className="px-2.5 py-1 bg-brand-650 hover:bg-brand-600 text-white rounded-lg text-[10px] font-bold"
                             >
                               Save
                             </button>
                             <button
+                              type="button"
                               onClick={() => { setEditingMemberId(null); setNewNickname(''); }}
+                              aria-label="Cancel editing nickname"
                               className="p-1 text-slate-500 hover:text-white rounded-lg"
                             >
-                              <X className="w-3.5 h-3.5" />
+                              <X className="w-3.5 h-3.5" aria-hidden="true" />
                             </button>
                           </div>
                         ) : (
@@ -5428,20 +5469,24 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       <div className="flex items-center gap-2">
                         {canEditNickname && (
                           <button
+                            type="button"
                             onClick={() => { setEditingMemberId(member.id); setNewNickname(member.nickname || ''); }}
                             className="text-[10px] font-bold text-slate-450 hover:text-white px-2 py-1 bg-slate-900 border border-slate-850 hover:border-slate-700 rounded-lg transition-all"
                             title="Edit Nickname"
+                            aria-label={`Edit nickname for ${member.display_name || member.username}`}
                           >
                             Nickname
                           </button>
                         )}
                         {canKick && (
                           <button
+                            type="button"
                             onClick={() => handleKickMember(member.id)}
                             className="p-2 bg-red-500/5 hover:bg-red-500/10 text-red-500/70 hover:text-red-400 border border-red-950/30 hover:border-red-900/50 rounded-lg transition-all"
                             title="Kick member"
+                            aria-label={`Kick ${member.display_name || member.username}`}
                           >
-                            <Trash className="w-3.5 h-3.5" />
+                            <Trash className="w-3.5 h-3.5" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -5459,31 +5504,33 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       {/* ─── Forward Message Modal ─────────────────────────────────────────────── */}
       {showForwardModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0c0c10] border border-white/[0.06] rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh] overflow-hidden">
+          <div role="dialog" aria-modal="true" aria-labelledby="forward-message-title" className="bg-[#0c0c10] border border-white/[0.06] rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh] overflow-hidden">
             
             {/* Modal Header */}
             <div className="p-5 border-b border-white/[0.05] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-brand-600/20 border border-brand-600/30 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-brand-600/20 border border-brand-600/30 flex items-center justify-center" aria-hidden="true">
                   <Forward className="w-5 h-5 text-brand-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">Forward Message</h3>
-                  <p className="text-[10px] text-slate-500 font-medium">Select a chat to forward this message to</p>
+                  <h3 id="forward-message-title" className="text-sm font-black text-white">Forward Message</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">Select a chat to forward this message to</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => { setShowForwardModal(false); setForwardingMessageBody(null); }}
+                aria-label="Close forward message dialog"
                 className="p-1.5 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 transition-all"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
             {/* Chats List */}
             <div className="flex-1 overflow-y-auto p-5 space-y-3 scrollbar-thin">
               {conversations.length === 0 ? (
-                <div className="text-center py-10 text-slate-650 text-xs font-semibold">
+                <div className="text-center py-10 text-slate-400 text-xs font-semibold">
                   No active chats found.
                 </div>
               ) : (
@@ -5498,11 +5545,11 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     <div key={convo.id} className="flex items-center justify-between gap-3 p-3 bg-slate-950/40 border border-white/[0.02] rounded-2xl">
                       
                       {/* Chat Avatar */}
-                      <div className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-slate-400">
+                      <div className="w-9 h-9 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold text-slate-400" aria-hidden="true">
                         {convo.is_group ? (
                           <Users className="w-4 h-4 text-brand-400" />
                         ) : avatarUrl ? (
-                          <img src={`/api/media/file/${avatarUrl}`} alt="Avatar" className="w-full h-full object-cover" />
+                          <img src={`/api/media/file/${avatarUrl}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
                         ) : (
                           chatName.substring(0, 2).toUpperCase()
                         )}
@@ -5514,19 +5561,21 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           {chatName}
                         </span>
                         {convo.is_group && (
-                          <span className="text-[8px] text-slate-550 font-bold uppercase tracking-wider block mt-0.5">{convo.members.length} members</span>
+                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider block mt-0.5">{convo.members.length} members</span>
                         )}
                         {!convo.is_group && partner?.username && (
-                          <span className="text-[9px] text-slate-550 truncate block mt-0.5">@{partner.username}</span>
+                          <span className="text-[9px] text-slate-400 truncate block mt-0.5">@{partner.username}</span>
                         )}
                       </div>
 
                       {/* Action */}
                       <button
+                        type="button"
                         onClick={() => handleSelectForwardTarget(convo)}
+                        aria-label={`Forward message to ${chatName}`}
                         className="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all active:scale-95"
                       >
-                        <Send className="w-3 h-3" />
+                        <Send className="w-3 h-3" aria-hidden="true" />
                         Send
                       </button>
 
@@ -5543,38 +5592,41 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       {/* ─── Game Selector Modal ────────────────────────────────────────── */}
       {showGameSelectorModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0c0c10] border border-white/[0.06] rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden">
+          <div role="dialog" aria-modal="true" aria-labelledby="game-selector-title" className="bg-[#0c0c10] border border-white/[0.06] rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[85vh] overflow-hidden">
             
             {/* Modal Header */}
             <div className="p-5 border-b border-white/[0.05] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Gamepad2 className="w-5 h-5 text-brand-400" />
-                <h3 className="text-sm font-black text-white">Select Game to Play</h3>
+                <Gamepad2 className="w-5 h-5 text-brand-400" aria-hidden="true" />
+                <h3 id="game-selector-title" className="text-sm font-black text-white">Select Game to Play</h3>
               </div>
               <button
+                type="button"
                 onClick={() => setShowGameSelectorModal(false)}
+                aria-label="Close game selector dialog"
                 className="p-1.5 rounded-xl text-slate-500 hover:text-white hover:bg-slate-800 transition-all"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
             {/* Games Grid */}
             <div className="flex-1 overflow-y-auto p-5 grid grid-cols-2 gap-4 scrollbar-thin">
               {[
-                { id: 'tic-tac-toe', name: 'Tic-Tac-Toe', desc: 'Classic 3x3 alignment game', icon: <Grid className="w-6 h-6 text-brand-400" />, multiplayer: true },
-                { id: 'chess', name: 'Chess Sandbox', desc: 'Sandbox Chess board to play 1v1', icon: <Crown className="w-6 h-6 text-yellow-500" />, multiplayer: true },
-                { id: 'rps', name: 'Rock Paper Scissors', desc: 'Classic choice battle', icon: <Flame className="w-6 h-6 text-red-400" />, multiplayer: true },
-                { id: 'higher-lower', name: 'Higher or Lower', desc: 'Card guessing streak challenge', icon: <Club className="w-6 h-6 text-purple-400" />, multiplayer: false },
-                { id: 'whack-a-mole', name: 'Whack-a-Mole', desc: 'Test your reaction times', icon: <Target className="w-6 h-6 text-emerald-400" />, multiplayer: false },
-                { id: 'coin-toss', name: 'Coin Toss', desc: 'Simple Heads/Tails decider', icon: <Coins className="w-6 h-6 text-amber-400" />, multiplayer: true },
-                { id: 'spin-wheel', name: 'Spin the Wheel', desc: 'Submit a question & spin to pick', icon: <CircleDot className="w-6 h-6 text-blue-400" />, multiplayer: true },
-                { id: 'car-racing', name: 'Car Racing', desc: 'Dodge traffic & survive longest!', icon: <span className="text-2xl leading-none">ðŸŽï¸</span>, multiplayer: false },
+                { id: 'tic-tac-toe', name: 'Tic-Tac-Toe', desc: 'Classic 3x3 alignment game', icon: <Grid className="w-6 h-6 text-brand-400" aria-hidden="true" />, multiplayer: true },
+                { id: 'chess', name: 'Chess Sandbox', desc: 'Sandbox Chess board to play 1v1', icon: <Crown className="w-6 h-6 text-yellow-500" aria-hidden="true" />, multiplayer: true },
+                { id: 'rps', name: 'Rock Paper Scissors', desc: 'Classic choice battle', icon: <Flame className="w-6 h-6 text-red-400" aria-hidden="true" />, multiplayer: true },
+                { id: 'higher-lower', name: 'Higher or Lower', desc: 'Card guessing streak challenge', icon: <Club className="w-6 h-6 text-purple-400" aria-hidden="true" />, multiplayer: false },
+                { id: 'whack-a-mole', name: 'Whack-a-Mole', desc: 'Test your reaction times', icon: <Target className="w-6 h-6 text-emerald-400" aria-hidden="true" />, multiplayer: false },
+                { id: 'coin-toss', name: 'Coin Toss', desc: 'Simple Heads/Tails decider', icon: <Coins className="w-6 h-6 text-amber-400" aria-hidden="true" />, multiplayer: true },
+                { id: 'spin-wheel', name: 'Spin the Wheel', desc: 'Submit a question & spin to pick', icon: <CircleDot className="w-6 h-6 text-blue-400" aria-hidden="true" />, multiplayer: true },
+                { id: 'car-racing', name: 'Car Racing', desc: 'Dodge traffic & survive longest!', icon: <span className="text-2xl leading-none" aria-hidden="true">🏎️</span>, multiplayer: false },
               ].map(game => (
                 <button
                   key={game.id}
                   type="button"
                   onClick={() => handleStartSelectedGame(game.id)}
+                  aria-label={`Start game: ${game.name}`}
                   className="bg-slate-950/60 border border-white/[0.03] hover:border-brand-500/35 hover:bg-brand-500/[0.02] p-4 rounded-2xl flex flex-col items-start text-left gap-3 transition-all active:scale-[0.98] group"
                 >
                   <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl group-hover:bg-brand-650/10 group-hover:border-brand-500/20 transition-all">
@@ -5586,10 +5638,10 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       {game.multiplayer ? (
                         <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-brand-550/10 text-brand-400">1v1 Sync</span>
                       ) : (
-                        <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-slate-800 text-slate-455">Local</span>
+                        <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Local</span>
                       )}
                     </h4>
-                    <p className="text-[10px] text-slate-500 mt-1 font-medium leading-relaxed">{game.desc}</p>
+                    <p className="text-[10px] text-slate-400 mt-1 font-medium leading-relaxed">{game.desc}</p>
                   </div>
                 </button>
               ))}
@@ -5601,17 +5653,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
       {/* FULLSCREEN VIDEO MODAL */}
       {activeFullscreenVideo && (
-        <div className="fixed inset-0 bg-black/95 z-[999] flex flex-col items-center justify-center animate-fade-in select-none">
+        <div role="dialog" aria-modal="true" aria-label="Fullscreen video player" className="fixed inset-0 bg-black/95 z-[999] flex flex-col items-center justify-center animate-fade-in select-none">
           <button
             type="button"
             onClick={() => { if (Date.now() - modalOpenTimeRef.current > 400) { setActiveFullscreenVideo(null); } }}
+            aria-label="Close fullscreen video"
             className="absolute top-4 right-4 p-2.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-xl transition-colors border border-white/10 z-[1000] active:scale-95 flex items-center justify-center"
           >
-            <X className="w-6 h-6" />
+            <X className="w-6 h-6" aria-hidden="true" />
           </button>
           
           <video
             src={activeFullscreenVideo.url}
+            title="Message video"
             autoPlay
             controls
             playsInline
