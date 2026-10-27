@@ -8,9 +8,9 @@ const authApp = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const getSecret = (secret?: string) => {
   if (!secret) {
-    console.warn('[SECURITY WARNING] JWT_SECRET is not configured. Please set JWT_SECRET via wrangler secret put.');
+    throw new Error('FATAL: JWT_SECRET environment variable is missing.');
   }
-  return new TextEncoder().encode(secret || 'dataverse-fallback-secret-key-123456');
+  return new TextEncoder().encode(secret);
 };
 
 /**

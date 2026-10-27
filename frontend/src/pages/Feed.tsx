@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Footer } from '../components/Footer';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { 
   Heart, 
@@ -806,14 +805,13 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
           })
         )}
 
-        {/* End of Feed Catch-up & Footer */}
+        {/* End of Feed Catch-up */}
         {posts.length > 0 && (
           <div className="py-8 text-center flex flex-col items-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card)] border border-[var(--line)] text-xs font-semibold text-[var(--muted)] shadow-sm">
               <Check className="w-4 h-4 text-emerald-400" aria-hidden="true" />
               <span>You're all caught up!</span>
             </div>
-            <Footer onNavigate={onNavigate} className="border-t-0 mt-6" />
           </div>
         )}
       </div>

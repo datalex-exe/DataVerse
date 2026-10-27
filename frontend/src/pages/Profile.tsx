@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Footer } from '../components/Footer';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile } from '../utils/upload';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -95,11 +94,44 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
   const usernameToLoad = targetUsername || currentUser?.username;
   const isOwnProfile = !targetUsername || targetUsername.toLowerCase() === currentUser?.username.toLowerCase();
 
-  const [profile, setProfile] = useState<ProfileUser | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [profile, setProfile] = useState<ProfileUser | null>(() => {
+    if (isOwnProfile && currentUser) {
+      try {
+        const cached = sessionStorage.getItem('dv_cached_own_profile');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+      return {
+        id: currentUser.id,
+        username: currentUser.username,
+        display_name: currentUser.display_name,
+        bio: currentUser.bio || '',
+        avatar_url: currentUser.avatar_url,
+        is_verified: currentUser.is_verified,
+        is_admin: currentUser.is_admin,
+        is_top_admin: currentUser.is_top_admin,
+        created_at: currentUser.created_at || Date.now(),
+        followers_count: 0,
+        following_count: 0,
+        is_following: false,
+      };
+    }
+    return null;
+  });
+  const [posts, setPosts] = useState<Post[]>(() => {
+    if (isOwnProfile) {
+      try {
+        const cached = sessionStorage.getItem('dv_cached_own_posts');
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return [];
+  });
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [loadingSaved, setLoadingSaved] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (isOwnProfile && currentUser) return false;
+    return true;
+  });
   const [error, setError] = useState<string | null>(null);
 
   // Profile tabs state
@@ -162,6 +194,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
   const [bioInput, setBioInput] = useState<string>('');
   const [categoryInput, setCategoryInput] = useState<string>('Creator');
   const [reasonInput, setReasonInput] = useState<string>('');
+  const [currentPasswordInput, setCurrentPasswordInput] = useState<string>('');
   const [newPasswordInput, setNewPasswordInput] = useState<string>('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState<string>('');
   const [isPrivateInput, setIsPrivateInput] = useState<boolean>(false);
@@ -328,7 +361,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
   const fetchProfileData = async () => {
     if (!usernameToLoad || !token) return;
-    setLoading(true);
+    if (!profile) setLoading(true);
     setError(null);
 
     try {
@@ -370,6 +403,11 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
       setIsBlocked(false);
       setViewerBlocked(false);
       setProfile(profileData.user);
+      if (isOwnProfile) {
+        try {
+          sessionStorage.setItem('dv_cached_own_profile', JSON.stringify(profileData.user));
+        } catch {}
+      }
       
       // Initialize settings form values if it's the current user
       if (isOwnProfile) {
@@ -387,10 +425,18 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
       if (postsRes.ok) {
         const postsData = await postsRes.json();
-        setPosts(postsData.posts || []);
+        const userPosts = postsData.posts || [];
+        setPosts(userPosts);
+        if (isOwnProfile) {
+          try {
+            sessionStorage.setItem('dv_cached_own_posts', JSON.stringify(userPosts));
+          } catch {}
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load profile');
+      if (!profile) {
+        setError(err.message || 'Failed to load profile');
+      }
     } finally {
       setLoading(false);
     }
@@ -885,6 +931,11 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
     setSettingsSuccessMsg(null);
     setSettingsErrorMsg(null);
 
+    if (!currentPasswordInput) {
+      setSettingsErrorMsg('Please enter your current password.');
+      return;
+    }
+
     if (newPasswordInput !== confirmPasswordInput) {
       setSettingsErrorMsg('New passwords do not match.');
       return;
@@ -901,6 +952,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
           display_name: profile.display_name || profile.username,
           bio: profile.bio || '',
           avatar_url: profile.avatar_url || '',
+          current_password: currentPasswordInput,
           new_password: newPasswordInput.trim()
         })
       });
@@ -911,6 +963,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
       }
 
       setSettingsSuccessMsg('Your account password was updated successfully.');
+      setCurrentPasswordInput('');
       setNewPasswordInput('');
       setConfirmPasswordInput('');
     } catch (err: any) {
@@ -1140,7 +1193,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
     }
   };
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-slate-500 gap-3">
         <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
@@ -1615,7 +1668,21 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
               <form onSubmit={handleChangePassword} className="space-y-6 max-w-md">
                 <div>
                   <h2 className="text-lg font-black text-white">Change Password</h2>
-                  <p className="text-[11px] text-[var(--muted)] mt-1">Enter a new secure password below to update your login credentials.</p>
+                  <p className="text-[11px] text-[var(--muted)] mt-1">Enter your current password and a new secure password below to update your login credentials.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="settings-current-password" className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest pl-1">Current Password</label>
+                  <input
+                    id="settings-current-password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={currentPasswordInput}
+                    onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                    className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-700 outline-none transition-all font-bold"
+                    placeholder="Enter your current password"
+                    required
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -1627,7 +1694,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     value={newPasswordInput}
                     onChange={(e) => setNewPasswordInput(e.target.value)}
                     className="w-full bg-slate-950 border border-white/[0.04] focus:border-brand-500 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-700 outline-none transition-all font-bold"
-                    placeholder="Enter new password"
+                    placeholder="Enter new password (min. 8 characters)"
                     required
                   />
                 </div>
@@ -3024,7 +3091,6 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
         />
       )}
 
-      <Footer onNavigate={onNavigate} className="border-t-0 mt-8" />
     </div>
   );
 };

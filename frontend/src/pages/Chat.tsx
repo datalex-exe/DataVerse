@@ -459,9 +459,22 @@ interface ChatProps {
 export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targetConvoId }) => {
   const { user, token } = useAuth();
   
-  // Conversations list states
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loadingConvos, setLoadingConvos] = useState<boolean>(true);
+  // Conversations list states with instant sessionStorage caching
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('dv_cached_convos');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loadingConvos, setLoadingConvos] = useState<boolean>(() => {
+    try {
+      return !sessionStorage.getItem('dv_cached_convos');
+    } catch {
+      return true;
+    }
+  });
   
   /* UI UPDATE START - Client-side search filter query and memoized list */
   const [chatFilterQuery, setChatFilterQuery] = useState<string>('');
@@ -486,6 +499,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const modalOpenTimeRef = useRef<number>(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
+  const messagesCacheRef = useRef<Record<string, Message[]>>({});
 
 
 
@@ -746,72 +760,86 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   // Fetch conversations
   const fetchConversations = async (showLoading = false) => {
     if (!token) return;
-    if (showLoading) setLoadingConvos(true);
+    if (showLoading && conversations.length === 0) setLoadingConvos(true);
     try {
       const res = await fetch('/api/conversations', { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         const convos = data.conversations || [];
         setConversations(convos);
+        try {
+          sessionStorage.setItem('dv_cached_convos', JSON.stringify(convos.slice(0, 30)));
+        } catch {}
         const unreadCount = convos.filter((c: any) => c.unread_count && c.unread_count > 0).length;
         window.dispatchEvent(new CustomEvent('unread-chats-update-value', { detail: unreadCount }));
       }
     } catch (err) {
       console.error('Error fetching conversations:', err);
     } finally {
-      if (showLoading) setLoadingConvos(false);
+      setLoadingConvos(false);
     }
   };
 
   useEffect(() => {
     if (!token) return;
-    fetchConversations(true);
+    fetchConversations(conversations.length === 0);
     const interval = setInterval(() => fetchConversations(false), 5000);
     return () => clearInterval(interval);
   }, [token]);
 
   // Synchronize activeConvo with targetConvoId prop
   useEffect(() => {
-    if (!token || loadingConvos) return;
+    if (!token) return;
     
     if (targetConvoId) {
       const found = conversations.find(c => c.id === targetConvoId);
       if (found) {
-        // Always update activeConvo with fresh data from conversations list
-        if (!activeConvo || activeConvo.id !== found.id) {
-          setActiveConvo(found);
-        } else {
-          // Update members/metadata even if already active
-          setActiveConvo(prev => prev ? { ...prev, ...found } : found);
-        }
+        setActiveConvo(prev => {
+          if (!prev || prev.id !== found.id) {
+            // Apply cached messages immediately if available
+            if (messagesCacheRef.current[found.id] && messagesCacheRef.current[found.id].length > 0) {
+              setMessages(messagesCacheRef.current[found.id]);
+              setLoadingMessages(false);
+            }
+            return found;
+          }
+          // Only update if metadata actually changed
+          if (
+            prev.group_name !== found.group_name ||
+            prev.members?.length !== found.members?.length ||
+            prev.unread_count !== found.unread_count
+          ) {
+            return { ...prev, ...found };
+          }
+          return prev;
+        });
       } else if (targetConvoId.startsWith('room_')) {
         const roomName = targetConvoId.replace('room_', '').replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-        if (!activeConvo || activeConvo.id !== targetConvoId) {
-          setActiveConvo({
-            id: targetConvoId,
-            is_group: true,
-            group_name: roomName,
-            creator_id: null,
-            created_at: Date.now(),
-            last_message: null,
-            members: []
-          });
-        }
+        setActiveConvo(prev => {
+          if (!prev || prev.id !== targetConvoId) {
+            return {
+              id: targetConvoId,
+              is_group: true,
+              group_name: roomName,
+              creator_id: null,
+              created_at: Date.now(),
+              last_message: null,
+              members: []
+            };
+          }
+          return prev;
+        });
       } else {
-        // Conversation not found in list — try fetching once, but DON'T clear activeConvo
-        // if it already matches the targetConvoId (race condition on page load)
         if (!fetchedIdsRef.current.has(targetConvoId)) {
           fetchedIdsRef.current.add(targetConvoId);
           fetchConversations(false);
         }
-        // NOTE: We intentionally do NOT call setActiveConvo(null) here anymore.
-        // The activeConvo is only cleared when the user explicitly navigates away
-        // (targetConvoId becomes null/undefined) or when the delete button is pressed.
       }
     } else {
-      if (activeConvo !== null) setActiveConvo(null);
+      // Explicitly clear active conversation when targetConvoId is cleared
+      setActiveConvo(prev => (prev !== null ? null : prev));
     }
-  }, [targetConvoId, conversations, loadingConvos, token]);
+  }, [targetConvoId, conversations, token]);
 
   // Debounced search
   useEffect(() => {
@@ -848,8 +876,18 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       return;
     }
 
+    const currentConvoId = activeConvo.id;
     let reconnectTimeout: number | null = null;
     let isCleanup = false;
+
+    // Fast-path: display cached messages immediately if available for 0ms transition
+    if (messagesCacheRef.current[currentConvoId] && messagesCacheRef.current[currentConvoId].length > 0) {
+      setMessages(messagesCacheRef.current[currentConvoId]);
+      setLoadingMessages(false);
+    } else {
+      setLoadingMessages(true);
+      setMessages([]);
+    }
 
     const connectWebSocket = () => {
       if (isCleanup) return;
@@ -859,15 +897,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const token = localStorage.getItem('token') || '';
-      const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/${activeConvo.id}?userId=${user.id}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+      const authToken = token || localStorage.getItem('dataverse_token') || '';
+      const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/${currentConvoId}?userId=${user.id}${authToken ? `&token=${encodeURIComponent(authToken)}` : ''}`;
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('Chat WebSocket connected:', activeConvo.id);
+        console.log('Chat WebSocket connected:', currentConvoId);
         ws.send(JSON.stringify({ type: 'get_game_state' }));
 
-        if (pendingForwardRef.current && pendingForwardRef.current.conversationId === activeConvo.id) {
+        if (pendingForwardRef.current && pendingForwardRef.current.conversationId === currentConvoId) {
           const forwardPayload = pendingForwardRef.current.body;
           pendingForwardRef.current = null;
           if (user) {
@@ -875,7 +913,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             const optimisticId = `optimistic-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
             const optimisticMsg: Message = {
               id: optimisticId,
-              conversation_id: activeConvo.id,
+              conversation_id: currentConvoId,
               sender_id: user.id,
               body: forwardPayload,
               created_at: Date.now(),
@@ -1038,12 +1076,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   m.sender_id === data.message.sender_id &&
                   (m.body === data.message.body || isMatchingMediaBody(m.body, data.message.body))
               );
+              let next: Message[];
               if (optimisticIdx !== -1) {
-                const next = [...prev];
+                next = [...prev];
                 next[optimisticIdx] = data.message;
-                return next;
+              } else {
+                next = [...prev, data.message];
               }
-              return [...prev, data.message];
+              messagesCacheRef.current[data.message.conversation_id] = next;
+              return next;
             });
 
             if (data.message.sender_id !== user?.id) {
@@ -1079,7 +1120,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       };
 
       ws.onclose = () => {
-        console.log('Chat WebSocket closed:', activeConvo.id);
+        console.log('Chat WebSocket closed:', currentConvoId);
         if (!isCleanup) {
           reconnectTimeout = window.setTimeout(() => {
             console.log('Attempting to reconnect WebSocket...');
@@ -1092,26 +1133,28 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     };
 
     const loadMessagesAndConnect = async () => {
-      setLoadingMessages(true);
-      setMessages([]);
-      
       try {
-        const res = await fetch(`/api/conversations/${activeConvo.id}/messages`, {
+        const res = await fetch(`/api/conversations/${currentConvoId}/messages`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (res.ok) {
+        if (res.ok && !isCleanup) {
           const data = await res.json();
-          setMessages(data.messages || []);
+          const fetched = data.messages || [];
+          if (!isCleanup) {
+            messagesCacheRef.current[currentConvoId] = fetched;
+            setMessages(fetched);
+          }
         }
       } catch (err) {
-        console.error(err);
+        if (!isCleanup) console.error(err);
       } finally {
-        setLoadingMessages(false);
+        if (!isCleanup) {
+          setLoadingMessages(false);
+        }
       }
-
-      connectWebSocket();
     };
 
+    connectWebSocket();
     loadMessagesAndConnect();
 
     return () => {
@@ -1123,7 +1166,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         wsRef.current.close();
       }
     };
-  }, [activeConvo?.id, token, user, onNavigate]);
+  }, [activeConvo?.id, token, user]);
 
   // ─── Scroll & Viewport Management ──────────────────────────────────────
   const handleMessagesScroll = useCallback(() => {
@@ -1160,21 +1203,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   // 2. Intelligent auto-scroll on messages update
   React.useLayoutEffect(() => {
     const container = messagesContainerRef.current;
-    if (!container || loadingMessages) return;
+    if (!container) return;
 
-    // BUG 3 FIX: After a message is sent or received, scroll the message list to the bottom with scrollTo({ top: list.scrollHeight, behavior: 'auto' }) without moving focus
-    if (userSentMessageRef.current) {
+    if (userSentMessageRef.current || isNearBottomRef.current) {
       userSentMessageRef.current = false;
-      isNearBottomRef.current = true;
-      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
-      return;
-    }
-
-    // If incoming message: only auto-scroll if user was already reading near bottom
-    if (isNearBottomRef.current) {
       container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
     }
-  }, [messages, loadingMessages]);
+  }, [messages, loadingMessages, activeConvo?.id]);
 
   // 3. Keep latest messages visible when virtual keyboard opens or viewport resizes, and update --vvh fallback
   useEffect(() => {
@@ -1903,7 +1938,11 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         avatar_url: user.avatar_url || null,
         is_verified: user.is_verified
       };
-      setMessages(prev => [...prev, optimisticMsg]);
+      setMessages(prev => {
+        const next = [...prev, optimisticMsg];
+        if (activeConvo) messagesCacheRef.current[activeConvo.id] = next;
+        return next;
+      });
 
       wsRef.current.send(JSON.stringify({
         type: 'chat',
@@ -1924,7 +1963,11 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         avatar_url: user.avatar_url || null,
         is_verified: user.is_verified
       };
-      setMessages(prev => [...prev, optimisticMsg]);
+      setMessages(prev => {
+        const next = [...prev, optimisticMsg];
+        if (activeConvo) messagesCacheRef.current[activeConvo.id] = next;
+        return next;
+      });
 
       wsRef.current.send(JSON.stringify({
         type: 'chat',
@@ -4041,6 +4084,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     return [x, y];
   };
 
+  // Only expose messages matching the active conversation to prevent any cross-conversation glitching
+  const activeMessages = useMemo(() => {
+    if (!activeConvo) return [];
+    return messages.filter(m => m.conversation_id === activeConvo.id);
+  }, [messages, activeConvo?.id]);
+
   return (
     <>
     {/* UI UPDATE START - Motion styles, entrance animations and reduced-motion support */}
@@ -4295,6 +4344,14 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   key={convo.id}
                   style={{ animationDelay: `${Math.min(index * 30, 240)}ms` }}
                   onClick={async () => { 
+                    setActiveConvo(convo);
+                    if (messagesCacheRef.current[convo.id] && messagesCacheRef.current[convo.id].length > 0) {
+                      setMessages(messagesCacheRef.current[convo.id]);
+                      setLoadingMessages(false);
+                    } else {
+                      setMessages([]);
+                      setLoadingMessages(true);
+                    }
                     onNavigate?.('messages', convo.id);
                     setIsSearchMode(false); 
                     if (hasUnread) {
@@ -4627,6 +4684,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             {/* Messages Bubbles Flow */}
             {/* BUG 3 FIX: Message list flex:1 with min-height:0 and overflow-y:auto, overscroll-behavior: contain */}
             <div 
+              key={activeConvo.id}
               ref={messagesContainerRef} 
               onScroll={handleMessagesScroll}
               className="chat-messages-container flex-1 min-h-0 overflow-y-auto overflow-x-hidden w-full min-w-0 max-w-full p-3 sm:p-4 space-y-4 bg-transparent scrollbar-thin overscroll-contain"
@@ -4642,16 +4700,16 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 touchAction: 'pan-y' 
               }}
             >
-              {loadingMessages ? (
+              {loadingMessages && activeMessages.length === 0 ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
                 </div>
-              ) : messages.length === 0 ? (
+              ) : activeMessages.length === 0 ? (
                 <div className="text-center py-10 text-slate-700 text-[10px] font-bold uppercase select-none">
                   This is the start of your secure conversation history.
                 </div>
               ) : (
-                messages.map((msg) => {
+                activeMessages.map((msg) => {
                   const isMe = msg.sender_id === user?.id;
                   const isSystem = msg.sender_id === 'system';
                   const isAdmin = user?.is_admin || user?.is_top_admin;

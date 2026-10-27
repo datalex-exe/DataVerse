@@ -38,17 +38,16 @@ app.use('/api/*', async (c, next) => {
 // Enable CORS with Origin Validation
 app.use('*', cors({
   origin: (origin) => {
-    if (!origin) return '*';
+    if (!origin) return 'https://dataverse-datalex.pages.dev';
     if (
       origin === 'https://dataverse-datalex.pages.dev' ||
-      origin.endsWith('.dataverse-datalex.pages.dev') ||
-      origin.endsWith('.pages.dev') ||
+      /^https:\/\/[a-z0-9-]+\.dataverse-datalex\.pages\.dev$/.test(origin) ||
       origin.startsWith('http://localhost:') ||
       origin.startsWith('http://127.0.0.1:')
     ) {
       return origin;
     }
-    return 'https://dataverse-datalex.pages.dev';
+    return null;
   },
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
@@ -79,16 +78,18 @@ app.get('/api/chat/ws/:id', async (c) => {
     return c.text('Missing userId query parameter', 400);
   }
 
+  if (!token) {
+    return c.text('Unauthorized: Session token is required', 401);
+  }
+
   // Verify authentication token
-  if (token) {
-    const payload = await verifyToken(token, c.env.JWT_SECRET);
-    if (!payload || payload.userId !== userId) {
-      return c.text('Unauthorized: Invalid session token', 401);
-    }
-    const cachedUserId = await c.env.SESSION_KV.get(`session:${token}`);
-    if (!cachedUserId || cachedUserId !== userId) {
-      return c.text('Unauthorized: Session expired or revoked', 401);
-    }
+  const payload = await verifyToken(token, c.env.JWT_SECRET);
+  if (!payload || payload.userId !== userId) {
+    return c.text('Unauthorized: Invalid session token', 401);
+  }
+  const cachedUserId = await c.env.SESSION_KV.get(`session:${token}`);
+  if (!cachedUserId || cachedUserId !== userId) {
+    return c.text('Unauthorized: Session expired or revoked', 401);
   }
 
   // Check if user is blocked in DB
@@ -155,8 +156,13 @@ app.post('/api/media/upload', authMiddleware, async (c) => {
   }
 
   const key = c.req.query('key');
-  if (!key || !/^[a-zA-Z0-9_\-\.]{1,120}$/.test(key) || key.includes('..')) {
+  if (!key || !/^[a-zA-Z0-9_\-\.\/]{1,160}$/.test(key) || key.includes('..')) {
     return c.json({ error: 'Invalid file key parameter' }, 400);
+  }
+
+  // Enforce that media key belongs to the authenticated user
+  if (!key.includes(userId)) {
+    return c.json({ error: 'Forbidden: Media key must belong to authenticated user' }, 403);
   }
 
   const chunkIndexParam = c.req.query('chunkIndex');

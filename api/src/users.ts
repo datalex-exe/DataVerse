@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from './types';
 import { authMiddleware, verifyToken } from './auth';
-import { generateSalt, hashPassword } from './crypto';
+import { generateSalt, hashPassword, verifyPassword } from './crypto';
 
 function escapeHtml(str: string): string {
   return String(str)
@@ -141,11 +141,11 @@ usersApp.get('/', authMiddleware, async (c) => {
 // ─── UPDATE PROFILE ────────────────────────────────────────────────────────────
 usersApp.put('/profile', authMiddleware, async (c) => {
   const userId = c.get('userId');
-  const { username, email, display_name, bio, avatar_url, new_password } = await c.req.json();
+  const { username, email, display_name, bio, avatar_url, new_password, current_password } = await c.req.json();
 
   try {
-    // Fetch current user details if username/email/avatar are not provided
-    const currentUser = await c.env.DB.prepare('SELECT username, email, display_name, bio, avatar_url FROM users WHERE id = ?')
+    // Fetch current user details including password credentials
+    const currentUser = await c.env.DB.prepare('SELECT username, email, display_name, bio, avatar_url, password_hash, password_salt FROM users WHERE id = ?')
       .bind(userId)
       .first<any>();
 
@@ -156,6 +156,20 @@ usersApp.put('/profile', authMiddleware, async (c) => {
     const targetUsername = (username && String(username).trim() !== '') ? String(username).trim().toLowerCase() : currentUser.username;
     const targetEmail = (email && String(email).trim() !== '') ? String(email).trim().toLowerCase() : currentUser.email;
     const targetAvatarUrl = (avatar_url !== undefined && avatar_url !== null) ? avatar_url : currentUser.avatar_url;
+
+    const isChangingPassword = new_password && String(new_password).trim() !== '';
+    const isChangingEmail = (email && String(email).trim() !== '') && (targetEmail.toLowerCase() !== currentUser.email.toLowerCase());
+
+    // Require current password verification when changing password or email
+    if (isChangingPassword || isChangingEmail) {
+      if (!current_password || typeof current_password !== 'string') {
+        return c.json({ error: 'Current password is required to change password or email address.' }, 400);
+      }
+      const isMatch = await verifyPassword(String(current_password), currentUser.password_salt, currentUser.password_hash);
+      if (!isMatch) {
+        return c.json({ error: 'Incorrect current password.' }, 401);
+      }
+    }
 
     // Validate username syntax if changed
     if (username && String(username).trim() !== '') {
@@ -174,7 +188,7 @@ usersApp.put('/profile', authMiddleware, async (c) => {
     }
 
     // Validate password if provided
-    if (new_password && String(new_password).trim() !== '') {
+    if (isChangingPassword) {
       const passStr = String(new_password).trim();
       if (passStr.length < 8) {
         return c.json({ error: 'New password must be at least 8 characters long.' }, 400);

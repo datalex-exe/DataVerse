@@ -108,11 +108,7 @@ async function getAesGcmKey(rawKey?: string): Promise<CryptoKey> {
   } else if (rawKey && rawKey.length >= 32) {
     keyBytes = encoder.encode(rawKey.substring(0, 32));
   } else {
-    // Fallback key for development if not explicitly configured
-    console.warn('[SECURITY WARNING] TWO_FACTOR_ENCRYPTION_KEY is not configured. Using fallback dev key.');
-    const devFallback = 'dataverse-dev-2fa-aes-gcm-master-key-32bytes';
-    const hash = await crypto.subtle.digest('SHA-256', encoder.encode(devFallback));
-    keyBytes = new Uint8Array(hash);
+    throw new Error('FATAL: TWO_FACTOR_ENCRYPTION_KEY is not configured or shorter than 32 characters.');
   }
 
   return await crypto.subtle.importKey(

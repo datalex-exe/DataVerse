@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Footer } from '../components/Footer';
 import { 
   Heart, 
   MessageCircle, 
@@ -34,8 +33,21 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
   const { token } = useAuth();
   const { toast } = useToast();
   
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('dv_cached_notifications');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !sessionStorage.getItem('dv_cached_notifications');
+    } catch {
+      return true;
+    }
+  });
 
   // Fetch real notifications
   const fetchNotifications = async () => {
@@ -46,7 +58,11 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
       });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.notifications || []);
+        const list = data.notifications || [];
+        setNotifications(list);
+        try {
+          sessionStorage.setItem('dv_cached_notifications', JSON.stringify(list.slice(0, 50)));
+        } catch {}
       }
     } catch (err) {
       console.error('Error fetching notifications:', err);
@@ -422,7 +438,6 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
       )}
       {/* THEME END */}
 
-      <Footer onNavigate={onNavigate} className="border-t-0 mt-8" />
     </div>
   );
   /* UI UPDATE END */

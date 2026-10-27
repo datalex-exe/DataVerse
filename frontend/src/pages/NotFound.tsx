@@ -1,6 +1,5 @@
 import React from 'react';
 import { Compass, Home, Search } from 'lucide-react';
-import { Footer } from '../components/Footer';
 
 interface NotFoundProps {
   onNavigate?: (view: string) => void;
@@ -60,7 +59,6 @@ export const NotFound: React.FC<NotFoundProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      <Footer onNavigate={onNavigate} />
     </div>
   );
 };

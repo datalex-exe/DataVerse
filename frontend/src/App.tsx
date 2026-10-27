@@ -17,14 +17,15 @@ import { SidebarThemeSwitch, ThemeIconButton } from './utils/theme';
 import { ToastProvider } from './context/ToastContext';
 import { CookieBanner } from './components/CookieBanner';
 
-// Code splitting: Lazy-load individual pages on demand to minimize initial bundle size
-const Auth = React.lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })));
-const Feed = React.lazy(() => import('./pages/Feed').then(m => ({ default: m.Feed })));
-const Explore = React.lazy(() => import('./pages/Explore').then(m => ({ default: m.Explore })));
-const Profile = React.lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
-const Chat = React.lazy(() => import('./pages/Chat').then(m => ({ default: m.Chat })));
-const Create = React.lazy(() => import('./pages/Create').then(m => ({ default: m.Create })));
-const Activity = React.lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
+import { Auth } from './pages/Auth';
+import { Feed } from './pages/Feed';
+import { Explore } from './pages/Explore';
+import { Profile } from './pages/Profile';
+import { Chat } from './pages/Chat';
+import { Create } from './pages/Create';
+import { Activity } from './pages/Activity';
+
+// Secondary views loaded on demand
 const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const NotFound = React.lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 const Legal = React.lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
@@ -47,41 +48,26 @@ const AppContent: React.FC = () => {
   const [messagesParam, setMessagesParam] = useState<string | undefined>(undefined);
   const [hideBottomNav, setHideBottomNav] = useState<boolean>(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState<boolean>(false);
-  // Track visited primary tabs to keep them mounted in DOM for 0ms instantaneous tab switching
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['feed']));
+  // All primary tabs are mounted in DOM for 0ms instantaneous tab switching
+  const [visitedTabs] = useState<Set<string>>(
+    () => new Set(['feed', 'messages', 'search', 'notifications', 'create', 'profile'])
+  );
 
-  React.useEffect(() => {
-    const primaryViews = ['feed', 'messages', 'search', 'notifications', 'create'];
-    if (primaryViews.includes(activeView)) {
-      setVisitedTabs((prev) => {
-        if (prev.has(activeView)) return prev;
-        const next = new Set(prev);
-        next.add(activeView);
-        return next;
-      });
-    }
-  }, [activeView]);
-
-  // Eagerly preload all primary page components in the background so tab switching is instantaneous
+  // Preload heavy camera modal in idle time
   React.useEffect(() => {
     if (user) {
-      const preloadViews = () => {
-        import('./pages/Feed');
-        import('./pages/Explore');
-        import('./pages/Chat');
-        import('./pages/Activity');
-        import('./pages/Create');
-        import('./pages/Profile');
-        import('./camera/SocialCameraModal');
+      const preloadCamera = () => {
+        import('./camera/SocialCameraModal').catch(() => {});
       };
-
       if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(preloadViews);
+        (window as any).requestIdleCallback(preloadCamera);
       } else {
-        setTimeout(preloadViews, 100);
+        setTimeout(preloadCamera, 200);
       }
     }
-  }, [user]);  // Synchronize mobile visualViewport and keyboard height for chat view
+  }, [user]);
+
+  // Synchronize mobile visualViewport and keyboard height for chat view
   React.useEffect(() => {
     if (activeView !== 'messages') {
       document.documentElement.classList.remove('messages-active', 'keyboard-open');
@@ -228,6 +214,8 @@ const AppContent: React.FC = () => {
         setProfileParam(undefined);
       } else if (rawRoute.startsWith('post/') || rawRoute.startsWith('p/')) {
         setActiveView('feed');
+        setMessagesParam(undefined);
+        setProfileParam(undefined);
       } else if (rawRoute.startsWith('messages/')) {
         const convoId = rawRoute.substring(9);
         setActiveView('messages');
@@ -237,11 +225,17 @@ const AppContent: React.FC = () => {
         setMessagesParam(undefined);
       } else if (rawRoute === 'search' || rawRoute === 'explore') {
         setActiveView('search');
+        setMessagesParam(undefined);
+        setProfileParam(undefined);
       } else if (rawRoute === 'notifications') {
         setActiveView('notifications');
+        setMessagesParam(undefined);
+        setProfileParam(undefined);
         setUnreadCount(0);
       } else if (rawRoute === 'create') {
         setActiveView('create');
+        setMessagesParam(undefined);
+        setProfileParam(undefined);
       } else if (rawRoute === 'admin') {
         setActiveView('admin');
       } else if (rawRoute === 'terms') {
@@ -271,9 +265,20 @@ const AppContent: React.FC = () => {
   }, [user]);
 
   const navigate = (newView: string, param?: string) => {
-    if (newView === 'feed') {
-      window.location.hash = '#/feed';
-    } else if (newView === 'feed_redirect') {
+    // Synchronously switch view state for instant 0ms UI reaction
+    if (newView === 'profile') {
+      setActiveView('profile');
+      setProfileParam(param || undefined);
+    } else if (newView === 'messages') {
+      setActiveView('messages');
+      setMessagesParam(param || undefined);
+    } else {
+      setActiveView(newView);
+      if (newView !== 'profile') setProfileParam(undefined);
+      if (newView !== 'messages') setMessagesParam(undefined);
+    }
+
+    if (newView === 'feed' || newView === 'feed_redirect') {
       window.location.hash = '#/feed';
     } else if (newView === 'profile') {
       window.location.hash = param ? `#/profile/${param}` : '#/profile';
@@ -283,6 +288,7 @@ const AppContent: React.FC = () => {
       window.location.hash = param ? `#/messages/${param}` : '#/messages';
     } else if (newView === 'notifications') {
       window.location.hash = '#/notifications';
+      setUnreadCount(0);
     } else if (newView === 'create') {
       window.location.hash = '#/create';
     } else if (newView === 'admin') {
@@ -290,8 +296,7 @@ const AppContent: React.FC = () => {
     } else {
       window.location.hash = `#/${newView}`;
     }
-    if (newView === 'notifications') setUnreadCount(0);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo(0, 0);
   };
 
   // Fullscreen Loading State
@@ -323,15 +328,7 @@ const AppContent: React.FC = () => {
       );
     }
 
-    return (
-      <React.Suspense fallback={
-        <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-[var(--accent-2)]" />
-        </div>
-      }>
-        <Auth />
-      </React.Suspense>
-    );
+    return <Auth />;
   }
 
 
@@ -693,8 +690,14 @@ const AppContent: React.FC = () => {
               </div>
             )}
 
+            {visitedTabs.has('profile') && !profileParam && (
+              <div className={activeView === 'profile' && !profileParam ? 'block w-full flex-1' : 'hidden'}>
+                <Profile onNavigate={navigate} />
+              </div>
+            )}
+
             {/* Dynamic / Parameter-based Views */}
-            {activeView === 'profile' && <Profile targetUsername={profileParam} onNavigate={navigate} />}
+            {activeView === 'profile' && !!profileParam && <Profile targetUsername={profileParam} onNavigate={navigate} />}
             {activeView === 'admin' && <Admin />}
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (
               <Legal type={activeView as any} onNavigate={navigate} />

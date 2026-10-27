@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Footer } from '../components/Footer';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { 
   Loader2, 
@@ -1635,7 +1634,6 @@ export const Admin: React.FC = () => {
         </div>
       )}
 
-      <Footer className="border-t-0 mt-8" />
     </div>
   );
 };

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Search as SearchIcon, Loader2, UserPlus, X } from 'lucide-react';
 import { VerifiedBadge } from '../components/VerifiedBadge';
-import { Footer } from '../components/Footer';
 
 interface ExploreUser {
   id: string;
@@ -164,7 +163,6 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
       )}
       {/* THEME END */}
 
-      <Footer onNavigate={onNavigate} className="border-t-0 mt-8" />
     </div>
   );
 };
