@@ -208,43 +208,52 @@ const AppContent: React.FC = () => {
 
   React.useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash || '#/feed';
-      
-      if (hash.startsWith('#/profile/')) {
-        const username = hash.substring(10);
+      let rawRoute = window.location.hash ? window.location.hash.replace(/^#\/?/, '') : window.location.pathname.replace(/^\//, '');
+      if (!rawRoute || rawRoute === 'feed') {
+        setActiveView('feed');
+        setHideBottomNav(false);
+        return;
+      }
+
+      if (rawRoute.startsWith('@')) {
+        const username = rawRoute.substring(1);
         setActiveView('profile');
         setProfileParam(username);
-      } else if (hash === '#/profile') {
+      } else if (rawRoute.startsWith('profile/')) {
+        const username = rawRoute.substring(8);
+        setActiveView('profile');
+        setProfileParam(username);
+      } else if (rawRoute === 'profile') {
         setActiveView('profile');
         setProfileParam(undefined);
-      } else if (hash.startsWith('#/messages/')) {
-        const convoId = hash.substring(11);
+      } else if (rawRoute.startsWith('post/') || rawRoute.startsWith('p/')) {
+        setActiveView('feed');
+      } else if (rawRoute.startsWith('messages/')) {
+        const convoId = rawRoute.substring(9);
         setActiveView('messages');
         setMessagesParam(convoId);
-      } else if (hash === '#/messages') {
+      } else if (rawRoute === 'messages') {
         setActiveView('messages');
         setMessagesParam(undefined);
-      } else if (hash === '#/search' || hash === '#/explore') {
+      } else if (rawRoute === 'search' || rawRoute === 'explore') {
         setActiveView('search');
-      } else if (hash === '#/notifications') {
+      } else if (rawRoute === 'notifications') {
         setActiveView('notifications');
         setUnreadCount(0);
-      } else if (hash === '#/create') {
+      } else if (rawRoute === 'create') {
         setActiveView('create');
-      } else if (hash === '#/admin') {
+      } else if (rawRoute === 'admin') {
         setActiveView('admin');
-      } else if (hash === '#/terms') {
+      } else if (rawRoute === 'terms') {
         setActiveView('terms');
-      } else if (hash === '#/privacy') {
+      } else if (rawRoute === 'privacy') {
         setActiveView('privacy');
-      } else if (hash === '#/cookies') {
+      } else if (rawRoute === 'cookies') {
         setActiveView('cookies');
-      } else if (hash === '#/refund') {
+      } else if (rawRoute === 'refund') {
         setActiveView('refund');
-      } else if (hash === '#/contact') {
+      } else if (rawRoute === 'contact') {
         setActiveView('contact');
-      } else if (hash === '#/feed' || hash === '' || hash === '#') {
-        setActiveView('feed');
       } else {
         setActiveView('404');
       }
@@ -252,10 +261,12 @@ const AppContent: React.FC = () => {
     };
 
     window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
     handleHashChange();
 
     return () => {
       window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
     };
   }, [user]);
 

@@ -1,0 +1,60 @@
+# ==============================================================================
+# DataVerse (Datalex) — Search Engine & AI Crawler Policy
+# Website: https://dataverse-datalex.pages.dev
+# ==============================================================================
+
+# Default Search Engines (Googlebot, Bingbot, DuckDuckBot, Applebot, etc.)
+User-agent: *
+Allow: /
+Allow: /explore
+Allow: /@*
+Allow: /profile/*
+Allow: /post/*
+Allow: /terms
+Allow: /privacy
+Allow: /cookies
+Allow: /refund
+Allow: /contact
+Allow: /favicon.svg
+Allow: /logo.png
+Allow: /arcade.js
+Allow: /arcade-sw.js
+Allow: /arcade-offline.html
+
+# Disallow private application views, messaging, authentication, and internal APIs
+Disallow: /api/
+Disallow: /chat
+Disallow: /messages
+Disallow: /activity
+Disallow: /notifications
+Disallow: /create
+Disallow: /admin
+Disallow: /settings
+Disallow: /*?*token=*
+Disallow: /*?*auth=*
+
+# AI Search & Retrieval Assistants (ChatGPT Search, Perplexity, Claude Search)
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: PerplexityBot
+User-agent: ClaudeBot
+User-agent: Google-Extended
+Allow: /
+Allow: /explore
+Allow: /@*
+Allow: /profile/*
+Allow: /post/*
+Allow: /terms
+Allow: /privacy
+Allow: /cookies
+Allow: /refund
+Allow: /contact
+Disallow: /api/
+Disallow: /chat
+Disallow: /messages
+Disallow: /admin
+Disallow: /settings
+
+# Sitemaps
+Sitemap: https://dataverse-datalex.pages.dev/sitemap.xml

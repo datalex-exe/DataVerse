@@ -4,6 +4,56 @@ import { authMiddleware } from './auth';
 
 const postsApp = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+// ─── GET PUBLIC POST BY ID (Unauthenticated - Public accounts only) ─────────────
+postsApp.get('/public/:id', async (c) => {
+  const postId = c.req.param('id');
+  try {
+    const post = await c.env.DB.prepare(`
+      SELECT p.id, p.caption, p.created_at, u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified, u.is_private,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
+      FROM posts p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.id = ?
+    `)
+      .bind(postId)
+      .first<any>();
+
+    if (!post) {
+      return c.json({ error: 'Post not found' }, 404);
+    }
+
+    // Privacy barrier: Never expose posts from private accounts to public requests
+    if (post.is_private === 1) {
+      return c.json({ error: 'This post is from a private account' }, 403);
+    }
+
+    const { results: media } = await c.env.DB.prepare(
+      'SELECT r2_key, media_type, position FROM post_media WHERE post_id = ? ORDER BY position ASC'
+    )
+      .bind(postId)
+      .all<any>();
+
+    return c.json({
+      post: {
+        id: post.id,
+        caption: post.caption,
+        created_at: post.created_at,
+        likes_count: post.likes_count,
+        comments_count: post.comments_count,
+        user_id: post.user_id,
+        username: post.username,
+        display_name: post.display_name,
+        avatar_url: post.avatar_url,
+        is_verified: !!post.is_verified,
+        media: media || []
+      }
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 postsApp.use('*', authMiddleware);
 
 // CREATE POST

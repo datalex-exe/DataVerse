@@ -25,8 +25,6 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
 
   // Search trigger with 300ms debounce
   useEffect(() => {
-    if (!token) return;
-
     const delayDebounce = setTimeout(async () => {
       if (searchQuery.trim() === '') {
         setResults([]);
@@ -35,8 +33,10 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
 
       setLoading(true);
       try {
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
         const res = await fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers
         });
 
         if (res.ok) {

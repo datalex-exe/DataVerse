@@ -7,6 +7,7 @@ import usersApp from './users';
 import postsApp from './posts';
 import conversationsApp from './conversations';
 import contactApp from './contact';
+import seoApp, { INDEXNOW_KEY } from './seo';
 import { checkRateLimit } from './rateLimit';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -65,6 +66,8 @@ app.route('/api/admin/users', usersApp);
 app.route('/api/posts', postsApp);
 app.route('/api/conversations', conversationsApp);
 app.route('/api/contact', contactApp);
+app.route('/api/seo', seoApp);
+app.route('/', seoApp);
 
 // WebSocket upgrade endpoint routed to Durable Object
 app.get('/api/chat/ws/:id', async (c) => {
