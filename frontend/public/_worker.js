@@ -10,7 +10,7 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
 };
 
-const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; connect-src 'self' https://dataverse-api.24216287.workers.dev wss://dataverse-api.24216287.workers.dev https://*.workers.dev wss://*.workers.dev; frame-ancestors 'none';";
+const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; connect-src 'self' https://dataverse-api.24216287.workers.dev wss://dataverse-api.24216287.workers.dev https://*.workers.dev wss://*.workers.dev; worker-src 'self'; frame-ancestors 'none';";
 
 export default {
   async fetch(request, env) {
