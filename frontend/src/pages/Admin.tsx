@@ -17,7 +17,8 @@ import {
   Bell,
   AlertTriangle,
   Search,
-  Archive
+  Archive,
+  ShieldAlert
 } from 'lucide-react';
 
 interface SystemUser {
@@ -29,6 +30,7 @@ interface SystemUser {
   is_admin: boolean;
   is_top_admin: boolean;
   is_blocked: boolean;
+  has_2fa?: boolean;
   chat_restricted_until?: number;
   is_verification_paid?: boolean;
   verification_paid_at?: number;
@@ -542,6 +544,31 @@ export const Admin: React.FC = () => {
     }
   };
 
+  // Reset User Two-Factor Authentication (Admin / Top Admin)
+  const handleReset2FA = async (targetUser: SystemUser) => {
+    if (!token) return;
+    if (!window.confirm(`Are you sure you want to reset Two-Factor Authentication for @${targetUser.username}? This will disable their 2FA and allow them to log in with their password.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/users/${targetUser.id}/2fa/reset`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to reset 2FA');
+      }
+      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, has_2fa: false } : u));
+      toast.success(`2FA reset successfully for @${targetUser.username}`);
+    } catch (err: any) {
+      toast.error(err.message || 'Error resetting 2FA');
+    }
+  };
+
   const getCleanLabel = (convo: SystemConvo) => {
     if (convo.is_group) return `Group Chat (ID: ${convo.id.substring(0, 8)})`;
     if (convo.members.length === 0) return 'Empty Chat';
@@ -759,10 +786,27 @@ export const Admin: React.FC = () => {
                                   Member
                                 </span>
                               )}
+                              {!!u.has_2fa && (
+                                <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap ml-1.5 inline-flex items-center gap-1">
+                                  <Shield className="w-2.5 h-2.5" /> 2FA
+                                </span>
+                              )}
                             </div>
 
                             {/* Action buttons (auto) - 40x40 rounded buttons */}
                             <div className="flex items-center gap-2 justify-end min-w-[130px]">
+                              {/* Reset 2FA */}
+                              {!!u.has_2fa && (
+                                <button
+                                  onClick={() => handleReset2FA(u)}
+                                  aria-label="Reset user 2FA"
+                                  title="Reset 2FA (Emergency Recovery)"
+                                  className="admin-action-btn !text-amber-400 !border-amber-400/40 !bg-[color-mix(in_srgb,var(--gold)_14%,var(--input))]"
+                                >
+                                  <ShieldAlert className="w-4 h-4" />
+                                </button>
+                              )}
+
                               {/* Toggle Verification */}
                               {currentUser?.is_top_admin && (
                                 <button
@@ -860,11 +904,28 @@ export const Admin: React.FC = () => {
                                   Member
                                 </span>
                               )}
+                              {!!u.has_2fa && (
+                                <span className="flex-shrink-0 text-[8px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
+                                  2FA
+                                </span>
+                              )}
                             </div>
                           </div>
 
                           {/* Col 3: Actions (Buttons at least 40px with 8px gaps) */}
                           <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Reset 2FA */}
+                            {!!u.has_2fa && (
+                              <button
+                                onClick={() => handleReset2FA(u)}
+                                aria-label="Reset user 2FA"
+                                title="Reset 2FA"
+                                className="admin-action-btn !text-amber-400 !border-amber-400/40 !bg-[color-mix(in_srgb,var(--gold)_14%,var(--input))]"
+                              >
+                                <ShieldAlert className="w-4 h-4" />
+                              </button>
+                            )}
+
                             {/* Toggle Verification */}
                             {currentUser?.is_top_admin && (
                               <button

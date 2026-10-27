@@ -109,9 +109,11 @@ usersApp.get('/', authMiddleware, async (c) => {
 
   try {
     const { results: users } = await c.env.DB.prepare(`
-      SELECT id, username, email, display_name, avatar_url, is_verified, is_admin, is_top_admin, is_blocked, chat_restricted_until, is_verification_paid, verification_paid_at, verification_category, verification_document_url, verification_reason, verification_status, created_at
-      FROM users
-      ORDER BY created_at DESC
+      SELECT u.id, u.username, u.email, u.display_name, u.avatar_url, u.is_verified, u.is_admin, u.is_top_admin, u.is_blocked, u.chat_restricted_until, u.is_verification_paid, u.verification_paid_at, u.verification_category, u.verification_document_url, u.verification_reason, u.verification_status, u.created_at,
+             COALESCE(t.enabled, 0) AS has_2fa
+      FROM users u
+      LEFT JOIN user_2fa t ON u.id = t.user_id
+      ORDER BY u.created_at DESC
     `).all<any>();
 
     const mappedUsers = (users || []).map(u => ({
@@ -120,6 +122,7 @@ usersApp.get('/', authMiddleware, async (c) => {
       is_admin: !!u.is_admin,
       is_top_admin: !!u.is_top_admin,
       is_blocked: !!u.is_blocked,
+      has_2fa: !!u.has_2fa,
       chat_restricted_until: u.chat_restricted_until || 0,
       is_verification_paid: !!u.is_verification_paid,
       verification_paid_at: u.verification_paid_at || 0,
@@ -576,6 +579,79 @@ usersApp.put('/:id/chat-restrict', authMiddleware, async (c) => {
     return c.json({ success: true, chat_restricted_until: restrictUntil, message: 'User chat restriction updated' });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
+  }
+});
+
+// ─── ADMIN RESET USER 2FA (Admin & Top Admin) ─────────────────────────────────
+usersApp.post('/:id/2fa/reset', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  const targetUserId = c.req.param('id');
+
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
+    .bind(callerId)
+    .first<any>();
+
+  if (!caller || (caller.is_admin !== 1 && caller.is_top_admin !== 1)) {
+    return c.json({ error: 'Unauthorized: Admin privileges required.' }, 403);
+  }
+
+  const targetUser = await c.env.DB.prepare('SELECT id, username, email, is_top_admin FROM users WHERE id = ?')
+    .bind(targetUserId)
+    .first<any>();
+
+  if (!targetUser) {
+    return c.json({ error: 'User not found.' }, 404);
+  }
+
+  // Prevent regular admins from resetting a top admin's 2FA
+  if (targetUser.is_top_admin === 1 && caller.is_top_admin !== 1) {
+    return c.json({ error: 'Unauthorized: Cannot reset 2FA for a Top Admin.' }, 403);
+  }
+
+  try {
+    // 1. Delete 2FA credentials & revoke trusted devices
+    await c.env.DB.prepare('DELETE FROM user_2fa WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM backup_codes WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(targetUserId).run();
+
+    // 2. Audit log in admin_audit_logs
+    await c.env.DB.prepare(
+      'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+      .bind(crypto.randomUUID(), callerId, 'admin_2fa_reset', targetUserId, JSON.stringify({ reset_by: callerId }), Date.now())
+      .run();
+
+    // 3. Audit log in auth_audit_log
+    const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-real-ip') || '127.0.0.1';
+    await c.env.DB.prepare(
+      'INSERT INTO auth_audit_log (id, user_id, event, ip, user_agent, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    )
+      .bind(crypto.randomUUID(), targetUserId, 'admin_2fa_reset', clientIp, c.req.header('user-agent') || '', JSON.stringify({ admin_id: callerId }), Date.now())
+      .run();
+
+    // 4. Send email notice to target user
+    if (targetUser.email) {
+      const { sendSecurityEmail } = await import('./email');
+      await sendSecurityEmail({
+        toEmail: targetUser.email,
+        toName: targetUser.username,
+        subject: 'Security Alert: Two-Factor Authentication Was Reset by an Administrator',
+        html: `
+          <h2 style="color:#ff6b81;margin:0 0 12px;font-size:18px;">2FA Security Notice</h2>
+          <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#e0f2f1;">
+            Hello <strong>@${targetUser.username}</strong>,<br>
+            An administrator has reset two-factor authentication on your DataVerse account. You can now sign in using your username/email and password.
+          </p>
+          <p style="margin:0;font-size:13px;color:#7fa3aa;">
+            For your security, we strongly recommend navigating to Settings &gt; Security to re-enable Two-Factor Authentication immediately.
+          </p>
+        `
+      });
+    }
+
+    return c.json({ success: true, message: `Two-factor authentication has been reset for @${targetUser.username}.` });
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Failed to reset 2FA.' }, 500);
   }
 });
 

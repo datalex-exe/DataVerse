@@ -5,12 +5,41 @@ export interface Bindings {
   SESSION_KV: KVNamespace;
   MEDIA_BUCKET: R2Bucket;
   JWT_SECRET?: string; // Optional JWT secret override from variables
+  TWO_FACTOR_ENCRYPTION_KEY?: string; // 256-bit AES-GCM encryption key
   CHAT_ROOM: DurableObjectNamespace;
 }
 
 export interface Variables {
   userId: string;
   token: string;
+}
+
+export interface User2FA {
+  user_id: string;
+  secret_encrypted: string;
+  enabled: number;
+  enabled_at: number | null;
+  last_used_step: number;
+  failed_attempts: number;
+  locked_until: number;
+}
+
+export interface BackupCode {
+  id: string;
+  user_id: string;
+  code_hash: string;
+  salt: string;
+  used_at: number | null;
+}
+
+export interface TrustedDevice {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  user_agent: string | null;
+  ip: string | null;
+  expires_at: number;
+  created_at: number;
 }
 
 export interface User {

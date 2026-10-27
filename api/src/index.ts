@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { Bindings, Variables } from './types';
 import authApp, { authMiddleware, verifyToken } from './auth';
+import twoFactorApp from './twoFactor';
 import usersApp from './users';
 import postsApp from './posts';
 import conversationsApp from './conversations';
@@ -56,8 +57,11 @@ app.use('*', cors({
 }));
 
 // API Routes
+app.route('/api/auth/2fa', twoFactorApp);
+app.route('/api/2fa', twoFactorApp);
 app.route('/api/auth', authApp);
 app.route('/api/users', usersApp);
+app.route('/api/admin/users', usersApp);
 app.route('/api/posts', postsApp);
 app.route('/api/conversations', conversationsApp);
 app.route('/api/contact', contactApp);

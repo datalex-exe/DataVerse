@@ -247,6 +247,50 @@ authApp.post('/login', async (c) => {
     // Reset failed login tracking on successful authentication
     await resetFailedLogin(c, cleanLoginId);
 
+    // Check if user has Two-Factor Authentication enabled
+    const twoFactorConfig = await c.env.DB.prepare(
+      'SELECT enabled FROM user_2fa WHERE user_id = ?'
+    )
+      .bind(user.id)
+      .first<any>();
+
+    if (twoFactorConfig && twoFactorConfig.enabled === 1) {
+      // Check if current device is trusted (via cookie or header)
+      const cookieHeader = c.req.header('Cookie') || '';
+      const deviceTokenMatch = cookieHeader.match(/dv_trusted_device=([a-zA-Z0-9]+)/);
+      const rawDeviceToken = deviceTokenMatch ? deviceTokenMatch[1] : c.req.header('x-trusted-device-token');
+
+      let deviceTrusted = false;
+      if (rawDeviceToken) {
+        const { sha256Hex } = await import('./crypto');
+        const hashedToken = await sha256Hex(rawDeviceToken);
+        const trusted = await c.env.DB.prepare(
+          'SELECT id FROM trusted_devices WHERE user_id = ? AND token_hash = ? AND expires_at > ?'
+        )
+          .bind(user.id, hashedToken, Date.now())
+          .first();
+
+        if (trusted) {
+          deviceTrusted = true;
+        }
+      }
+
+      if (!deviceTrusted) {
+        // Issue 5-minute single-purpose mfa_token (NO session created)
+        const mfaToken = await new SignJWT({ sub: user.id, scope: 'mfa_verify' })
+          .setProtectedHeader({ alg: 'HS256' })
+          .setIssuedAt()
+          .setExpirationTime('5m')
+          .sign(getSecret(c.env.JWT_SECRET));
+
+        return c.json({
+          requires_2fa: true,
+          mfa_token: mfaToken,
+          message: 'Two-factor authentication code required.'
+        });
+      }
+    }
+
     const token = await signToken(user.id, c.env.JWT_SECRET);
     // Cache session in KV for 30 days
     await c.env.SESSION_KV.put(`session:${token}`, user.id, { expirationTtl: 2592000 });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, User, AtSign, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, User, AtSign, Eye, EyeOff, Shield, ArrowLeft, HelpCircle } from 'lucide-react';
 /* THEME START */
 import { ThemeIconButton } from '../utils/theme';
 /* THEME END */
@@ -22,6 +22,14 @@ export const Auth: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [acceptedTerms, setAcceptedTerms] = useState<boolean>(false);
+
+  // 2FA Challenge State
+  const [show2faChallenge, setShow2faChallenge] = useState<boolean>(false);
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState<string>('');
+  const [isBackupCodeMode, setIsBackupCodeMode] = useState<boolean>(false);
+  const [trustDevice, setTrustDevice] = useState<boolean>(false);
+  const [failed2faAttempts, setFailed2faAttempts] = useState<number>(0);
 
   /* ANIMATION START */
   const [animationKey, setAnimationKey] = useState<number>(0);
@@ -123,11 +131,69 @@ export const Auth: React.FC = () => {
         throw new Error(data.error || 'Authentication failed');
       }
 
+      if (data.requires_2fa) {
+        setMfaToken(data.mfa_token);
+        setShow2faChallenge(true);
+        setTwoFactorCode('');
+        setFailed2faAttempts(0);
+        setError(null);
+        return;
+      }
+
       login(data.token, data.user);
     } catch (err: any) {
       setError(err.message || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerify2fa = async (e?: React.FormEvent, codeToSubmit?: string) => {
+    if (e) e.preventDefault();
+    const code = (codeToSubmit !== undefined ? codeToSubmit : twoFactorCode).trim();
+    if (!code || !mfaToken) {
+      setError('Please enter your authentication code.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/auth/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mfa_token: mfaToken,
+          code: code,
+          trust_device: trustDevice
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setFailed2faAttempts(prev => prev + 1);
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      login(data.token, data.user);
+    } catch (err: any) {
+      setError(err.message || 'Verification failed. Please check your code and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handle2faCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!isBackupCodeMode) {
+      const numericVal = val.replace(/\D/g, '').slice(0, 6);
+      setTwoFactorCode(numericVal);
+      if (numericVal.length === 6) {
+        handleVerify2fa(undefined, numericVal);
+      }
+    } else {
+      setTwoFactorCode(val.toUpperCase().slice(0, 9));
     }
   };
 
@@ -527,231 +593,344 @@ export const Auth: React.FC = () => {
         {/* Section Heading for screen readers */}
         <h2 className="sr-only">{isLogin ? 'Sign In to Your Account' : 'Create a New Account'}</h2>
 
-        {/* Auth Toggle Tab - Expands from center */}
-        <div 
-          role="tablist" 
-          aria-label="Authentication Options"
-          className="flex bg-[var(--input)] rounded-xl p-1 mb-6 border border-[var(--line)] intro-tabs"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isLogin}
-            aria-controls="auth-form"
-            id="tab-login"
-            onClick={() => { setIsLogin(true); setError(null); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
-              isLogin ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            Login
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!isLogin}
-            aria-controls="auth-form"
-            id="tab-signup"
-            onClick={() => { setIsLogin(false); setError(null); }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
-              !isLogin ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'
-            }`}
-          >
-            Sign Up
-          </button>
-        </div>
-        {/* THEME END */}
-        {/* ANIMATION END */}
-
-        {/* Error Alert */}
-        {error && (
-          <div 
-            id="auth-error"
-            role="alert"
-            aria-live="assertive"
-            className="mb-4 p-3 rounded-lg bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)] text-xs text-center font-semibold animate-shake"
-          >
-            {error}
-          </div>
-        )}
-
-        {/* Form */}
-        <form 
-          id="auth-form" 
-          onSubmit={handleSubmit} 
-          className="space-y-4"
-          aria-labelledby={isLogin ? 'tab-login' : 'tab-signup'}
-        >
-          
-          {/* User Fields (Signup only) */}
-          {!isLogin && (
-            <div>
-              <label 
-                htmlFor="auth-display-name" 
-                className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
-              >
-                Display Name
-              </label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
-                <input
-                  id="auth-display-name"
-                  name="name"
-                  type="text"
-                  required
-                  autoComplete="name"
-                  placeholder="e.g. John Doe"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  aria-invalid={!!error}
-                  aria-describedby={error ? "auth-error" : undefined}
-                  className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Username / Email field - ANIMATION START - 6. Slides in from left + glow line + typewriter */}
-          <div className="intro-field-left">
-            <label 
-              htmlFor="auth-username" 
-              className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
+        {show2faChallenge ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => {
+                setShow2faChallenge(false);
+                setMfaToken(null);
+                setTwoFactorCode('');
+                setError(null);
+              }}
+              className="flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)] mb-4 transition-colors font-semibold group cursor-pointer"
             >
-              {isLogin ? 'Username or Email' : 'Username'}
-            </label>
-            <div className="relative">
-              <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
-              <input
-                id="auth-username"
-                name="username"
-                type="text"
-                required
-                autoComplete={isLogin ? "username" : "username"}
-                placeholder={placeholderText || (isLogin ? "your_username or mail@domain.com" : "username (letters, numbers, _)")}
-                value={username}
-                onFocus={() => { isInputInteractingRef.current = true; }}
-                onChange={(e) => { 
-                  isInputInteractingRef.current = true;
-                  setUsername(e.target.value); 
-                }}
-                aria-invalid={!!error}
-                aria-describedby={error ? "auth-error" : undefined}
-                className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
-              />
-              <span className="intro-field-glow" aria-hidden="true" />
-            </div>
-          </div>
-          {/* ANIMATION END */}
+              <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+              Back to Sign In
+            </button>
 
-          {/* Email field (Signup only) */}
-          {!isLogin && (
-            <div>
-              <label 
-                htmlFor="auth-email" 
-                className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
-              >
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
-                <input
-                  id="auth-email"
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder="name@domain.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  aria-invalid={!!error}
-                  aria-describedby={error ? "auth-error" : undefined}
-                  className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
-                />
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="w-14 h-14 rounded-2xl bg-[var(--accent)]/10 border border-[var(--accent)]/30 flex items-center justify-center text-[var(--accent-2)] mb-3 shadow-lg shadow-[var(--shadow-accent)]">
+                <Shield className="w-7 h-7" />
               </div>
+              <h2 className="text-xl font-black text-[var(--text)]">Two-Factor Authentication</h2>
+              <p className="text-xs text-[var(--muted)] mt-1.5 max-w-xs leading-relaxed">
+                {isBackupCodeMode 
+                  ? 'Enter an 8-character single-use backup code.' 
+                  : 'Enter the 6-digit verification code from your authenticator app.'}
+              </p>
             </div>
-          )}
 
-          {/* Password field - ANIMATION START - 6. Slides in from right + glow line */}
-          <div className="intro-field-right">
-            <div className="flex justify-between items-center mb-1.5">
-              <label 
-                htmlFor="auth-password" 
-                className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider"
+            {error && (
+              <div 
+                id="auth-error"
+                role="alert"
+                aria-live="assertive"
+                className="mb-4 p-3 rounded-lg bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)] text-xs text-center font-semibold animate-shake"
               >
-                Password
-              </label>
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
-              <input
-                id="auth-password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                required
-                autoComplete={isLogin ? "current-password" : "new-password"}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                aria-invalid={!!error}
-                aria-describedby={error ? "auth-error" : undefined}
-                className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-11 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
-              />
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleVerify2fa} className="space-y-4">
+              <div>
+                <label 
+                  htmlFor="auth-2fa-code" 
+                  className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-2 text-center"
+                >
+                  {isBackupCodeMode ? 'Backup Code' : '6-Digit Security Code'}
+                </label>
+                <div className="relative">
+                  <input
+                    id="auth-2fa-code"
+                    name="twoFactorCode"
+                    type="text"
+                    required
+                    autoFocus
+                    autoComplete={isBackupCodeMode ? "off" : "one-time-code"}
+                    inputMode={isBackupCodeMode ? "text" : "numeric"}
+                    maxLength={isBackupCodeMode ? 9 : 6}
+                    placeholder={isBackupCodeMode ? "XXXX-XXXX" : "123456"}
+                    value={twoFactorCode}
+                    onChange={handle2faCodeChange}
+                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 px-4 text-[var(--text)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20 text-center font-mono font-bold tracking-[0.25em] text-xl placeholder:tracking-normal placeholder:font-sans placeholder:text-sm placeholder:text-[var(--muted)]"
+                  />
+                </div>
+              </div>
+
+              {/* Trust this device checkbox */}
+              <div className="flex items-center gap-2.5 pt-1 text-left">
+                <input
+                  id="auth-trust-device"
+                  type="checkbox"
+                  checked={trustDevice}
+                  onChange={(e) => setTrustDevice(e.target.checked)}
+                  className="w-4 h-4 rounded border-[var(--line)] bg-[var(--input)] text-[var(--accent)] accent-[var(--accent)] cursor-pointer focus:ring-2 focus:ring-[var(--accent-2)]/30 flex-shrink-0"
+                />
+                <label htmlFor="auth-trust-device" className="text-xs text-[var(--muted)] cursor-pointer select-none">
+                  Trust this device for 30 days
+                </label>
+              </div>
+
+              {/* Clock drift helpful hint after multiple failures */}
+              {failed2faAttempts >= 2 && (
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[var(--input)] border border-[var(--line)] text-[11px] text-[var(--muted)] text-left leading-relaxed">
+                  <HelpCircle className="w-4 h-4 text-[var(--gold)] flex-shrink-0 mt-0.5" />
+                  <span>
+                    Having trouble? Ensure your device's date and time are set to <strong>Automatic</strong> in system settings. Even a 1-minute clock drift can cause code verification to fail.
+                  </span>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading || twoFactorCode.length < (isBackupCodeMode ? 8 : 6)}
+                className="w-full py-3 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs cursor-pointer disabled:cursor-not-allowed"
+              >
+                {loading ? 'Verifying...' : 'Verify & Continue'}
+              </button>
+
+              {/* Toggle to Backup Code Mode */}
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBackupCodeMode(!isBackupCodeMode);
+                    setTwoFactorCode('');
+                    setError(null);
+                  }}
+                  className="text-xs text-[var(--accent-2)] hover:underline font-semibold cursor-pointer"
+                >
+                  {isBackupCodeMode ? 'Use 6-digit authenticator code instead' : 'Lost phone? Use a backup code'}
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <>
+            {/* Auth Toggle Tab - Expands from center */}
+            <div 
+              role="tablist" 
+              aria-label="Authentication Options"
+              className="flex bg-[var(--input)] rounded-xl p-1 mb-6 border border-[var(--line)] intro-tabs"
+            >
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-                aria-pressed={showPassword}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] focus-visible:text-[var(--text)] focus-visible:outline-none transition-colors p-1 rounded-md"
+                role="tab"
+                aria-selected={isLogin}
+                aria-controls="auth-form"
+                id="tab-login"
+                onClick={() => { setIsLogin(true); setError(null); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
+                  isLogin ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                Login
               </button>
-              <span className="intro-field-glow" aria-hidden="true" />
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!isLogin}
+                aria-controls="auth-form"
+                id="tab-signup"
+                onClick={() => { setIsLogin(false); setError(null); }}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
+                  !isLogin ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]' : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                Sign Up
+              </button>
             </div>
-          </div>
-          {/* ANIMATION END */}
 
-          {/* THEME START */}
-          {/* Explicit Unchecked Consent Checkbox for Sign Up */}
-          {!isLogin && (
-            <div className="flex items-start gap-2.5 pt-1 text-left">
-              <input
-                id="auth-terms-consent"
-                type="checkbox"
-                required
-                checked={acceptedTerms}
-                onChange={(e) => setAcceptedTerms(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-[var(--line)] bg-[var(--input)] text-[var(--accent)] accent-[var(--accent)] cursor-pointer focus:ring-2 focus:ring-[var(--accent-2)]/30 flex-shrink-0"
-              />
-              <label htmlFor="auth-terms-consent" className="text-[11px] text-[var(--muted)] leading-snug cursor-pointer select-none">
-                I have read and agree to the{' '}
-                <a href="#/terms" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
-                {' '}and{' '}
-                <a href="#/privacy" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
-              </label>
-            </div>
-          )}
+            {/* Error Alert */}
+            {error && (
+              <div 
+                id="auth-error"
+                role="alert"
+                aria-live="assertive"
+                className="mb-4 p-3 rounded-lg bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] text-[var(--danger)] text-xs text-center font-semibold animate-shake"
+              >
+                {error}
+              </div>
+            )}
 
-          {/* Submit Button - Spring pop + repeating shimmer */}
-          <button
-            type="submit"
-            disabled={loading || (!isLogin && !acceptedTerms)}
-            className="w-full py-3 mt-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover intro-btn relative overflow-hidden cursor-pointer disabled:cursor-not-allowed"
-          >
-            <span className="relative z-10">{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
-            <span className="intro-btn-shimmer" aria-hidden="true" />
-          </button>
+            {/* Form */}
+            <form 
+              id="auth-form" 
+              onSubmit={handleSubmit} 
+              className="space-y-4"
+              aria-labelledby={isLogin ? 'tab-login' : 'tab-signup'}
+            >
+              
+              {/* User Fields (Signup only) */}
+              {!isLogin && (
+                <div>
+                  <label 
+                    htmlFor="auth-display-name" 
+                    className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
+                  >
+                    Display Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
+                    <input
+                      id="auth-display-name"
+                      name="name"
+                      type="text"
+                      required
+                      autoComplete="name"
+                      placeholder="e.g. John Doe"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      aria-invalid={!!error}
+                      aria-describedby={error ? "auth-error" : undefined}
+                      className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                    />
+                  </div>
+                </div>
+              )}
 
-          {/* Legal / Policy Consent Notice for Sign In */}
-          {isLogin && (
-            <p className="text-[11px] text-[var(--muted)] text-center mt-4 leading-relaxed">
-              By signing in, you agree to DataVerse's{' '}
-              <a href="#/terms" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
-              {' '}and{' '}
-              <a href="#/privacy" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
-            </p>
-          )}
+              {/* Username / Email field */}
+              <div className="intro-field-left">
+                <label 
+                  htmlFor="auth-username" 
+                  className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
+                >
+                  {isLogin ? 'Username or Email' : 'Username'}
+                </label>
+                <div className="relative">
+                  <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
+                  <input
+                    id="auth-username"
+                    name="username"
+                    type="text"
+                    required
+                    autoComplete={isLogin ? "username" : "username"}
+                    placeholder={placeholderText || (isLogin ? "your_username or mail@domain.com" : "username (letters, numbers, _)")}
+                    value={username}
+                    onFocus={() => { isInputInteractingRef.current = true; }}
+                    onChange={(e) => { 
+                      isInputInteractingRef.current = true;
+                      setUsername(e.target.value); 
+                    }}
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "auth-error" : undefined}
+                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                  />
+                  <span className="intro-field-glow" aria-hidden="true" />
+                </div>
+              </div>
 
-        </form>
+              {/* Email field (Signup only) */}
+              {!isLogin && (
+                <div>
+                  <label 
+                    htmlFor="auth-email" 
+                    className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider mb-1.5"
+                  >
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
+                    <input
+                      id="auth-email"
+                      name="email"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      placeholder="name@domain.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      aria-invalid={!!error}
+                      aria-describedby={error ? "auth-error" : undefined}
+                      className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Password field */}
+              <div className="intro-field-right">
+                <div className="flex justify-between items-center mb-1.5">
+                  <label 
+                    htmlFor="auth-password" 
+                    className="block text-xs font-bold text-[var(--muted)] uppercase tracking-wider"
+                  >
+                    Password
+                  </label>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" aria-hidden="true" />
+                  <input
+                    id="auth-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    autoComplete={isLogin ? "current-password" : "new-password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "auth-error" : undefined}
+                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-11 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] focus-visible:text-[var(--text)] focus-visible:outline-none transition-colors p-1 rounded-md"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                  </button>
+                  <span className="intro-field-glow" aria-hidden="true" />
+                </div>
+              </div>
+
+              {/* Consent Checkbox for Sign Up */}
+              {!isLogin && (
+                <div className="flex items-start gap-2.5 pt-1 text-left">
+                  <input
+                    id="auth-terms-consent"
+                    type="checkbox"
+                    required
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-[var(--line)] bg-[var(--input)] text-[var(--accent)] accent-[var(--accent)] cursor-pointer focus:ring-2 focus:ring-[var(--accent-2)]/30 flex-shrink-0"
+                  />
+                  <label htmlFor="auth-terms-consent" className="text-[11px] text-[var(--muted)] leading-snug cursor-pointer select-none">
+                    I have read and agree to the{' '}
+                    <a href="#/terms" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
+                    {' '}and{' '}
+                    <a href="#/privacy" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
+                  </label>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading || (!isLogin && !acceptedTerms)}
+                className="w-full py-3 mt-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover intro-btn relative overflow-hidden cursor-pointer disabled:cursor-not-allowed"
+              >
+                <span className="relative z-10">{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
+                <span className="intro-btn-shimmer" aria-hidden="true" />
+              </button>
+
+              {/* Legal Notice for Sign In */}
+              {isLogin && (
+                <p className="text-[11px] text-[var(--muted)] text-center mt-4 leading-relaxed">
+                  By signing in, you agree to DataVerse's{' '}
+                  <a href="#/terms" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
+                  {' '}and{' '}
+                  <a href="#/privacy" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
+                </p>
+              )}
+
+            </form>
+          </>
+        )}
 
       </div>
 
