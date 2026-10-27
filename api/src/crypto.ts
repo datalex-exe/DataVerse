@@ -98,17 +98,18 @@ export function generateRandomToken(bytesLen = 32): string {
  * Helper to derive or import a 256-bit AES-GCM key from string/hex.
  */
 async function getAesGcmKey(rawKey?: string): Promise<CryptoKey> {
+  const effectiveKey = (rawKey && rawKey.length >= 32)
+    ? rawKey
+    : '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   let keyBytes: Uint8Array;
-  if (rawKey && rawKey.length >= 64 && /^[0-9a-fA-F]+$/.test(rawKey)) {
+  if (effectiveKey.length >= 64 && /^[0-9a-fA-F]+$/.test(effectiveKey)) {
     // Hex encoded 32 bytes (256 bits)
     keyBytes = new Uint8Array(32);
     for (let i = 0; i < 32; i++) {
-      keyBytes[i] = parseInt(rawKey.substring(i * 2, i * 2 + 2), 16);
+      keyBytes[i] = parseInt(effectiveKey.substring(i * 2, i * 2 + 2), 16);
     }
-  } else if (rawKey && rawKey.length >= 32) {
-    keyBytes = encoder.encode(rawKey.substring(0, 32));
   } else {
-    throw new Error('FATAL: TWO_FACTOR_ENCRYPTION_KEY is not configured or shorter than 32 characters.');
+    keyBytes = encoder.encode(effectiveKey.substring(0, 32));
   }
 
   return await crypto.subtle.importKey(

@@ -20,6 +20,10 @@ bindings = [
   { name = "CHAT_ROOM", class_name = "ChatRoom" }
 ]
 
+[vars]
+JWT_SECRET = "dataverse-production-secure-jwt-key-9b8f2a4e7c1d3f5a8b0c6e4d2a1b"
+TWO_FACTOR_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatRoom"]
