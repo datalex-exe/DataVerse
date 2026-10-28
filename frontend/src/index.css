@@ -552,3 +552,26 @@ body {
   overscroll-behavior: contain !important;
 }
 
+/* Tab content slide & fade animation (transform and opacity only, 200ms) */
+@keyframes settingsTabSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-tab-slide {
+  animation: settingsTabSlideUp 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-tab-slide {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+

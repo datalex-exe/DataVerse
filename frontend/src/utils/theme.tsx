@@ -1,6 +1,6 @@
 /* THEME START */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Sun, Moon, Laptop } from 'lucide-react';
+import { Sun, Moon, Laptop, Check } from 'lucide-react';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
@@ -258,62 +258,93 @@ export const SettingsThemeControl: React.FC = () => {
   const { mode, setMode } = useTheme();
 
   return (
-    <div className="p-4 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm space-y-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h4 className="text-sm font-semibold text-[var(--text)]">Appearance & Color Theme</h4>
-          <p className="text-xs text-[var(--muted)]">Choose between Aurora Teal (Dark), Warm Sand (Light), or match your System settings.</p>
-        </div>
+    <div className="bg-[var(--card)] border border-[var(--line)] rounded-[20px] p-6 shadow-[var(--shadow-card)] space-y-5">
+      <div className="border-b border-[var(--line)] pb-3">
+        <h3 className="text-[16px] font-semibold text-[var(--text)]">Appearance & Color Theme</h3>
+        <p className="text-[13px] text-[var(--muted)] mt-0.5">Choose between Aurora Teal (Dark), Warm Sand (Light), or match your System settings.</p>
       </div>
 
       <div 
         role="radiogroup" 
         aria-label="Color theme" 
-        className="grid grid-cols-3 gap-2 pt-1"
+        className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1"
       >
+        {/* Light Card */}
         <button
           type="button"
           role="radio"
           aria-checked={mode === 'light'}
           onClick={() => setMode('light')}
-          className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
+          className={`relative p-6 rounded-[16px] border flex flex-col items-center justify-center gap-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
             mode === 'light'
-              ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,var(--card))] text-[var(--text)] shadow-sm ring-1 ring-[var(--accent)]'
+              ? 'border-[var(--accent-2)] ring-2 ring-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_12%,var(--card))] text-[var(--text)] shadow-sm'
               : 'border-[var(--line)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
-          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]`}
+          }`}
         >
-          <Sun className="w-4 h-4 text-[var(--gold)]" />
-          <span>Light</span>
+          {mode === 'light' && (
+            <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center">
+              <Check className="w-3 h-3 stroke-[2.5]" />
+            </div>
+          )}
+          <div className="w-12 h-12 rounded-[14px] bg-[color-mix(in_srgb,var(--gold)_18%,transparent)] text-[var(--gold)] flex items-center justify-center">
+            <Sun className="w-6 h-6 stroke-[1.8]" />
+          </div>
+          <div className="text-center">
+            <span className="text-[15px] font-semibold text-[var(--text)] block">Light</span>
+            <span className="text-[12px] text-[var(--muted)] block mt-0.5">Warm Sand</span>
+          </div>
         </button>
 
+        {/* Dark Card */}
         <button
           type="button"
           role="radio"
           aria-checked={mode === 'dark'}
           onClick={() => setMode('dark')}
-          className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
+          className={`relative p-6 rounded-[16px] border flex flex-col items-center justify-center gap-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
             mode === 'dark'
-              ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,var(--card))] text-[var(--text)] shadow-sm ring-1 ring-[var(--accent)]'
+              ? 'border-[var(--accent-2)] ring-2 ring-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_12%,var(--card))] text-[var(--text)] shadow-sm'
               : 'border-[var(--line)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
-          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]`}
+          }`}
         >
-          <Moon className="w-4 h-4 text-[var(--accent-2)]" />
-          <span>Dark</span>
+          {mode === 'dark' && (
+            <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center">
+              <Check className="w-3 h-3 stroke-[2.5]" />
+            </div>
+          )}
+          <div className="w-12 h-12 rounded-[14px] bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--accent-2)] flex items-center justify-center">
+            <Moon className="w-6 h-6 stroke-[1.8]" />
+          </div>
+          <div className="text-center">
+            <span className="text-[15px] font-semibold text-[var(--text)] block">Dark</span>
+            <span className="text-[12px] text-[var(--muted)] block mt-0.5">Aurora Teal</span>
+          </div>
         </button>
 
+        {/* System Card */}
         <button
           type="button"
           role="radio"
           aria-checked={mode === 'system'}
           onClick={() => setMode('system')}
-          className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-semibold transition-all ${
+          className={`relative p-6 rounded-[16px] border flex flex-col items-center justify-center gap-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] ${
             mode === 'system'
-              ? 'border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,var(--card))] text-[var(--text)] shadow-sm ring-1 ring-[var(--accent)]'
+              ? 'border-[var(--accent-2)] ring-2 ring-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_12%,var(--card))] text-[var(--text)] shadow-sm'
               : 'border-[var(--line)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
-          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]`}
+          }`}
         >
-          <Laptop className="w-4 h-4 text-[var(--muted)]" />
-          <span>System</span>
+          {mode === 'system' && (
+            <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center">
+              <Check className="w-3 h-3 stroke-[2.5]" />
+            </div>
+          )}
+          <div className="w-12 h-12 rounded-[14px] bg-[color-mix(in_srgb,var(--muted)_18%,transparent)] text-[var(--muted)] flex items-center justify-center">
+            <Laptop className="w-6 h-6 stroke-[1.8]" />
+          </div>
+          <div className="text-center">
+            <span className="text-[15px] font-semibold text-[var(--text)] block">System</span>
+            <span className="text-[12px] text-[var(--muted)] block mt-0.5">Match device</span>
+          </div>
         </button>
       </div>
     </div>
