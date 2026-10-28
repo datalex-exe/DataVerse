@@ -1237,6 +1237,14 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
     return num.toLocaleString();
   };
 
+  const resolveAvatarSrc = (url: string | null | undefined) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/api/') || url.startsWith('data:')) {
+      return url;
+    }
+    return `/api/media/file/${url}`;
+  };
+
   // Settings Navigation Configuration & Handlers
   interface SettingsTabItem {
     id: 'edit_profile' | 'security' | 'verification' | 'privacy' | 'password' | 'report' | 'blocked_users' | 'theme';
@@ -1410,6 +1418,10 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
   if (showSettings) {
     const meta = getTabMeta(settingsTab);
     const TabIcon = meta.icon;
+    const avatarSrc = resolveAvatarSrc(profile?.avatar_url || currentUser?.avatar_url);
+    const displayName = profile?.display_name || currentUser?.display_name || profile?.username || currentUser?.username || 'User';
+    const username = profile?.username || currentUser?.username || '';
+    const isVerifiedUser = profile?.is_verified || currentUser?.is_verified || profile?.is_verification_paid;
 
     return (
       <div className="relative w-full min-h-screen bg-[var(--bg)] text-[var(--text)]">
@@ -1442,29 +1454,30 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
             {/* Phone Profile Summary Card */}
             <div className="bg-[var(--card)] border border-[var(--line)] rounded-[20px] p-4 shadow-[var(--shadow-card)] flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-[var(--line)] bg-[var(--input)] flex items-center justify-center">
-                {profile?.avatar_url ? (
+                {avatarSrc ? (
                   <img
-                    src={profile.avatar_url}
-                    alt={profile.display_name || profile.username || 'User'}
+                    src={avatarSrc}
+                    alt=""
+                    aria-hidden="true"
                     className="w-full h-full object-cover"
                   />
                 ) : (
                   <span className="text-base font-semibold text-[var(--text)] uppercase">
-                    {(profile?.username || 'U').slice(0, 2)}
+                    {(username || 'U').slice(0, 2)}
                   </span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[15px] font-semibold text-[var(--text)] truncate">
-                    {profile?.display_name || profile?.username || 'User'}
+                    {displayName}
                   </span>
-                  {(profile?.is_verified || profile?.is_verification_paid) && (
+                  {isVerifiedUser && (
                     <VerifiedBadge size={16} />
                   )}
                 </div>
-                {profile?.username && (
-                  <p className="text-[13px] text-[var(--muted)] truncate">@{profile.username}</p>
+                {username && (
+                  <p className="text-[13px] text-[var(--muted)] truncate">@{username}</p>
                 )}
               </div>
             </div>
@@ -1539,29 +1552,30 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
               {/* Profile Summary Card */}
               <div className="bg-[var(--card)] border border-[var(--line)] rounded-[20px] p-4 shadow-[var(--shadow-card)] flex items-center gap-3.5">
                 <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-[var(--line)] bg-[var(--input)] flex items-center justify-center">
-                  {profile?.avatar_url ? (
+                  {avatarSrc ? (
                     <img
-                      src={profile.avatar_url}
-                      alt={profile.display_name || profile.username || 'User'}
+                      src={avatarSrc}
+                      alt=""
+                      aria-hidden="true"
                       className="w-full h-full object-cover"
                     />
                   ) : (
                     <span className="text-base font-semibold text-[var(--text)] uppercase">
-                      {(profile?.username || 'U').slice(0, 2)}
+                      {(username || 'U').slice(0, 2)}
                     </span>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[15px] font-semibold text-[var(--text)] truncate">
-                      {profile?.display_name || profile?.username || 'User'}
+                      {displayName}
                     </span>
-                    {(profile?.is_verified || profile?.is_verification_paid) && (
+                    {isVerifiedUser && (
                       <VerifiedBadge size={16} />
                     )}
                   </div>
-                  {profile?.username && (
-                    <p className="text-[13px] text-[var(--muted)] truncate">@{profile.username}</p>
+                  {username && (
+                    <p className="text-[13px] text-[var(--muted)] truncate">@{username}</p>
                   )}
                 </div>
               </div>
@@ -2809,8 +2823,9 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                               <div className="w-11 h-11 rounded-full overflow-hidden shrink-0 border border-[var(--line)] bg-[var(--card)] flex items-center justify-center">
                                 {blockedUser.avatar_url ? (
                                   <img 
-                                    src={blockedUser.avatar_url} 
-                                    alt={blockedUser.username} 
+                                    src={resolveAvatarSrc(blockedUser.avatar_url)} 
+                                    alt="" 
+                                    aria-hidden="true"
                                     className="w-full h-full object-cover"
                                   />
                                 ) : (
