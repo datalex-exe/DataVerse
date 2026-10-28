@@ -53,3 +53,8 @@ pids/
 # Coverage
 coverage/
 .nyc_output/
+
+# Agent IDE files
+.agents/
+skills-lock.json
+

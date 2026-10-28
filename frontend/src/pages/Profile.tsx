@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { compressImage } from '../utils/compress';
@@ -32,9 +32,10 @@ import {
   Copy,
   Download,
   RefreshCw,
-  /* THEME START */
-  Sun
-  /* THEME END */
+  BadgeCheck,
+  UserX,
+  SunMoon,
+  ChevronRight
 } from 'lucide-react';
 /* THEME START */
 import { SettingsThemeControl } from '../utils/theme';
@@ -143,6 +144,20 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
   /* THEME START */
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [settingsTab, setSettingsTab] = useState<'edit_profile' | 'security' | 'verification' | 'privacy' | 'password' | 'report' | 'blocked_users' | 'theme'>('edit_profile');
+  const [phoneDetailOpen, setPhoneDetailOpen] = useState<boolean>(false);
+  const navContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showSettings) return;
+    const onPopState = () => {
+      // Browser/phone Back button returns from detail to settings list on mobile
+      setPhoneDetailOpen(false);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, [showSettings]);
   /* THEME END */
 
   // Two-Factor Authentication (2FA) State
@@ -1221,123 +1236,290 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
     return num.toLocaleString();
   };
 
+  // Settings Navigation Configuration & Handlers
+  interface SettingsTabItem {
+    id: 'edit_profile' | 'security' | 'verification' | 'privacy' | 'password' | 'report' | 'blocked_users' | 'theme';
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    isDanger?: boolean;
+  }
+
+  interface SettingsSection {
+    title: string;
+    tabs: SettingsTabItem[];
+  }
+
+  const SETTINGS_SECTIONS: SettingsSection[] = [
+    {
+      title: 'Account',
+      tabs: [
+        { id: 'edit_profile', label: 'Edit Profile', icon: User },
+        { id: 'verification', label: 'Request Verification', icon: BadgeCheck },
+      ],
+    },
+    {
+      title: 'Privacy & security',
+      tabs: [
+        { id: 'privacy', label: 'Account Privacy', icon: Lock },
+        { id: 'password', label: 'Change Password', icon: Key },
+        { id: 'security', label: 'Security & 2FA', icon: Shield },
+        { id: 'blocked_users', label: 'Blocked Users', icon: UserX },
+      ],
+    },
+    {
+      title: 'Preferences',
+      tabs: [
+        { id: 'theme', label: 'Theme & Appearance', icon: SunMoon },
+      ],
+    },
+    {
+      title: 'Support',
+      tabs: [
+        { id: 'report', label: 'Report a Problem', icon: Flag, isDanger: true },
+      ],
+    },
+  ];
+
+  const getTabTitle = (tab: typeof settingsTab) => {
+    switch (tab) {
+      case 'edit_profile': return 'Edit Profile';
+      case 'verification': return 'Request Verification';
+      case 'privacy': return 'Account Privacy';
+      case 'password': return 'Change Password';
+      case 'security': return 'Security & 2FA';
+      case 'blocked_users': return 'Blocked Users';
+      case 'theme': return 'Theme & Appearance';
+      case 'report': return 'Report a Problem';
+      default: return 'Settings';
+    }
+  };
+
+  const handleTabSelect = (tab: typeof settingsTab) => {
+    setSettingsTab(tab);
+    setSettingsSuccessMsg(null);
+    setSettingsErrorMsg(null);
+    if (tab === 'report') {
+      setReportSuccessMsg(null);
+      setReportErrorMsg(null);
+    }
+    // On phone web view (< 768px), open full screen detail pane and push history entry so back button returns to list
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setPhoneDetailOpen(true);
+      window.history.pushState({ dataverseSettingsDetail: true }, '');
+    }
+  };
+
+  const handleBackToList = () => {
+    if (typeof window !== 'undefined' && window.history.state?.dataverseSettingsDetail) {
+      window.history.back();
+    } else {
+      setPhoneDetailOpen(false);
+    }
+  };
+
+  const handleCloseSettings = () => {
+    if (typeof window !== 'undefined' && window.history.state?.dataverseSettingsDetail) {
+      window.history.back();
+    }
+    setPhoneDetailOpen(false);
+    setShowSettings(false);
+    fetchProfileData();
+  };
+
+  const handleNavKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+    const container = navContainerRef.current;
+    if (!container) return;
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-settings-tab]'));
+    if (!buttons.length) return;
+    const activeEl = document.activeElement as HTMLButtonElement | null;
+    const currentIndex = buttons.indexOf(activeEl!);
+    let nextIndex = 0;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      nextIndex = currentIndex >= 0 ? (currentIndex + 1) % buttons.length : 0;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      nextIndex = currentIndex > 0 ? currentIndex - 1 : buttons.length - 1;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      nextIndex = buttons.length - 1;
+    }
+    buttons[nextIndex]?.focus();
+  };
+
   // INSTAGRAM SETTINGS WORKSPACE VIEW
   if (showSettings) {
     return (
-      <div className="w-full max-w-4xl mx-auto self-center px-4 py-8 animate-fade-in">
-        <div className="glass-card rounded-3xl overflow-hidden border border-white/5 shadow-2xl flex flex-col md:flex-row min-h-[500px]">
-          
-          {/* Left Settings Sidebar */}
-          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-white/[0.04] bg-slate-950/20 p-5 flex flex-col justify-between">
-            <div className="space-y-6">
-              <div className="px-2">
-                <h1 className="text-xs font-black text-white uppercase tracking-widest">Settings</h1>
+      <div className="w-full max-w-5xl mx-auto self-center px-0 md:px-4 py-0 md:py-8 animate-fade-in">
+        {/* PHONE (below 768px): List View */}
+        <div className={`md:hidden ${phoneDetailOpen ? 'hidden' : 'block'} w-full bg-[var(--bg)] min-h-screen`}>
+          {/* Phone List Sticky Header */}
+          <div className="sticky top-0 z-20 bg-[var(--card)] border-b border-[var(--line)] px-4 py-3 flex items-center gap-3 shadow-sm">
+            <button
+              type="button"
+              onClick={handleCloseSettings}
+              className="min-w-[48px] min-h-[48px] -ml-2 flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+              aria-label="Back to profile"
+            >
+              <ArrowLeft className="w-5 h-5 text-[var(--text)]" />
+            </button>
+            <h1 className="text-base font-semibold text-[var(--text)]">Settings</h1>
+          </div>
+
+          {/* Phone List Grouped Sections as Rounded Cards */}
+          <div className="px-4 py-4 space-y-6 pb-28 max-w-lg mx-auto w-full">
+            {SETTINGS_SECTIONS.map((section) => (
+              <div key={section.title}>
+                <div className="px-1 mb-2 text-[12px] font-semibold text-[var(--muted)] select-none">
+                  {section.title}
+                </div>
+                <div className="bg-[var(--card)] border border-[var(--line)] rounded-[16px] overflow-hidden divide-y divide-[var(--line)] shadow-sm">
+                  {section.tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isDanger = tab.isDanger;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => handleTabSelect(tab.id)}
+                        className="w-full h-[56px] min-h-[56px] px-4 flex items-center gap-3.5 text-left transition-colors duration-150 hover:bg-[var(--hover)] active:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+                      >
+                        <div
+                          className={`w-9 h-9 min-w-[36px] min-h-[36px] rounded-xl flex items-center justify-center shrink-0 ${
+                            isDanger
+                              ? 'bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] text-[var(--danger)]'
+                              : 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)]'
+                          }`}
+                        >
+                          <Icon className="w-5 h-5 stroke-[1.8]" />
+                        </div>
+                        <span className="text-[15px] font-medium text-[var(--text)] truncate">
+                          {tab.label}
+                        </span>
+                        <ChevronRight className="w-5 h-5 text-[var(--muted)] ml-auto shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <nav aria-label="Settings navigation" className="space-y-1">
-                <button
-                  onClick={() => { setSettingsTab('edit_profile'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
-                    settingsTab === 'edit_profile'
-                      ? 'bg-brand-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
-                  }`}
-                >
-                  <User className="w-4 h-4" />
-                  Edit Profile
-                </button>
-                <button
-                  onClick={() => { setSettingsTab('verification'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
-                    settingsTab === 'verification'
-                      ? 'bg-brand-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Request Verification
-                </button>
-                <button
-                  onClick={() => { setSettingsTab('privacy'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
-                    settingsTab === 'privacy'
-                      ? 'bg-brand-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
-                  }`}
-                >
-                  <Lock className="w-4 h-4" />
-                  Account Privacy
-                </button>
-                <button
-                  onClick={() => { setSettingsTab('password'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
-                    settingsTab === 'password'
-                      ? 'bg-brand-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
-                  }`}
-                >
-                  <Key className="w-4 h-4" />
-                  Change Password
-                </button>
-                <button
-                  onClick={() => { setSettingsTab('security'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
-                    settingsTab === 'security'
-                      ? 'bg-brand-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
-                  }`}
-                >
-                  <Shield className="w-4 h-4 text-emerald-400" />
-                  Security & 2FA
-                </button>
-                <button
-                  onClick={() => { setSettingsTab('blocked_users'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
-                    settingsTab === 'blocked_users'
-                      ? 'bg-brand-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
-                  }`}
-                >
-                  <Lock className="w-4 h-4 text-red-400" />
-                  Blocked Users
-                </button>
-                <button
-                  onClick={() => { setSettingsTab('report'); setReportSuccessMsg(null); setReportErrorMsg(null); }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
-                    settingsTab === 'report'
-                      ? 'bg-red-600/80 text-white shadow-md'
-                      : 'text-slate-400 hover:text-red-400 hover:bg-red-900/10'
-                  }`}
-                >
-                  <Flag className="w-4 h-4" />
-                  Report a Problem
-                </button>
-                {/* THEME START */}
-                <button
-                  onClick={() => { setSettingsTab('theme'); setSettingsSuccessMsg(null); setSettingsErrorMsg(null); }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all flex items-center gap-3 ${
-                    settingsTab === 'theme'
-                      ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900/30'
-                  }`}
-                >
-                  <Sun className="w-4 h-4 text-[var(--gold)]" />
-                  Theme & Appearance
-                </button>
-                {/* THEME END */}
-              </nav>
-            </div>
+            ))}
+
+            <div className="h-[1px] bg-[var(--line)] my-6 w-full" />
 
             <button
-              onClick={() => { setShowSettings(false); fetchProfileData(); }}
-              className="mt-8 w-full py-2.5 px-4 bg-slate-905 border border-slate-900 text-slate-350 hover:text-white rounded-xl text-[10px] font-black transition-all uppercase tracking-wider text-center flex items-center justify-center gap-1.5"
+              type="button"
+              onClick={handleCloseSettings}
+              className="w-full h-[48px] min-h-[48px] rounded-[14px] border border-[var(--line)] bg-[var(--card)] text-[var(--text)] text-[15px] font-medium flex items-center justify-center gap-2 hover:bg-[var(--hover)] active:scale-[0.99] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
             >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Profile
+              <ArrowLeft className="w-5 h-5 text-[var(--muted)]" />
+              Back to profile
+            </button>
+          </div>
+        </div>
+
+        {/* DESKTOP (>= 768px) & PHONE DETAIL VIEW CONTAINER */}
+        <div className={`glass-card md:bg-[var(--card)] md:rounded-3xl overflow-hidden md:border md:border-[var(--line)] shadow-2xl flex flex-col md:flex-row min-h-[580px] ${!phoneDetailOpen ? 'hidden md:flex' : 'flex'}`}>
+          
+          {/* DESKTOP Left Settings Sidebar (min-width: 768px, 280px on min-width: 1024px) */}
+          <div
+            ref={navContainerRef}
+            onKeyDown={handleNavKeyDown}
+            className="hidden md:flex flex-col w-[260px] lg:w-[280px] shrink-0 border-r border-[var(--line)] bg-[var(--side)] p-5 md:self-start md:sticky md:top-6"
+          >
+            <div className="px-2">
+              <h1 className="text-sm font-semibold text-[var(--text)]">Settings</h1>
+            </div>
+
+            <nav aria-label="Settings navigation" className="mt-1 flex flex-col">
+              {SETTINGS_SECTIONS.map((section) => (
+                <div key={section.title} className="mt-5">
+                  <div className="px-2 mb-1.5 text-[12px] font-semibold text-[var(--muted)] select-none">
+                    {section.title}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {section.tabs.map((tab) => {
+                      const Icon = tab.icon;
+                      const isActive = settingsTab === tab.id;
+                      const isDanger = tab.isDanger;
+
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive}
+                          data-settings-tab={tab.id}
+                          onClick={() => handleTabSelect(tab.id)}
+                          className={`group relative w-full h-[44px] min-h-[44px] px-3.5 rounded-[12px] text-[15px] font-medium flex items-center gap-3 transition-[background-color,color] duration-150 motion-reduce:transition-none text-left focus-visible:outline-none focus-visible:ring-2 ${
+                            isDanger
+                              ? 'focus-visible:ring-[var(--danger)]'
+                              : 'focus-visible:ring-[var(--accent-2)]'
+                          } focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--side)] ${
+                            isActive
+                              ? isDanger
+                                ? 'bg-[color-mix(in_srgb,var(--danger)_16%,transparent)] text-[var(--text)]'
+                                : 'bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--text)]'
+                              : 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]'
+                          }`}
+                        >
+                          {isActive && (
+                            <span
+                              className={`absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r ${
+                                isDanger ? 'bg-[var(--danger)]' : 'bg-[var(--accent-2)]'
+                              }`}
+                            />
+                          )}
+                          <Icon
+                            className={`w-5 h-5 stroke-[1.8] shrink-0 transition-colors duration-150 motion-reduce:transition-none ${
+                              isActive
+                                ? isDanger
+                                  ? 'text-[var(--danger)]'
+                                  : 'text-[var(--accent-2)]'
+                                : 'text-[var(--muted)] group-hover:text-[var(--text)]'
+                            }`}
+                          />
+                          <span className="truncate">{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+
+            <div className="h-[1px] bg-[var(--line)] my-4 w-full" />
+
+            <button
+              type="button"
+              onClick={handleCloseSettings}
+              className="group w-full h-[44px] min-h-[44px] px-3.5 rounded-[12px] text-[15px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition-[background-color,color] duration-150 motion-reduce:transition-none flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--side)] text-left"
+            >
+              <ArrowLeft className="w-5 h-5 stroke-[1.8] shrink-0 text-[var(--muted)] group-hover:text-[var(--text)] transition-colors duration-150 motion-reduce:transition-none" />
+              Back to profile
             </button>
           </div>
 
-          {/* Right Contents Pane */}
-          <div className="flex-1 p-6 sm:p-8 bg-[#030303]/60 relative min-h-[450px]">
+          {/* Right Contents Pane (Full screen on phone detail, side-by-side on desktop) */}
+          <div className="flex-1 p-4 sm:p-6 md:p-8 bg-[var(--card)] relative min-h-[580px] pb-28 md:pb-8 w-full overflow-x-hidden">
+            
+            {/* Phone Detail Sticky Header */}
+            <div className="md:hidden sticky top-0 z-30 -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 mb-6 px-4 py-3 bg-[var(--card)] border-b border-[var(--line)] flex items-center gap-3 shadow-sm">
+              <button
+                type="button"
+                onClick={handleBackToList}
+                aria-label="Back to settings list"
+                className="min-w-[48px] min-h-[48px] -ml-2 flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+              >
+                <ArrowLeft className="w-5 h-5 text-[var(--text)]" />
+              </button>
+              <h2 className="text-base font-semibold text-[var(--text)] truncate">
+                {getTabTitle(settingsTab)}
+              </h2>
+            </div>
             
             {/* Loading/Verifying overlay */}
             {verifyingState === 'submitting' && (
