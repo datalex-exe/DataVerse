@@ -65,6 +65,7 @@ interface ProfileUser {
   display_name: string | null;
   bio: string | null;
   avatar_url: string | null;
+  cover_url?: string | null;
   is_verified?: boolean;
   is_admin?: boolean;
   is_top_admin?: boolean;
@@ -141,6 +142,8 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
   // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
+  // Cover photo upload state
+  const [uploadingCover, setUploadingCover] = useState<boolean>(false);
 
   /* THEME START */
   const [showSettings, setShowSettings] = useState<boolean>(false);
@@ -749,6 +752,55 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
       toast.error(err.message || 'Failed to update photo');
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file for the cover.');
+      return;
+    }
+    if (!token || !currentUser || !profile) return;
+
+    setUploadingCover(true);
+    try {
+      const compressedCover = await compressImage(file, 1400, 0.88);
+      const fileExtension = file.name.split('.').pop() || 'jpg';
+      const r2Key = `covers/${currentUser.id}-${Date.now()}.${fileExtension}`;
+
+      await uploadMediaFile(compressedCover, r2Key, token, 'image/jpeg');
+
+      try {
+        localStorage.setItem(`dv_cover_${profile.username.toLowerCase()}`, r2Key);
+        localStorage.setItem(`dv_cover_${currentUser.username.toLowerCase()}`, r2Key);
+      } catch {}
+
+      setProfile(prev => prev ? { ...prev, cover_url: r2Key } : prev);
+
+      try {
+        await fetch('/api/users/profile', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            display_name: profile.display_name || profile.username,
+            bio: profile.bio || '',
+            avatar_url: profile.avatar_url,
+            cover_url: r2Key
+          })
+        });
+      } catch {}
+
+      toast.success('Cover photo updated successfully');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update cover photo');
+    } finally {
+      setUploadingCover(false);
+      e.target.value = '';
     }
   };
 
@@ -2898,23 +2950,65 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
 
 
   /* UI UPDATE START - Profile Page UI Redesign (Desktop & Phone unified reference design) */
+  const currentCoverPhoto = profile?.cover_url || (usernameToLoad ? localStorage.getItem(`dv_cover_${usernameToLoad.toLowerCase()}`) : null);
+
   return (
     <div className="w-full max-w-[980px] mx-auto self-center px-0 sm:px-6 pt-0 sm:pt-4 pb-24 md:pb-12 animate-fade-in relative z-10">
       
-      {/* Cover Area Banner */}
-      <div className="relative w-full h-36 sm:h-52 overflow-hidden bg-gradient-to-tr from-[color-mix(in_srgb,var(--side)_85%,transparent)] via-[color-mix(in_srgb,var(--accent)_25%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_18%,transparent)] border-b sm:border border-[var(--card-border)] sm:rounded-2xl">
-        <div 
-          aria-hidden="true" 
-          className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--glow),transparent)] opacity-40 pointer-events-none" 
-        />
+      {/* Cover Area Banner (Photo Holder with its own dedicated size slot) */}
+      <div className="relative w-full h-44 sm:h-64 overflow-hidden bg-gradient-to-tr from-[color-mix(in_srgb,var(--side)_85%,transparent)] via-[color-mix(in_srgb,var(--accent)_25%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_18%,transparent)] border-b sm:border border-[var(--card-border)] sm:rounded-2xl shadow-sm group">
+        {currentCoverPhoto ? (
+          <img 
+            src={currentCoverPhoto.startsWith('blob:') || currentCoverPhoto.startsWith('data:') || currentCoverPhoto.startsWith('http')
+              ? currentCoverPhoto 
+              : `/api/media/file/${currentCoverPhoto}`}
+            alt={profile.display_name || profile.username}
+            className="w-full h-full object-cover select-none transition-transform duration-300 group-hover:scale-[1.01]"
+          />
+        ) : (
+          <div 
+            aria-hidden="true" 
+            className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--glow),transparent)] opacity-40 pointer-events-none" 
+          />
+        )}
+
+        {/* Ambient bottom gradient so avatar seamlessly overlays */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+
+        {/* Back navigation button if viewing other user */}
         {!isOwnProfile && (
           <button
+            type="button"
             onClick={() => onNavigate('feed')}
             className="absolute top-3 left-3 w-9 h-9 rounded-full bg-[color-mix(in_srgb,var(--side)_75%,transparent)] backdrop-blur-md border border-[var(--card-border)] text-[var(--text)] flex items-center justify-center hover:bg-[var(--hover)] transition-all cursor-pointer z-10 active:scale-95"
             aria-label="Back"
           >
             <ArrowLeft className="w-4 h-4 stroke-[2]" />
           </button>
+        )}
+
+        {/* Change Cover Photo button for own profile */}
+        {isOwnProfile && (
+          <label 
+            htmlFor="profile-cover-file-input"
+            className="absolute bottom-3 right-3 px-3.5 py-1.5 rounded-full bg-[color-mix(in_srgb,var(--side)_80%,transparent)] backdrop-blur-md border border-[var(--card-border)] text-[var(--text)] text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/60 active:scale-95 transition-all z-20"
+            title="Change Cover Photo"
+            aria-label="Change Cover Photo"
+          >
+            {uploadingCover ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-2)]" />
+            ) : (
+              <Camera className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+            )}
+            <span className="text-xs font-medium">Cover</span>
+            <input 
+              id="profile-cover-file-input"
+              type="file" 
+              accept="image/*" 
+              onChange={handleCoverChange} 
+              className="hidden" 
+            />
+          </label>
         )}
       </div>
 
