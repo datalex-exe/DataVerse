@@ -36,7 +36,8 @@ import {
   UserX,
   SunMoon,
   ChevronRight,
-  Mail
+  Mail,
+  Move
 } from 'lucide-react';
 /* THEME START */
 import { SettingsThemeControl } from '../utils/theme';
@@ -142,8 +143,42 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
   // Avatar upload state
   const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
-  // Cover photo upload state
+  // Cover photo upload & repositioning state
   const [uploadingCover, setUploadingCover] = useState<boolean>(false);
+  const [isRepositioningCover, setIsRepositioningCover] = useState<boolean>(false);
+  const [showCoverMenu, setShowCoverMenu] = useState<boolean>(false);
+  const [coverPosY, setCoverPosY] = useState<number>(() => {
+    try {
+      const saved = usernameToLoad ? localStorage.getItem(`dv_cover_pos_${usernameToLoad.toLowerCase()}`) : null;
+      return saved !== null ? Number(saved) : 50;
+    } catch {
+      return 50;
+    }
+  });
+  const [tempCoverPosY, setTempCoverPosY] = useState<number>(50);
+  const dragStartYRef = useRef<number | null>(null);
+  const dragStartPosRef = useRef<number>(50);
+  const coverMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const saved = usernameToLoad ? localStorage.getItem(`dv_cover_pos_${usernameToLoad.toLowerCase()}`) : null;
+      setCoverPosY(saved !== null ? Number(saved) : 50);
+    } catch {
+      setCoverPosY(50);
+    }
+  }, [usernameToLoad]);
+
+  useEffect(() => {
+    if (!showCoverMenu) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (coverMenuRef.current && !coverMenuRef.current.contains(e.target as Node)) {
+        setShowCoverMenu(false);
+      }
+    };
+    window.addEventListener('click', handleOutside);
+    return () => window.removeEventListener('click', handleOutside);
+  }, [showCoverMenu]);
 
   /* THEME START */
   const [showSettings, setShowSettings] = useState<boolean>(false);
@@ -802,6 +837,65 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
       setUploadingCover(false);
       e.target.value = '';
     }
+  };
+
+  const handleStartReposition = () => {
+    setTempCoverPosY(coverPosY);
+    setIsRepositioningCover(true);
+    setShowCoverMenu(false);
+  };
+
+  const handleSaveCoverPosition = () => {
+    setCoverPosY(tempCoverPosY);
+    setIsRepositioningCover(false);
+    if (profile?.username) {
+      try {
+        localStorage.setItem(`dv_cover_pos_${profile.username.toLowerCase()}`, String(tempCoverPosY));
+      } catch {}
+    }
+    toast.success('Cover position saved!');
+  };
+
+  const handleCancelCoverPosition = () => {
+    setTempCoverPosY(coverPosY);
+    setIsRepositioningCover(false);
+  };
+
+  const handleRemoveCoverPhoto = () => {
+    if (!profile) return;
+    try {
+      localStorage.removeItem(`dv_cover_${profile.username.toLowerCase()}`);
+      if (currentUser?.username) {
+        localStorage.removeItem(`dv_cover_${currentUser.username.toLowerCase()}`);
+      }
+    } catch {}
+    setProfile(prev => prev ? { ...prev, cover_url: null } : prev);
+    setShowCoverMenu(false);
+    toast.info('Cover photo removed.');
+  };
+
+  const handleCoverPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isRepositioningCover) return;
+    dragStartYRef.current = e.clientY;
+    dragStartPosRef.current = tempCoverPosY;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleCoverPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isRepositioningCover || dragStartYRef.current === null) return;
+    const deltaY = e.clientY - dragStartYRef.current;
+    const height = e.currentTarget.clientHeight || 240;
+    const deltaPercent = (deltaY / height) * 100;
+    const nextVal = Math.max(0, Math.min(100, Math.round(dragStartPosRef.current - deltaPercent)));
+    setTempCoverPosY(nextVal);
+  };
+
+  const handleCoverPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isRepositioningCover) return;
+    dragStartYRef.current = null;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
   };
 
   // Save Settings: username, email, display_name, and bio
@@ -2953,17 +3047,27 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
   const currentCoverPhoto = profile?.cover_url || (usernameToLoad ? localStorage.getItem(`dv_cover_${usernameToLoad.toLowerCase()}`) : null);
 
   return (
-    <div className="w-full max-w-[980px] mx-auto self-center px-0 sm:px-6 pt-0 sm:pt-4 pb-24 md:pb-12 animate-fade-in relative z-10">
+    <div className="w-full max-w-[980px] mx-auto self-center px-3 sm:px-6 pt-2 sm:pt-4 pb-24 md:pb-12 animate-fade-in relative z-10">
       
-      {/* Cover Area Banner (Photo Holder with its own dedicated size slot) */}
-      <div className="relative w-full h-44 sm:h-64 overflow-hidden bg-gradient-to-tr from-[color-mix(in_srgb,var(--side)_85%,transparent)] via-[color-mix(in_srgb,var(--accent)_25%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_18%,transparent)] border-b sm:border border-[var(--card-border)] sm:rounded-2xl shadow-sm group">
+      {/* Cover Area Banner (Photo Holder with its own dedicated size slot & reposition controls) */}
+      <div 
+        onPointerDown={handleCoverPointerDown}
+        onPointerMove={handleCoverPointerMove}
+        onPointerUp={handleCoverPointerUp}
+        onPointerCancel={handleCoverPointerUp}
+        className={`relative w-full h-44 sm:h-64 rounded-2xl sm:rounded-3xl overflow-hidden bg-gradient-to-tr from-[color-mix(in_srgb,var(--side)_85%,transparent)] via-[color-mix(in_srgb,var(--accent)_25%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_18%,transparent)] border border-[var(--card-border)] shadow-md select-none group ${
+          isRepositioningCover ? 'cursor-grab active:cursor-grabbing ring-2 ring-[var(--accent-2)]' : ''
+        }`}
+      >
         {currentCoverPhoto ? (
           <img 
             src={currentCoverPhoto.startsWith('blob:') || currentCoverPhoto.startsWith('data:') || currentCoverPhoto.startsWith('http')
               ? currentCoverPhoto 
               : `/api/media/file/${currentCoverPhoto}`}
             alt={profile.display_name || profile.username}
-            className="w-full h-full object-cover select-none transition-transform duration-300 group-hover:scale-[1.01]"
+            style={{ objectPosition: `center ${isRepositioningCover ? tempCoverPosY : coverPosY}%` }}
+            className="w-full h-full object-cover select-none pointer-events-none transition-[object-position] duration-75"
+            draggable={false}
           />
         ) : (
           <div 
@@ -2975,49 +3079,185 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
         {/* Ambient bottom gradient so avatar seamlessly overlays */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-        {/* Back navigation button if viewing other user */}
-        {!isOwnProfile && (
-          <button
-            type="button"
-            onClick={() => onNavigate('feed')}
-            className="absolute top-3 left-3 w-9 h-9 rounded-full bg-[color-mix(in_srgb,var(--side)_75%,transparent)] backdrop-blur-md border border-[var(--card-border)] text-[var(--text)] flex items-center justify-center hover:bg-[var(--hover)] transition-all cursor-pointer z-10 active:scale-95"
-            aria-label="Back"
-          >
-            <ArrowLeft className="w-4 h-4 stroke-[2]" />
-          </button>
-        )}
+        {/* Repositioning Overlay Bar (when active) */}
+        {isRepositioningCover ? (
+          <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex flex-col justify-between p-3 sm:p-4 z-30 pointer-events-auto">
+            {/* Top Reposition Status & Actions */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white text-xs font-semibold shadow-lg">
+                <Move className="w-3.5 h-3.5 text-[var(--accent-2)] animate-pulse" />
+                <span>Drag photo to place</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCancelCoverPosition}
+                  className="px-3.5 py-1.5 rounded-full bg-black/75 hover:bg-black/90 text-white border border-white/20 text-xs font-semibold active:scale-95 transition-all cursor-pointer shadow"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveCoverPosition}
+                  className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold active:scale-95 transition-all cursor-pointer shadow-md shadow-[var(--shadow-accent)] flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Save Position</span>
+                </button>
+              </div>
+            </div>
 
-        {/* Change Cover Photo button for own profile */}
-        {isOwnProfile && (
-          <label 
-            htmlFor="profile-cover-file-input"
-            className="absolute bottom-3 right-3 px-3.5 py-1.5 rounded-full bg-[color-mix(in_srgb,var(--side)_80%,transparent)] backdrop-blur-md border border-[var(--card-border)] text-[var(--text)] text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/60 active:scale-95 transition-all z-20"
-            title="Change Cover Photo"
-            aria-label="Change Cover Photo"
-          >
-            {uploadingCover ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-2)]" />
-            ) : (
-              <Camera className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+            {/* Bottom Fine-tune Slider & Presets */}
+            <div className="bg-black/80 backdrop-blur-md p-2.5 rounded-2xl border border-white/15 max-w-md mx-auto w-full flex flex-col gap-2 shadow-2xl">
+              <div className="flex items-center justify-between text-[11px] text-white/80 font-medium px-1">
+                <span>Vertical Position: {tempCoverPosY}%</span>
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    type="button"
+                    onClick={() => setTempCoverPosY(0)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${tempCoverPosY === 0 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                  >
+                    Top
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setTempCoverPosY(50)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${tempCoverPosY === 50 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                  >
+                    Center
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setTempCoverPosY(100)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${tempCoverPosY === 100 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                  >
+                    Bottom
+                  </button>
+                </div>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={tempCoverPosY}
+                onChange={(e) => setTempCoverPosY(Number(e.target.value))}
+                className="w-full accent-[var(--accent-2)] cursor-pointer h-1.5 bg-white/20 rounded-lg"
+              />
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Back navigation button if viewing other user */}
+            {!isOwnProfile && (
+              <button
+                type="button"
+                onClick={() => onNavigate('feed')}
+                className="absolute top-3 left-3 w-9 h-9 rounded-full bg-[color-mix(in_srgb,var(--side)_75%,transparent)] backdrop-blur-md border border-[var(--card-border)] text-[var(--text)] flex items-center justify-center hover:bg-[var(--hover)] transition-all cursor-pointer z-10 active:scale-95"
+                aria-label="Back"
+              >
+                <ArrowLeft className="w-4 h-4 stroke-[2]" />
+              </button>
             )}
-            <span className="text-xs font-medium">Cover</span>
-            <input 
-              id="profile-cover-file-input"
-              type="file" 
-              accept="image/*" 
-              onChange={handleCoverChange} 
-              className="hidden" 
-            />
-          </label>
+
+            {/* Cover Action Button (and menu) for own profile */}
+            {isOwnProfile && (
+              <div className="absolute bottom-3 right-3 z-20" ref={coverMenuRef}>
+                {currentCoverPhoto ? (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowCoverMenu(prev => !prev);
+                      }}
+                      className="px-3.5 py-1.5 rounded-full bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border border-[var(--card-border)] text-[var(--text)] text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/60 active:scale-95 transition-all"
+                      title="Cover Options"
+                      aria-label="Cover Options"
+                    >
+                      {uploadingCover ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-2)]" />
+                      ) : (
+                        <Camera className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+                      )}
+                      <span className="text-xs font-medium">Cover</span>
+                    </button>
+
+                    {showCoverMenu && (
+                      <div 
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 bottom-full mb-2 w-48 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl p-1.5 select-none animate-scale-up z-30"
+                      >
+                        {/* Option 1: Upload New */}
+                        <label className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] rounded-xl transition-colors cursor-pointer">
+                          <Camera className="w-4 h-4 text-[var(--accent-2)]" />
+                          <span>Change Photo</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={(e) => {
+                              setShowCoverMenu(false);
+                              handleCoverChange(e);
+                            }} 
+                            className="hidden" 
+                          />
+                        </label>
+
+                        {/* Option 2: Reposition */}
+                        <button
+                          type="button"
+                          onClick={handleStartReposition}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] rounded-xl transition-colors cursor-pointer text-left"
+                        >
+                          <Move className="w-4 h-4 text-[var(--accent-2)]" />
+                          <span>Reposition Photo</span>
+                        </button>
+
+                        {/* Option 3: Remove */}
+                        <button
+                          type="button"
+                          onClick={handleRemoveCoverPhoto}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] rounded-xl transition-colors cursor-pointer text-left"
+                        >
+                          <Trash className="w-4 h-4" />
+                          <span>Remove Photo</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <label 
+                    htmlFor="profile-cover-file-input"
+                    className="px-3.5 py-1.5 rounded-full bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border border-[var(--card-border)] text-[var(--text)] text-xs font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/60 active:scale-95 transition-all"
+                    title="Upload Cover Photo"
+                    aria-label="Upload Cover Photo"
+                  >
+                    {uploadingCover ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-2)]" />
+                    ) : (
+                      <Camera className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+                    )}
+                    <span className="text-xs font-medium">Add Cover</span>
+                    <input 
+                      id="profile-cover-file-input"
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleCoverChange} 
+                      className="hidden" 
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      <div className="px-4 sm:px-6">
+      <div className="px-2 sm:px-4">
         {/* Header content overlapping the cover banner */}
         <div className="select-none relative">
           
           {/* Avatar (96px) overlapping banner with 3px var(--accent-2) ring */}
-          <div className="flex items-end justify-between -mt-12 sm:-mt-16 mb-3">
+          <div className="flex items-end justify-between -mt-12 sm:-mt-16 ml-2 sm:ml-4 mb-3">
             <div className="relative flex-shrink-0">
               <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[var(--card)] border-[3px] border-[var(--accent-2)] shadow-xl overflow-hidden relative group">
                 <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-[var(--input)]">
