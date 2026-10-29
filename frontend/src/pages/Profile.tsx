@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { compressImage } from '../utils/compress';
-import { uploadMediaFile } from '../utils/upload';
+import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { ImageCropper } from '../components/ImageCropper';
 import { 
@@ -147,6 +147,8 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
   const [uploadingCover, setUploadingCover] = useState<boolean>(false);
   const [isRepositioningCover, setIsRepositioningCover] = useState<boolean>(false);
   const [showCoverMenu, setShowCoverMenu] = useState<boolean>(false);
+  const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
+  const [pendingCoverPreview, setPendingCoverPreview] = useState<string | null>(null);
   const [coverPosY, setCoverPosY] = useState<number>(() => {
     try {
       const saved = usernameToLoad ? localStorage.getItem(`dv_cover_pos_${usernameToLoad.toLowerCase()}`) : null;
@@ -179,6 +181,15 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
     window.addEventListener('click', handleOutside);
     return () => window.removeEventListener('click', handleOutside);
   }, [showCoverMenu]);
+
+  // Clean up pending cover preview object URL to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (pendingCoverPreview && pendingCoverPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(pendingCoverPreview);
+      }
+    };
+  }, [pendingCoverPreview]);
 
   /* THEME START */
   const [showSettings, setShowSettings] = useState<boolean>(false);
@@ -792,81 +803,121 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
   const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file for the cover.');
       return;
     }
-    if (!token || !currentUser || !profile) return;
 
-    setUploadingCover(true);
-    try {
-      const compressedCover = await compressImage(file, 1400, 0.88);
-      const fileExtension = file.name.split('.').pop() || 'jpg';
-      const r2Key = `covers/${currentUser.id}-${Date.now()}.${fileExtension}`;
-
-      await uploadMediaFile(compressedCover, r2Key, token, 'image/jpeg');
-
-      try {
-        localStorage.setItem(`dv_cover_${profile.username.toLowerCase()}`, r2Key);
-        localStorage.setItem(`dv_cover_${currentUser.username.toLowerCase()}`, r2Key);
-      } catch {}
-
-      setProfile(prev => prev ? { ...prev, cover_url: r2Key } : prev);
-
-      try {
-        await fetch('/api/users/profile', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            display_name: profile.display_name || profile.username,
-            bio: profile.bio || '',
-            avatar_url: profile.avatar_url,
-            cover_url: r2Key
-          })
-        });
-      } catch {}
-
-      toast.success('Cover photo updated successfully');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update cover photo');
-    } finally {
-      setUploadingCover(false);
-      e.target.value = '';
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('Cover image must be under 25MB.');
+      return;
     }
-  };
 
-  const handleStartReposition = () => {
-    setTempCoverPosY(coverPosY);
+    if (pendingCoverPreview && pendingCoverPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(pendingCoverPreview);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setPendingCoverFile(file);
+    setPendingCoverPreview(previewUrl);
+    setTempCoverPosY(50);
     setIsRepositioningCover(true);
     setShowCoverMenu(false);
   };
 
-  const handleSaveCoverPosition = () => {
-    setCoverPosY(tempCoverPosY);
-    setIsRepositioningCover(false);
-    if (profile?.username) {
+
+  const handleSaveCoverPosition = async () => {
+    if (!profile) return;
+
+    if (pendingCoverFile) {
+      if (!token || !currentUser) return;
+      setUploadingCover(true);
       try {
-        localStorage.setItem(`dv_cover_pos_${profile.username.toLowerCase()}`, String(tempCoverPosY));
-      } catch {}
+        const compressedCover = await compressImage(pendingCoverFile, 1400, 0.88);
+        const fileExtension = pendingCoverFile.name.split('.').pop() || 'jpg';
+        const r2Key = `covers/${currentUser.id}-${Date.now()}.${fileExtension}`;
+
+        await uploadMediaFile(compressedCover, r2Key, token, 'image/jpeg');
+
+        try {
+          localStorage.setItem(`dv_cover_${profile.username.toLowerCase()}`, r2Key);
+          localStorage.setItem(`dv_cover_${currentUser.username.toLowerCase()}`, r2Key);
+          localStorage.setItem(`dv_cover_pos_${profile.username.toLowerCase()}`, String(tempCoverPosY));
+          localStorage.setItem(`dv_cover_pos_${currentUser.username.toLowerCase()}`, String(tempCoverPosY));
+        } catch {}
+
+        setCoverPosY(tempCoverPosY);
+        setProfile(prev => prev ? { ...prev, cover_url: r2Key } : prev);
+
+        try {
+          await fetch('/api/users/profile', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              display_name: profile.display_name || profile.username,
+              bio: profile.bio || '',
+              avatar_url: profile.avatar_url,
+              cover_url: r2Key
+            })
+          });
+        } catch {}
+
+        if (pendingCoverPreview && pendingCoverPreview.startsWith('blob:')) {
+          URL.revokeObjectURL(pendingCoverPreview);
+        }
+        setPendingCoverFile(null);
+        setPendingCoverPreview(null);
+        setIsRepositioningCover(false);
+        toast.success('Cover photo updated successfully');
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to update cover photo');
+      } finally {
+        setUploadingCover(false);
+      }
+    } else {
+      setCoverPosY(tempCoverPosY);
+      setIsRepositioningCover(false);
+      if (profile?.username) {
+        try {
+          localStorage.setItem(`dv_cover_pos_${profile.username.toLowerCase()}`, String(tempCoverPosY));
+          if (currentUser?.username) {
+            localStorage.setItem(`dv_cover_pos_${currentUser.username.toLowerCase()}`, String(tempCoverPosY));
+          }
+        } catch {}
+      }
+      toast.success('Cover position saved!');
     }
-    toast.success('Cover position saved!');
   };
 
   const handleCancelCoverPosition = () => {
+    if (pendingCoverPreview && pendingCoverPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(pendingCoverPreview);
+    }
+    setPendingCoverFile(null);
+    setPendingCoverPreview(null);
     setTempCoverPosY(coverPosY);
     setIsRepositioningCover(false);
   };
 
   const handleRemoveCoverPhoto = () => {
     if (!profile) return;
+    if (pendingCoverPreview && pendingCoverPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(pendingCoverPreview);
+    }
+    setPendingCoverFile(null);
+    setPendingCoverPreview(null);
     try {
       localStorage.removeItem(`dv_cover_${profile.username.toLowerCase()}`);
+      localStorage.removeItem(`dv_cover_pos_${profile.username.toLowerCase()}`);
       if (currentUser?.username) {
         localStorage.removeItem(`dv_cover_${currentUser.username.toLowerCase()}`);
+        localStorage.removeItem(`dv_cover_pos_${currentUser.username.toLowerCase()}`);
       }
     } catch {}
     setProfile(prev => prev ? { ...prev, cover_url: null } : prev);
@@ -3044,7 +3095,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
 
 
   /* UI UPDATE START - Profile Page UI Redesign (Desktop & Phone unified reference design) */
-  const currentCoverPhoto = profile?.cover_url || (usernameToLoad ? localStorage.getItem(`dv_cover_${usernameToLoad.toLowerCase()}`) : null);
+  const currentCoverPhoto = pendingCoverPreview || profile?.cover_url || (usernameToLoad ? localStorage.getItem(`dv_cover_${usernameToLoad.toLowerCase()}`) : null);
 
   return (
     <div className="w-full max-w-[980px] mx-auto self-center px-3 sm:px-6 pt-2 sm:pt-4 pb-24 md:pb-12 animate-fade-in relative z-10">
@@ -3091,18 +3142,29 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  disabled={uploadingCover}
                   onClick={handleCancelCoverPosition}
-                  className="px-3.5 py-1.5 rounded-full bg-black/75 hover:bg-black/90 text-white border border-white/20 text-xs font-semibold active:scale-95 transition-all cursor-pointer shadow"
+                  className="px-3.5 py-1.5 rounded-full bg-black/75 hover:bg-black/90 text-white border border-white/20 text-xs font-semibold active:scale-95 transition-all cursor-pointer shadow disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
+                  disabled={uploadingCover}
                   onClick={handleSaveCoverPosition}
-                  className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold active:scale-95 transition-all cursor-pointer shadow-md shadow-[var(--shadow-accent)] flex items-center gap-1.5"
+                  className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold active:scale-95 transition-all cursor-pointer shadow-md shadow-[var(--shadow-accent)] flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Save Position</span>
+                  {uploadingCover ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                      <span>Save Position</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -3185,7 +3247,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     {showCoverMenu && (
                       <div 
                         onClick={(e) => e.stopPropagation()}
-                        className="absolute right-0 bottom-full mb-2 w-48 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl p-1.5 select-none animate-scale-up z-30"
+                        className="absolute right-0 bottom-full mb-2 w-44 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl p-1.5 select-none animate-scale-up z-30"
                       >
                         {/* Option 1: Upload New */}
                         <label className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] rounded-xl transition-colors cursor-pointer">
@@ -3202,17 +3264,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                           />
                         </label>
 
-                        {/* Option 2: Reposition */}
-                        <button
-                          type="button"
-                          onClick={handleStartReposition}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] rounded-xl transition-colors cursor-pointer text-left"
-                        >
-                          <Move className="w-4 h-4 text-[var(--accent-2)]" />
-                          <span>Reposition Photo</span>
-                        </button>
-
-                        {/* Option 3: Remove */}
+                        {/* Option 2: Remove */}
                         <button
                           type="button"
                           onClick={handleRemoveCoverPhoto}
