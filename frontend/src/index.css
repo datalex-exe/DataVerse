@@ -478,7 +478,7 @@ body.messages-active {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
-  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 0px)) !important;
   flex-shrink: 0 !important;
 }
 

@@ -385,7 +385,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
         {/* BUG 2 FIX: Pill container with overflow:hidden and border radius */}
         <div 
-          className="input-pill flex-1 min-w-0 flex items-center bg-[var(--input)] border border-[var(--line)] rounded-full pl-3 sm:pl-4 pr-1.5 py-1.5 transition-all overflow-hidden"
+          onClick={() => textareaRef.current?.focus()}
+          className="input-pill flex-1 min-w-0 flex items-center bg-[var(--input)] border border-[var(--line)] rounded-full pl-3 sm:pl-4 pr-1.5 py-1.5 transition-all overflow-hidden cursor-text"
           style={{ minWidth: 0, overflow: 'hidden', borderRadius: '9999px' }}
         >
           <label htmlFor="chat-message-textarea" className="sr-only">Type a message</label>
@@ -728,9 +729,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
   // Toggle mobile bottom navigation bar
   useEffect(() => {
-    if (onToggleBottomNav) onToggleBottomNav(!!activeConvo);
-    return () => { if (onToggleBottomNav) onToggleBottomNav(false); };
-  }, [activeConvo, onToggleBottomNav]);
+    const isConvoOpen = Boolean(activeConvo || targetConvoId);
+    if (onToggleBottomNav) onToggleBottomNav(isConvoOpen);
+  }, [activeConvo, targetConvoId, onToggleBottomNav]);
+
+  useEffect(() => {
+    return () => {
+      if (onToggleBottomNav) onToggleBottomNav(false);
+    };
+  }, [onToggleBottomNav]);
 
   // PrintScreen / Blur screenshot protection
   useEffect(() => {
@@ -1723,6 +1730,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         const data = await res.json();
         await fetchConversations();
         
+        if (onToggleBottomNav) onToggleBottomNav(true);
         onNavigate?.('messages', data.conversationId);
         setIsSearchMode(false);
         setSearchQuery('');
@@ -1780,6 +1788,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         // Refresh conversations list
         await fetchConversations();
         // Open the new group directly
+        if (onToggleBottomNav) onToggleBottomNav(true);
         onNavigate?.('messages', data.conversationId);
         // Reset modal state
         setShowCreateGroup(false);
@@ -4345,6 +4354,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   style={{ animationDelay: `${Math.min(index * 30, 240)}ms` }}
                   onClick={async () => { 
                     setActiveConvo(convo);
+                    if (onToggleBottomNav) onToggleBottomNav(true);
                     if (messagesCacheRef.current[convo.id] && messagesCacheRef.current[convo.id].length > 0) {
                       setMessages(messagesCacheRef.current[convo.id]);
                       setLoadingMessages(false);
@@ -4484,7 +4494,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             <div className="sticky top-0 z-20 px-4 py-3 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md flex items-center justify-between select-none flex-shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <button 
-                  onClick={() => { setActiveConvo(null); onNavigate?.('messages'); }}
+                  onClick={() => { setActiveConvo(null); if (onToggleBottomNav) onToggleBottomNav(false); onNavigate?.('messages'); }}
                   className="min-w-[44px] min-h-[44px] -ml-2 p-2.5 md:hidden hover:bg-white/[0.06] rounded-full text-slate-300 hover:text-white flex items-center justify-center transition-colors"
                   aria-label="Back to conversations list"
                 >

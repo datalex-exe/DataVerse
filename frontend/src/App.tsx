@@ -220,9 +220,12 @@ const AppContent: React.FC = () => {
         const convoId = rawRoute.substring(9);
         setActiveView('messages');
         setMessagesParam(convoId);
+        setHideBottomNav(true);
+        return;
       } else if (rawRoute === 'messages') {
         setActiveView('messages');
         setMessagesParam(undefined);
+        setHideBottomNav(false);
       } else if (rawRoute === 'search' || rawRoute === 'explore') {
         setActiveView('search');
         setMessagesParam(undefined);
@@ -269,13 +272,16 @@ const AppContent: React.FC = () => {
     if (newView === 'profile') {
       setActiveView('profile');
       setProfileParam(param || undefined);
+      setHideBottomNav(false);
     } else if (newView === 'messages') {
       setActiveView('messages');
       setMessagesParam(param || undefined);
+      setHideBottomNav(Boolean(param));
     } else {
       setActiveView(newView);
       if (newView !== 'profile') setProfileParam(undefined);
       if (newView !== 'messages') setMessagesParam(undefined);
+      setHideBottomNav(false);
     }
 
     if (newView === 'feed' || newView === 'feed_redirect') {
@@ -710,7 +716,7 @@ const AppContent: React.FC = () => {
 
       {/* MOBILE BOTTOM NAVIGATION BAR */}
       {/* THEME START */}
-      {!hideBottomNav && (
+      {!hideBottomNav && !(activeView === 'messages' && (Boolean(messagesParam) || hideBottomNav)) && (
         <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[color-mix(in_srgb,var(--side)_90%,transparent)] backdrop-blur-lg border-t border-[var(--line)] flex justify-around items-center px-2 py-1 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] shadow-2xl">
         
         {/* Home */}
