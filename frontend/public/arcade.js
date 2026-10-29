@@ -5,7 +5,7 @@
 (() => {
   // ---- Settings ----
   const MESSAGE = "You're offline. Play a game while you wait?";
-  const BUTTON = "Play";
+  const BUTTON = "Play Game";
   // Offline bar colours matching DataVerse theme tokens.
   const BAR_BG = "#040b0d";
   const BAR_TEXT = "#ffffff";

@@ -6,7 +6,7 @@
 // told when it's ready and reloading serves the finished response from a short-lived stash.
 //
 // Bump VERSION whenever arcade-offline.html changes so returning visitors get it.
-const VERSION = "v1";
+const VERSION = "v2";
 
 // Show the games if a page is still loading after this many ms. 0 = offline only.
 const SLOW_MS = 6000;

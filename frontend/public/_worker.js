@@ -34,6 +34,31 @@ export default {
     const isBot = BOT_UA_REGEX.test(userAgent);
 
     // ──────────────────────────────────────────────────────────────────────────
+    // 0. OFFLINE ARCADE STATIC PAGES & SCRIPTS
+    // ──────────────────────────────────────────────────────────────────────────
+    if (
+      url.pathname === '/arcade-offline.html' || 
+      url.pathname === '/arcade-register.html' ||
+      url.pathname === '/arcade.js' ||
+      url.pathname === '/arcade-sw.js'
+    ) {
+      const asset = await env.ASSETS.fetch(request);
+      const newHeaders = new Headers(asset.headers);
+      if (url.pathname.endsWith('.html')) {
+        newHeaders.set('Content-Type', 'text/html; charset=utf-8');
+        newHeaders.set('Cache-Control', 'public, max-age=86400');
+        newHeaders.set('Content-Security-Policy', "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+      } else if (url.pathname.endsWith('.js')) {
+        newHeaders.set('Content-Type', 'application/javascript; charset=utf-8');
+        newHeaders.set('Cache-Control', 'public, max-age=0, must-revalidate');
+      }
+      return new Response(asset.body, {
+        status: asset.status,
+        headers: newHeaders,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // 1. INDEXNOW KEY FILE
     // ──────────────────────────────────────────────────────────────────────────
     if (url.pathname === `/${INDEXNOW_KEY}.txt`) {

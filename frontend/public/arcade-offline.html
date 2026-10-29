@@ -85,11 +85,16 @@
   const $ = (s) => document.querySelector(s);
   const touch = matchMedia("(pointer: coarse)").matches;
   const dark = matchMedia("(prefers-color-scheme: dark)");
-  let INK, BG;
+  let INK = "#e0f2f1", BG = "#040b0d";
   const setColors = () => {
-    const css = getComputedStyle(document.documentElement);
-    INK = css.getPropertyValue("--ink").trim();
-    BG = css.getPropertyValue("--bg").trim();
+    try {
+      const css = getComputedStyle(document.documentElement);
+      INK = css.getPropertyValue("--ink").trim() || (dark.matches ? "#e0f2f1" : "#1f2a28");
+      BG = css.getPropertyValue("--bg").trim() || (dark.matches ? "#040b0d" : "#faf6ee");
+    } catch {
+      INK = dark.matches ? "#e0f2f1" : "#1f2a28";
+      BG = dark.matches ? "#040b0d" : "#faf6ee";
+    }
   };
   setColors();
 
