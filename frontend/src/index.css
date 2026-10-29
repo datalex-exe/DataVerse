@@ -24,6 +24,8 @@
   --shadow-accent: rgba(45,212,191,.30); /* glow under primary buttons */
   --shadow-card: rgba(0,0,0,.25);
   --img-dim: .55;           /* brightness of the blurred post backdrop */
+  --bg-gradient: linear-gradient(180deg, var(--side) 0%, var(--bg) 100%);
+  --card-border: color-mix(in srgb, var(--accent-2) 14%, var(--line));
 }
 
 /* LIGHT MODE: Warm Sand */
@@ -47,6 +49,8 @@
   --shadow-accent: rgba(15,118,110,.22);
   --shadow-card: rgba(122,95,40,.10);
   --img-dim: .9;
+  --bg-gradient: linear-gradient(180deg, var(--side) 0%, var(--bg) 100%);
+  --card-border: color-mix(in srgb, var(--accent-2) 14%, var(--line));
 }
 
 /* Cross-fade 250ms transition on theme colors */

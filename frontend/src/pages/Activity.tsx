@@ -117,80 +117,77 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
 
   /* UI UPDATE START - Notifications Page UI Redesign (Desktop & Phone responsive) */
   const renderTypeBadge = (type: string) => {
-    let bgColor = 'bg-brand-600';
-    let icon = <UserPlus className="w-3 h-3 text-white" />;
+    let bgColor = 'bg-[var(--accent)]';
+    let icon = <UserPlus className="w-3 h-3 text-[var(--on-accent)] stroke-[2]" />;
 
     switch (type) {
       case 'welcome':
-        bgColor = 'bg-brand-600';
-        icon = <Sparkles className="w-3 h-3 text-white" />;
+        bgColor = 'bg-[var(--accent)]';
+        icon = <Sparkles className="w-3 h-3 text-[var(--on-accent)] stroke-[2]" />;
         break;
-/* THEME START */
       case 'follow':
         bgColor = 'bg-[var(--accent)]';
-        icon = <UserPlus className="w-3 h-3 text-[var(--on-accent)]" />;
+        icon = <UserPlus className="w-3 h-3 text-[var(--on-accent)] stroke-[2]" />;
         break;
       case 'follow_request':
-        bgColor = 'bg-amber-500';
-        icon = <UserPlus className="w-3 h-3 text-white" />;
+        bgColor = 'bg-[var(--gold)]';
+        icon = <UserPlus className="w-3 h-3 text-[var(--bg)] stroke-[2]" />;
         break;
       case 'follow_accept':
-        bgColor = 'bg-emerald-500';
-        icon = <UserPlus className="w-3 h-3 text-white" />;
+        bgColor = 'bg-[var(--accent-2)]';
+        icon = <UserPlus className="w-3 h-3 text-[var(--bg)] stroke-[2]" />;
         break;
       case 'like':
         bgColor = 'bg-[var(--like)]';
-        icon = <Heart className="w-3 h-3 text-white fill-white" />;
+        icon = <Heart className="w-3 h-3 text-white fill-white stroke-[1.5]" />;
         break;
       case 'comment':
-        bgColor = 'bg-sky-500';
-        icon = <MessageCircle className="w-3 h-3 text-white" />;
+        bgColor = 'bg-[var(--accent-2)]';
+        icon = <MessageCircle className="w-3 h-3 text-[var(--bg)] stroke-[2]" />;
         break;
       case 'verification_request':
         bgColor = 'bg-[var(--accent)]';
-        icon = <Shield className="w-3 h-3 text-[var(--on-accent)]" />;
+        icon = <Shield className="w-3 h-3 text-[var(--on-accent)] stroke-[2]" />;
         break;
       case 'restriction':
         bgColor = 'bg-[var(--danger)]';
-        icon = <AlertTriangle className="w-3 h-3 text-white" />;
+        icon = <AlertTriangle className="w-3 h-3 text-white stroke-[2]" />;
         break;
       default:
         bgColor = 'bg-[var(--muted)]';
-        icon = <ArrowRight className="w-3 h-3 text-white" />;
+        icon = <ArrowRight className="w-3 h-3 text-[var(--bg)] stroke-[2]" />;
         break;
     }
 
     return (
-      <div className={`absolute -bottom-1 -right-1 w-5 h-5 sm:w-[22px] sm:h-[22px] rounded-full ${bgColor} border-2 border-[var(--card)] group-hover:border-[var(--hover)] transition-colors flex items-center justify-center shadow-md flex-shrink-0 z-10`}>
+      <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full ${bgColor} border-2 border-[var(--card)] flex items-center justify-center shadow-md flex-shrink-0 z-10`}>
         {icon}
       </div>
     );
   };
-/* THEME END */
 
   const renderItem = (item: NotificationItem, idx: number) => {
     const isWelcome = item.type === 'welcome';
     const notifierName = item.display_name || item.username || 'System';
     const isUnread = !item.is_read;
 
-/* THEME START */
     return (
       <div 
         key={item.id} 
         style={{ animationDelay: `${Math.min(idx, 10) * 35}ms` }}
         className={`flex items-center justify-between p-3.5 sm:p-4 hover:bg-[var(--hover)] transition-colors duration-200 select-none relative group animate-fade-in ${
-          isUnread ? 'bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]' : ''
+          isUnread ? 'bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_16%,transparent)]' : ''
         }`}
       >
         <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
           
-          {/* Avatar / Icon Container (48px mobile, 52px desktop) with 22px cut-out badge */}
+          {/* Avatar (40px mobile, 44px desktop) with 20px badge on bottom-right */}
           <div className="relative flex-shrink-0">
-            <div className="w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm">
               {!item.notifier_id ? (
                 <img src="/logo.png?v=2" alt="" aria-hidden="true" className="w-full h-full object-cover" />
               ) : isWelcome ? (
-                <div className="w-full h-full bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] flex items-center justify-center text-[var(--accent-2)] font-extrabold text-sm sm:text-base">D</div>
+                <div className="w-full h-full bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] flex items-center justify-center text-[var(--accent-2)] font-bold text-sm sm:text-base">D</div>
               ) : item.avatar_url ? (
                 <img src={`/api/media/file/${item.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
               ) : (
@@ -198,53 +195,53 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
               )}
             </div>
             
-            {/* 22px Solid Type Badge with 2px card-color cut-out border */}
+            {/* Type Badge */}
             {renderTypeBadge(item.type)}
           </div>
 
           {/* Details Column: Username + Action on same line, Muted regular time on second line */}
           <div className="min-w-0 flex-1 pt-0.5">
             {isWelcome ? (
-              <p className="text-sm text-slate-300 leading-snug break-words">
+              <p className="text-sm text-[var(--text)] leading-snug break-words">
                 {item.body ? (
                   <span>
                     {item.notifier_id ? (
                       <span 
                         onClick={() => item.username && onNavigate('profile', item.username)}
-                        className="font-semibold text-white mr-1.5 hover:text-brand-300 cursor-pointer transition-colors"
+                        className="font-bold text-[var(--text)] mr-1.5 hover:text-[var(--accent-2)] cursor-pointer transition-colors"
                       >
                         {notifierName}:
                       </span>
                     ) : (
-                      <span className="font-semibold text-brand-400 mr-1.5">
+                      <span className="font-bold text-[var(--accent-2)] mr-1.5">
                         System:
                       </span>
                     )}
-                    <span className="text-[#aab0c8] font-normal">{item.body}</span>
+                    <span className="text-[var(--muted)] font-normal">{item.body}</span>
                   </span>
                 ) : (
                   <span>
-                    <span className="font-semibold text-white mr-1.5">Welcome to DataVerse!</span>
-                    <span className="text-[#aab0c8] font-normal">Explore your feed, share reels, and connect with other creators.</span>
+                    <span className="font-bold text-[var(--text)] mr-1.5">Welcome to DataVerse!</span>
+                    <span className="text-[var(--muted)] font-normal">Explore your feed, share reels, and connect with other creators.</span>
                   </span>
                 )}
               </p>
             ) : item.type === 'restriction' ? (
-              <p className="text-sm text-slate-300 leading-snug break-words">
+              <p className="text-sm text-[var(--text)] leading-snug break-words">
                 {item.notifier_id ? (
                   <span>
                     <span 
                       onClick={() => item.username && onNavigate('profile', item.username)}
-                      className="font-semibold text-white mr-1.5 hover:text-brand-300 cursor-pointer transition-colors"
+                      className="font-bold text-[var(--text)] mr-1.5 hover:text-[var(--accent-2)] cursor-pointer transition-colors"
                     >
                       {notifierName}
                     </span>
-                    <span className="text-[#aab0c8] font-normal">restricted your chat access for {item.body?.replace("You can't chat for ", "")}</span>
+                    <span className="text-[var(--muted)] font-normal">restricted your chat access for {item.body?.replace("You can't chat for ", "")}</span>
                   </span>
                 ) : (
                   <span>
-                    <span className="font-semibold text-red-400 mr-1.5">System Alert:</span>
-                    <span className="text-[#aab0c8] font-normal">{item.body}</span>
+                    <span className="font-bold text-[var(--danger)] mr-1.5">System Alert:</span>
+                    <span className="text-[var(--muted)] font-normal">{item.body}</span>
                   </span>
                 )}
               </p>
@@ -252,11 +249,11 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
               <p className="text-sm leading-snug break-words">
                 <span 
                   onClick={() => item.username && onNavigate('profile', item.username)}
-                  className="font-semibold text-white hover:text-brand-300 cursor-pointer transition-colors mr-1.5 inline"
+                  className="font-bold text-[var(--text)] hover:text-[var(--accent-2)] cursor-pointer transition-colors mr-1.5 inline"
                 >
                   {notifierName}
                 </span>
-                <span className="text-[#aab0c8] font-normal text-sm inline">
+                <span className="text-[var(--muted)] font-normal text-sm inline">
                   {item.type === 'follow' && 'started following you'}
                   {item.type === 'follow_request' && 'requested to follow you'}
                   {item.type === 'follow_accept' && 'accepted your request'}
@@ -267,7 +264,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
               </p>
             )}
 
-            {/* Time on second line: high-contrast token */}
+            {/* Time on second line: muted */}
             <span className="text-xs text-[var(--muted)] font-normal block mt-1">
               {formatTime(item.created_at)}
             </span>
@@ -279,7 +276,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
         <div className="flex items-center gap-2 ml-3 flex-shrink-0">
           {/* Unread indicator dot */}
           {isUnread && item.type !== 'follow_request' && (
-            <span className="w-2 h-2 rounded-full bg-blue-500 shadow shadow-blue-500/50 flex-shrink-0 animate-pulse mr-1" />
+            <span className="w-2 h-2 rounded-full bg-[var(--accent-2)] shadow-[0_0_8px_var(--shadow-accent)] flex-shrink-0 animate-pulse mr-1" />
           )}
 
           {item.type === 'follow_request' ? (
@@ -304,7 +301,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                     toast.error('Network error accepting follow request');
                   }
                 }}
-                className="min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-4 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-full shadow-md shadow-brand-600/20 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                className="min-h-[36px] px-4 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-semibold rounded-full shadow-md shadow-[var(--shadow-accent)] active:scale-95 transition-all flex items-center justify-center cursor-pointer"
               >
                 Accept
               </button>
@@ -328,7 +325,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                     toast.error('Network error rejecting follow request');
                   }
                 }}
-                className="min-h-[44px] sm:min-h-[36px] px-3.5 sm:px-4 bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/10 text-xs font-medium rounded-full active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                className="min-h-[36px] px-4 bg-[var(--input)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] border border-[var(--card-border)] text-xs font-medium rounded-full active:scale-95 transition-all flex items-center justify-center cursor-pointer"
               >
                 Reject
               </button>
@@ -347,7 +344,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                       onNavigate('profile', item.username!);
                     }
                   }}
-                  className="min-h-[44px] sm:min-h-[36px] px-4 py-1.5 rounded-full border border-[var(--line)] text-[var(--accent-2)] hover:bg-[var(--accent)] hover:text-[var(--on-accent)] text-xs font-medium transition-all shadow-sm active:scale-95 flex items-center justify-center"
+                  className="min-h-[34px] px-3.5 py-1 rounded-full border border-[var(--card-border)] text-[var(--accent-2)] hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] text-xs font-medium transition-all shadow-sm active:scale-95 flex items-center justify-center cursor-pointer"
                 >
                   {item.type === 'verification_request' ? 'Admin' : 'Profile'}
                 </button>
@@ -360,7 +357,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
     );
   };
 
-  // Categorize notifications based on time (New within 24h, Earlier older)
+  // Categorize notifications based on time (Today within 24h, Earlier older)
   const now = Date.now();
   const oneDay = 24 * 60 * 60 * 1000;
   const newActivities = notifications.filter(n => now - n.created_at < oneDay);
@@ -369,76 +366,71 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center py-32 text-slate-500 gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
+      <div className="h-full flex flex-col items-center justify-center py-32 text-[var(--muted)] gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
         <p className="text-xs">Loading notifications...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-[720px] mx-auto self-center px-4 sm:px-6 pt-3 sm:pt-8 pb-24 md:pb-12 animate-fade-in relative z-10">
-
-      {/* THEME START */}
-      {/* Faint radial glow behind the header */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[120px] rounded-full pointer-events-none -z-10" />
+    <div className="w-full max-w-[640px] mx-auto self-center px-4 sm:px-6 pt-3 sm:pt-6 pb-24 md:pb-12 animate-fade-in relative z-10">
 
       <div className="space-y-4 sm:space-y-6">
         {/* Unified Main Heading */}
-        <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl sm:text-2xl md:text-[28px] font-semibold text-[var(--text)] tracking-tight">Notifications</h1>
-          {unreadCount > 0 && (
-            <span className="text-xs font-semibold text-[var(--on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-2.5 py-0.5 rounded-full shadow-md shadow-[var(--shadow-accent)]">
-              {unreadCount} new
-            </span>
-          )}
+        <div className="flex items-center justify-between pb-3 border-b border-[var(--card-border)]">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl sm:text-2xl md:text-[28px] font-semibold text-[var(--text)] tracking-tight">Notifications</h1>
+            {unreadCount > 0 && (
+              <span className="text-xs font-semibold text-[var(--on-accent)] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-2.5 py-0.5 rounded-full shadow-md shadow-[var(--shadow-accent)]">
+                {unreadCount} new
+              </span>
+            )}
+          </div>
         </div>
-      </div>
       
-      {notifications.length === 0 ? (
-        <div className="rounded-3xl p-12 border border-[var(--line)] bg-[var(--card)] shadow-xl shadow-[var(--shadow-card)] text-center space-y-4 flex flex-col items-center justify-center py-20 select-none">
-          <div className="w-14 h-14 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center text-[var(--muted)]">
-            <Heart className="w-6 h-6 text-[var(--muted)]" />
+        {notifications.length === 0 ? (
+          <div className="rounded-[20px] p-12 border border-[var(--card-border)] bg-[var(--card)] shadow-lg shadow-[var(--shadow-card)] text-center space-y-4 flex flex-col items-center justify-center py-20 select-none">
+            <div className="w-14 h-14 rounded-2xl bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-[var(--muted)]">
+              <Heart className="w-6 h-6 stroke-[1.8] text-[var(--muted)]" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--text)]">No notifications yet</h2>
+              <p className="text-xs text-[var(--muted)] max-w-xs mx-auto mt-2 leading-relaxed font-normal">
+                When people follow your account, like your posts, or comment on updates, they will appear here in real-time.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--text)]">No notifications yet</h2>
-            <p className="text-xs text-[var(--muted)] max-w-xs mx-auto mt-2 leading-relaxed font-normal">
-              When people follow your account, like your posts, or comment on updates, they will appear here in real-time.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6 sm:space-y-8">
-          {/* New (within 24 hours) */}
-          {newActivities.length > 0 && (
-            <section aria-labelledby="heading-new-notifications" className="space-y-3">
-              <div className="flex items-center gap-3 py-1">
-                <h2 id="heading-new-notifications" className="text-xs font-medium text-[var(--muted)]">New</h2>
-                <div className="flex-1 h-[1px] bg-[var(--line)]" />
-              </div>
-              <div className="bg-[var(--card)] border border-[var(--line)] rounded-2xl sm:rounded-3xl shadow-xl shadow-[var(--shadow-card)] overflow-hidden divide-y divide-[var(--line)]">
-                {newActivities.map((item, idx) => renderItem(item, idx))}
-              </div>
-            </section>
-          )}
+        ) : (
+          <div className="space-y-6">
+            {/* Today (within 24 hours) */}
+            {newActivities.length > 0 && (
+              <section aria-labelledby="heading-new-notifications" className="space-y-2.5">
+                <div className="flex items-center gap-3 py-1">
+                  <h2 id="heading-new-notifications" className="text-xs font-semibold text-[var(--muted)]">Today</h2>
+                  <div className="flex-1 h-[1px] bg-[var(--card-border)]" />
+                </div>
+                <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-[20px] shadow-lg shadow-[var(--shadow-card)] overflow-hidden divide-y divide-[var(--card-border)]">
+                  {newActivities.map((item, idx) => renderItem(item, idx))}
+                </div>
+              </section>
+            )}
 
-          {/* Earlier (older than 24 hours) */}
-          {earlierActivities.length > 0 && (
-            <section aria-labelledby="heading-earlier-notifications" className="space-y-3">
-              <div className="flex items-center gap-3 py-1">
-                <h2 id="heading-earlier-notifications" className="text-xs font-medium text-[var(--muted)]">Earlier</h2>
-                <div className="flex-1 h-[1px] bg-[var(--line)]" />
-              </div>
-              <div className="bg-[var(--card)] border border-[var(--line)] rounded-2xl sm:rounded-3xl shadow-xl shadow-[var(--shadow-card)] overflow-hidden divide-y divide-[var(--line)]">
-                {earlierActivities.map((item, idx) => renderItem(item, idx))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
+            {/* Earlier (older than 24 hours) */}
+            {earlierActivities.length > 0 && (
+              <section aria-labelledby="heading-earlier-notifications" className="space-y-2.5">
+                <div className="flex items-center gap-3 py-1">
+                  <h2 id="heading-earlier-notifications" className="text-xs font-semibold text-[var(--muted)]">Earlier</h2>
+                  <div className="flex-1 h-[1px] bg-[var(--card-border)]" />
+                </div>
+                <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-[20px] shadow-lg shadow-[var(--shadow-card)] overflow-hidden divide-y divide-[var(--card-border)]">
+                  {earlierActivities.map((item, idx) => renderItem(item, idx))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
       </div>
-      {/* THEME END */}
 
     </div>
   );

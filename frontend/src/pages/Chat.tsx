@@ -4209,7 +4209,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 placeholder="Search chats..."
                 value={chatFilterQuery}
                 onChange={(e) => setChatFilterQuery(e.target.value)}
-                className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)]/30 rounded-full py-2 pl-9 pr-8 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all"
+                className="w-full bg-[var(--input)] border border-[var(--card-border)] focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)]/30 rounded-full py-2 pl-9 pr-8 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all shadow-sm"
                 autoComplete="off"
               />
               {chatFilterQuery && (
@@ -4741,8 +4741,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     <div 
                       key={msg.id} 
                       id={`msg-${msg.id}`} 
-                      className={`flex flex-col gap-1.5 w-full min-w-0 max-w-[min(80%,520px)] ${isMe ? 'ml-auto items-end' : 'items-start'}`}
-                      style={{ maxWidth: 'min(80%, 520px)', minWidth: 0 }}
+                      className={`flex flex-col gap-1.5 w-full min-w-0 max-w-[min(78%,520px)] ${isMe ? 'ml-auto items-end' : 'items-start'}`}
+                      style={{ maxWidth: 'min(78%, 520px)', minWidth: 0 }}
                     >
                       {/* Group Chat: sender name label */}
                       {activeConvo?.is_group && !isMe && (() => {
@@ -4979,10 +4979,10 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                 className={`chat-bubble px-4 py-2.5 rounded-[18px] text-xs sm:text-sm leading-relaxed shadow-sm break-words whitespace-pre-wrap min-w-0 max-w-full ${
                                   isMe 
                                     ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-br-[4px]' 
-                                    : 'bg-[var(--card)] border border-[var(--line)] text-[var(--text)] rounded-bl-[4px]'
+                                    : 'bg-[var(--card)] border border-[var(--card-border)] text-[var(--text)] rounded-bl-[4px]'
                                 }`}
                                 style={{
-                                  maxWidth: 'min(80%, 520px)',
+                                  maxWidth: 'min(78%, 520px)',
                                   minWidth: 0,
                                   overflowWrap: 'anywhere',
                                   wordBreak: 'break-word',

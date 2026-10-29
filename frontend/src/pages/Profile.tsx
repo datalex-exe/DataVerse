@@ -2897,29 +2897,38 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
   }
 
 
-  /* UI UPDATE START - Profile Page UI Redesign (Desktop & Phone responsive) */
+  /* UI UPDATE START - Profile Page UI Redesign (Desktop & Phone unified reference design) */
   return (
-    <div className="w-full max-w-[980px] mx-auto self-center px-4 sm:px-6 pt-2 sm:pt-8 pb-24 md:pb-12 animate-fade-in relative z-10">
+    <div className="w-full max-w-[980px] mx-auto self-center px-0 sm:px-6 pt-0 sm:pt-4 pb-24 md:pb-12 animate-fade-in relative z-10">
       
-      {/* Background Ambient Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-b from-brand-600/15 via-brand-500/5 to-transparent blur-[120px] rounded-full pointer-events-none -z-10" />
+      {/* Cover Area Banner */}
+      <div className="relative w-full h-36 sm:h-52 overflow-hidden bg-gradient-to-tr from-[color-mix(in_srgb,var(--side)_85%,transparent)] via-[color-mix(in_srgb,var(--accent)_25%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_18%,transparent)] border-b sm:border border-[var(--card-border)] sm:rounded-2xl">
+        <div 
+          aria-hidden="true" 
+          className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--glow),transparent)] opacity-40 pointer-events-none" 
+        />
+        {!isOwnProfile && (
+          <button
+            onClick={() => onNavigate('feed')}
+            className="absolute top-3 left-3 w-9 h-9 rounded-full bg-[color-mix(in_srgb,var(--side)_75%,transparent)] backdrop-blur-md border border-[var(--card-border)] text-[var(--text)] flex items-center justify-center hover:bg-[var(--hover)] transition-all cursor-pointer z-10 active:scale-95"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-4 h-4 stroke-[2]" />
+          </button>
+        )}
+      </div>
 
-      <div className="space-y-6 sm:space-y-8">
-        {/* Profile Header card */}
-        <div className="select-none">
-        
-        {/* DESKTOP HEADER (min-width: 768px / md) */}
-        <div className="hidden md:flex items-start gap-10">
+      <div className="px-4 sm:px-6">
+        {/* Header content overlapping the cover banner */}
+        <div className="select-none relative">
           
-          {/* Avatar (150px) with gradient ring */}
-          {/* THEME START */}
-          <div className="relative flex-shrink-0">
-            <div className="p-[3px] rounded-full bg-gradient-to-tr from-[var(--accent)] via-[var(--accent-2)] to-[var(--gold)] shadow-xl shadow-[var(--shadow-card)]">
-              <div className="w-[146px] h-[146px] rounded-full bg-[var(--side)] p-1 overflow-hidden relative group">
-                <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-[var(--input)] border border-[var(--line)]">
-          {/* THEME END */}
+          {/* Avatar (96px) overlapping banner with 3px var(--accent-2) ring */}
+          <div className="flex items-end justify-between -mt-12 sm:-mt-16 mb-3">
+            <div className="relative flex-shrink-0">
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[var(--card)] border-[3px] border-[var(--accent-2)] shadow-xl overflow-hidden relative group">
+                <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-[var(--input)]">
                   {uploadingAvatar ? (
-                    <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
+                    <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
                   ) : profile.avatar_url ? (
                     <img 
                       src={`/api/media/file/${profile.avatar_url}`} 
@@ -2927,224 +2936,24 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                       className="w-full h-full object-cover" 
                     />
                   ) : (
-                    <span className="text-3xl font-black text-brand-400 uppercase">
+                    <span className="text-2xl font-bold text-[var(--accent-2)] uppercase">
                       {profile.username.substring(0, 2)}
                     </span>
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* Camera badge at bottom right */}
-            {isOwnProfile && (
-              <label 
-                htmlFor="profile-avatar-file-input"
-                className="absolute bottom-1 right-1 p-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-full transition-all border-2 border-[#050508] shadow-lg shadow-brand-600/40 cursor-pointer active:scale-95" 
-                title="Change Avatar"
-              >
-                <Camera className="w-4 h-4" />
-                <input 
-                  id="profile-avatar-file-input"
-                  aria-label="Upload profile avatar"
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleAvatarChange} 
-                  className="hidden" 
-                />
-              </label>
-            )}
-          </div>
-
-          {/* Info Column */}
-          <div className="flex-1 space-y-4 pt-1">
-            
-            {/* Top row: Name, Badge, Handle & Actions (Settings at top right) */}
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-black text-white flex items-center gap-2 tracking-tight">
-                  {profile.display_name || profile.username}
-                  {!!profile.is_verified && <VerifiedBadge size={18} />}
-                </h1>
-                <p className="text-sm font-medium text-slate-400 mt-0.5">
-                  @{profile.username}
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2">
-                {isOwnProfile ? (
-                  <>
-                    <button
-                      onClick={() => setShowSettings(true)}
-                      className="px-4 py-2 bg-transparent hover:bg-white/[0.06] border border-white/10 hover:border-brand-500/50 text-slate-200 hover:text-white text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-2"
-                    >
-                      <Settings className="w-4 h-4 text-slate-400" />
-                      Settings
-                    </button>
-                    <button
-                      onClick={() => logout()}
-                      className="md:hidden px-4 py-2 bg-red-650/10 border border-red-500/20 hover:bg-red-650/20 text-red-500 hover:text-red-400 text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-2"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Log Out
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {!isBlocked ? (
-                      <>
-                        <button
-                          onClick={handleFollowToggle}
-                          className={`px-5 py-2 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 ${
-                            profile.is_following
-                              ? 'bg-slate-900 border border-white/10 text-slate-300 hover:text-white'
-                              : profile.is_requested
-                              ? 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200'
-                              : 'bg-brand-600 hover:bg-brand-500 text-white shadow-brand-500/20'
-                          }`}
-                        >
-                          {profile.is_following ? (
-                            <>
-                              <Check className="w-3.5 h-3.5" />
-                              Following
-                            </>
-                          ) : profile.is_requested ? (
-                            <>
-                              <Clock className="w-3.5 h-3.5" />
-                              Requested
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="w-3.5 h-3.5" />
-                              Follow
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={handleMessageUser}
-                          className="px-5 py-2 bg-transparent border border-white/10 hover:bg-white/[0.06] text-slate-200 hover:text-white text-xs font-semibold rounded-xl shadow-sm transition-all"
-                        >
-                          Message
-                        </button>
-
-                        <button
-                          onClick={handleBlockUser}
-                          className="px-4 py-2 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 hover:text-red-300 text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center gap-1.5"
-                        >
-                          Block
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        {!viewerBlocked && (
-                          <button
-                            onClick={handleUnblockUser}
-                            className="px-5 py-2 bg-slate-900 border border-white/10 hover:bg-slate-850 text-white text-xs font-semibold rounded-xl shadow transition-all"
-                          >
-                            Unblock
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Stats row: "4 posts   7 followers   7 following" */}
-            <div className="flex items-center gap-8 py-1">
-              <div className="flex items-baseline gap-1.5">
-                <span className="font-bold text-white text-base">
-                  {isBlocked ? 0 : formatStat(profile.posts_count ?? posts.length)}
-                </span>
-                <span className="text-slate-400 text-sm font-normal">posts</span>
-              </div>
-              <div 
-                onClick={() => {
-                  if (!isBlocked && canSeeStats) {
-                    fetchFollowers();
-                  }
-                }}
-                className={`flex items-baseline gap-1.5 ${!isBlocked && canSeeStats ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
-              >
-                <span className="font-bold text-white text-base">
-                  {isBlocked ? 0 : formatStat(profile.followers_count)}
-                </span>
-                <span className="text-slate-400 text-sm font-normal">followers</span>
-              </div>
-              <div 
-                onClick={() => {
-                  if (!isBlocked && canSeeStats) {
-                    fetchFollowing();
-                  }
-                }}
-                className={`flex items-baseline gap-1.5 ${!isBlocked && canSeeStats ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
-              >
-                <span className="font-bold text-white text-base">
-                  {isBlocked ? 0 : formatStat(profile.following_count)}
-                </span>
-                <span className="text-slate-400 text-sm font-normal">following</span>
-              </div>
-            </div>
-
-            {/* Bio line */}
-            <div className="pt-0.5">
-              {isBlocked ? (
-                <p className="text-sm text-slate-500 italic">No information available.</p>
-              ) : profile.bio ? (
-                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap max-w-xl">
-                  {profile.bio}
-                </p>
-              ) : (
-                <p className="text-sm text-slate-400 italic">No bio shared yet.</p>
-              )}
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* PHONE HEADER (below 768px / md:hidden) */}
-        <div className="md:hidden space-y-4">
-          
-          {/* Top row: Avatar on left, Stats on right (Instagram-style) */}
-          <div className="flex items-center gap-6">
-            
-            {/* Avatar (about 96px) with gradient ring */}
-            {/* THEME START */}
-            <div className="relative flex-shrink-0">
-              <div className="p-[2.5px] rounded-full bg-gradient-to-tr from-[var(--accent)] via-[var(--accent-2)] to-[var(--gold)] shadow-lg shadow-[var(--shadow-card)]">
-                <div className="w-24 h-24 rounded-full bg-[var(--side)] p-0.5 overflow-hidden relative group">
-                  <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-[var(--input)] border border-[var(--line)]">
-            {/* THEME END */}
-                    {uploadingAvatar ? (
-                      <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
-                    ) : profile.avatar_url ? (
-                      <img 
-                        src={`/api/media/file/${profile.avatar_url}`} 
-                        alt={profile.username} 
-                        className="w-full h-full object-cover" 
-                      />
-                    ) : (
-                      <span className="text-2xl font-black text-brand-400 uppercase">
-                        {profile.username.substring(0, 2)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Camera badge */}
+              {/* Camera upload badge for own profile */}
               {isOwnProfile && (
                 <label 
-                  htmlFor="profile-avatar-mobile-file-input"
-                  className="absolute bottom-0 right-0 p-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-full transition-all border-2 border-[#050508] shadow-md cursor-pointer active:scale-95" 
+                  htmlFor="profile-avatar-file-input"
+                  className="absolute bottom-0 right-0 p-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-full border-2 border-[var(--bg)] shadow-md cursor-pointer active:scale-95 transition-all" 
                   title="Change Avatar"
+                  aria-label="Change Avatar"
                 >
                   <Camera className="w-3.5 h-3.5" />
                   <input 
-                    id="profile-avatar-mobile-file-input"
+                    id="profile-avatar-file-input"
                     aria-label="Upload profile avatar"
                     type="file" 
                     accept="image/*" 
@@ -3154,89 +2963,103 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                 </label>
               )}
             </div>
-
-            {/* Stats row on the right (3 columns) */}
-            <div className="flex-1 flex justify-around items-center text-center">
-              <div className="flex flex-col">
-                <span className="font-extrabold text-white text-base">
-                  {isBlocked ? 0 : formatStat(profile.posts_count ?? posts.length)}
-                </span>
-                <span className="text-slate-400 text-xs font-normal">posts</span>
-              </div>
-              <div 
-                onClick={() => {
-                  if (!isBlocked && canSeeStats) {
-                    fetchFollowers();
-                  }
-                }}
-                className={`flex flex-col ${!isBlocked && canSeeStats ? 'cursor-pointer active:opacity-75' : 'cursor-default'}`}
-              >
-                <span className="font-extrabold text-white text-base">
-                  {isBlocked ? 0 : formatStat(profile.followers_count)}
-                </span>
-                <span className="text-slate-400 text-xs font-normal">followers</span>
-              </div>
-              <div 
-                onClick={() => {
-                  if (!isBlocked && canSeeStats) {
-                    fetchFollowing();
-                  }
-                }}
-                className={`flex flex-col ${!isBlocked && canSeeStats ? 'cursor-pointer active:opacity-75' : 'cursor-default'}`}
-              >
-                <span className="font-extrabold text-white text-base">
-                  {isBlocked ? 0 : formatStat(profile.following_count)}
-                </span>
-                <span className="text-slate-400 text-xs font-normal">following</span>
-              </div>
-            </div>
-
           </div>
 
-          {/* Details below: Name, Badge, Handle, Bio */}
-          <div className="space-y-1.5">
-            <h1 className="text-lg font-black text-white flex items-center gap-1.5">
-              {profile.display_name || profile.username}
-              {!!profile.is_verified && <VerifiedBadge size={16} />}
+          {/* User Name, Badge, Handle & Bio */}
+          <div className="space-y-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-[var(--text)] flex items-center gap-2 tracking-tight">
+              <span>{profile.display_name || profile.username}</span>
+              {!!profile.is_verified && <VerifiedBadge size={18} />}
             </h1>
-            <p className="text-xs font-medium text-slate-400">
+            <p className="text-xs sm:text-sm font-medium text-[var(--muted)]">
               @{profile.username}
             </p>
-            <div className="pt-1">
+            <div className="pt-1.5">
               {isBlocked ? (
-                <p className="text-xs text-slate-500 italic">No information available.</p>
+                <p className="text-xs sm:text-sm text-[var(--muted)] italic">No information available.</p>
               ) : profile.bio ? (
-                <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap">
+                <p className="text-xs sm:text-sm text-[var(--text)] leading-relaxed whitespace-pre-wrap max-w-2xl">
                   {profile.bio}
                 </p>
               ) : (
-                <p className="text-xs text-slate-400 italic">No bio shared yet.</p>
+                <p className="text-xs sm:text-sm text-[var(--muted)] italic">No bio shared yet.</p>
               )}
             </div>
           </div>
 
-          {/* Full-width Actions under that */}
-          <div className="pt-1">
+          {/* Three Centered Stats: posts, followers, following */}
+          <div className="flex items-center justify-around py-3 sm:py-4 border-y border-[var(--card-border)] my-4">
+            <div className="flex flex-col items-center">
+              <span className="text-base sm:text-lg font-bold text-[var(--text)]">
+                {isBlocked ? 0 : formatStat(profile.posts_count ?? posts.length)}
+              </span>
+              <span className="text-xs text-[var(--muted)] font-medium">posts</span>
+            </div>
+            <div 
+              onClick={() => {
+                if (!isBlocked && canSeeStats) {
+                  fetchFollowers();
+                }
+              }}
+              className={`flex flex-col items-center ${!isBlocked && canSeeStats ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default'}`}
+            >
+              <span className="text-base sm:text-lg font-bold text-[var(--text)]">
+                {isBlocked ? 0 : formatStat(profile.followers_count)}
+              </span>
+              <span className="text-xs text-[var(--muted)] font-medium">followers</span>
+            </div>
+            <div 
+              onClick={() => {
+                if (!isBlocked && canSeeStats) {
+                  fetchFollowing();
+                }
+              }}
+              className={`flex flex-col items-center ${!isBlocked && canSeeStats ? 'cursor-pointer hover:opacity-80 active:scale-95 transition-all' : 'cursor-default'}`}
+            >
+              <span className="text-base sm:text-lg font-bold text-[var(--text)]">
+                {isBlocked ? 0 : formatStat(profile.following_count)}
+              </span>
+              <span className="text-xs text-[var(--muted)] font-medium">following</span>
+            </div>
+          </div>
+
+          {/* Action Row: Edit Profile + Settings gear */}
+          <div className="mb-4">
             {isOwnProfile ? (
-              <button
-                onClick={() => setShowSettings(true)}
-                className="w-full py-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-200 text-xs font-semibold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
-              >
-                <Settings className="w-4 h-4 text-slate-400" />
-                Settings
-              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsTab('edit_profile');
+                    setShowSettings(true);
+                  }}
+                  className="flex-1 h-10 px-4 rounded-full border border-[var(--card-border)] text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] hover:border-[var(--accent-2)] transition-all flex items-center justify-center active:scale-[0.98] cursor-pointer"
+                >
+                  Edit Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(true)}
+                  className="w-10 h-10 rounded-xl border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)] transition-all flex items-center justify-center active:scale-95 cursor-pointer flex-shrink-0"
+                  aria-label="Settings"
+                  title="Settings"
+                >
+                  <Settings className="w-4 h-4 stroke-[1.8]" />
+                </button>
+              </div>
             ) : (
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2.5">
                 {!isBlocked ? (
                   <>
                     <button
+                      type="button"
                       onClick={handleFollowToggle}
-                      className={`flex-1 py-2.5 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 ${
+                      className={`flex-1 h-10 px-4 text-xs sm:text-sm font-semibold rounded-full transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] cursor-pointer ${
                         profile.is_following
-                          ? 'bg-slate-900 border border-white/10 text-slate-300'
+                          ? 'border border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--hover)]'
                           : profile.is_requested
-                          ? 'bg-slate-800 border border-slate-700 text-slate-400'
-                          : 'bg-brand-600 text-white'
+                          ? 'border border-[var(--card-border)] text-[var(--muted)] bg-[var(--card)]'
+                          : 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
                       }`}
                     >
                       {profile.is_following ? (
@@ -3258,15 +3081,17 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     </button>
 
                     <button
+                      type="button"
                       onClick={handleMessageUser}
-                      className="flex-1 py-2.5 bg-white/[0.04] border border-white/10 text-slate-200 text-xs font-semibold rounded-xl shadow-sm transition-all text-center"
+                      className="flex-1 h-10 px-4 border border-[var(--card-border)] text-[var(--accent-2)] hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] text-xs sm:text-sm font-semibold rounded-full transition-all text-center flex items-center justify-center active:scale-[0.98] cursor-pointer"
                     >
                       Message
                     </button>
 
                     <button
+                      type="button"
                       onClick={handleBlockUser}
-                      className="py-2.5 px-4 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold rounded-xl shadow-sm transition-all"
+                      className="h-10 px-4 border border-[var(--card-border)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] text-xs sm:text-sm font-semibold rounded-full transition-all flex items-center justify-center active:scale-[0.98] cursor-pointer"
                     >
                       Block
                     </button>
@@ -3275,8 +3100,9 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                   <>
                     {!viewerBlocked && (
                       <button
+                        type="button"
                         onClick={handleUnblockUser}
-                        className="w-full py-2.5 bg-slate-900 border border-white/10 text-white text-xs font-semibold rounded-xl shadow transition-all"
+                        className="w-full h-10 border border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--hover)] text-xs sm:text-sm font-semibold rounded-full transition-all flex items-center justify-center cursor-pointer"
                       >
                         Unblock
                       </button>
@@ -3289,218 +3115,216 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
 
         </div>
 
-      </div>
-
-      {/* Tabs navigation: Posts, Saved (Sentence case, semibold, icons, sliding underline, sticky) */}
-      <div className="space-y-6">
-        {isBlocked ? (
-          <div className="flex flex-col items-center justify-center py-20 border border-white/[0.04] bg-[#060608]/40 rounded-3xl p-8 select-none text-center">
-            <div className="w-16 h-16 rounded-full bg-slate-900 border border-white/[0.04] flex items-center justify-center mb-4 text-slate-400">
-              <Lock className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-extrabold text-white">
-              {viewerBlocked ? 'Account Not Accessible' : 'User Blocked'}
-            </h3>
-            <p className="text-xs text-slate-500 mt-2 max-w-sm">
-              {viewerBlocked 
-                ? 'This profile is not accessible.' 
-                : 'You have blocked this user. Unblock to view their profile details and posts.'}
-            </p>
-          </div>
-        ) : profile.is_private && !profile.is_following && !isOwnProfile && !currentUser?.is_admin && !currentUser?.is_top_admin ? (
-          <div className="flex items-center justify-center py-16 px-4 select-none border-t border-white/[0.04] mt-6">
-            <div className="flex items-center gap-4 text-left max-w-sm">
-              <div className="w-12 h-12 rounded-full border border-white/20 flex items-center justify-center text-slate-300 flex-shrink-0">
-                <Lock className="w-5 h-5 stroke-[1.5]" />
+        {/* Tabs navigation: Posts, Saved (Sliding var(--accent-2) underline) */}
+        <div className="space-y-4">
+          {isBlocked ? (
+            <div className="flex flex-col items-center justify-center py-20 border border-[var(--card-border)] bg-[var(--card)] rounded-3xl p-8 select-none text-center">
+              <div className="w-16 h-16 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center mb-4 text-[var(--muted)]">
+                <Lock className="w-6 h-6 stroke-[1.8]" />
               </div>
-              <div>
-                <h3 className="text-sm font-extrabold text-white">This profile is private</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {profile.is_requested 
-                    ? 'Wait for the owner to accept your follow request.' 
-                    : 'Follow to see their photos and videos.'}
-                </p>
+              <h3 className="text-sm font-bold text-[var(--text)]">
+                {viewerBlocked ? 'Account Not Accessible' : 'User Blocked'}
+              </h3>
+              <p className="text-xs text-[var(--muted)] mt-2 max-w-sm">
+                {viewerBlocked 
+                  ? 'This profile is not accessible.' 
+                  : 'You have blocked this user. Unblock to view their profile details and posts.'}
+              </p>
+            </div>
+          ) : profile.is_private && !profile.is_following && !isOwnProfile && !currentUser?.is_admin && !currentUser?.is_top_admin ? (
+            <div className="flex items-center justify-center py-16 px-4 select-none border-t border-[var(--card-border)] mt-4">
+              <div className="flex items-center gap-4 text-left max-w-sm">
+                <div className="w-12 h-12 rounded-full border border-[var(--card-border)] flex items-center justify-center text-[var(--muted)] flex-shrink-0">
+                  <Lock className="w-5 h-5 stroke-[1.8]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text)]">This profile is private</h3>
+                  <p className="text-xs text-[var(--muted)] mt-0.5">
+                    {profile.is_requested 
+                      ? 'Wait for the owner to accept your follow request.' 
+                      : 'Follow to see their photos and videos.'}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <>
-            {/* Sticky Tabs Bar */}
-            <div className="sticky top-0 z-20 bg-[#050508]/85 backdrop-blur-md border-b border-white/[0.06] -mx-4 sm:-mx-6 px-4 sm:px-6">
-              <div className="flex w-full sm:w-auto sm:justify-start gap-2 sm:gap-8">
-                
-                <button
-                  onClick={() => setActiveSubTab('posts')}
-                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-3.5 sm:py-4 px-2 text-xs sm:text-sm font-semibold transition-all relative ${
-                    activeSubTab === 'posts'
-                      ? 'text-white'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Grid className="w-4 h-4" />
-                  <span>Posts</span>
-                  {/* THEME START */}
-                  {activeSubTab === 'posts' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] rounded-full" />
-                  )}
-                </button>
-
-                {isOwnProfile && (
+          ) : (
+            <>
+              {/* Sticky Tabs Bar */}
+              <div className="sticky top-0 z-20 bg-[color-mix(in_srgb,var(--side)_90%,transparent)] backdrop-blur-md border-b border-[var(--card-border)]">
+                <div className="flex w-full">
+                  
                   <button
-                    onClick={() => setActiveSubTab('saved')}
-                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 py-3.5 sm:py-4 px-2 text-xs sm:text-sm font-semibold transition-all relative ${
-                      activeSubTab === 'saved'
-                        ? 'text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                    type="button"
+                    onClick={() => setActiveSubTab('posts')}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-xs sm:text-sm font-semibold transition-all relative cursor-pointer ${
+                      activeSubTab === 'posts'
+                        ? 'text-[var(--accent-2)]'
+                        : 'text-[var(--muted)] hover:text-[var(--text)]'
                     }`}
                   >
-                    <Bookmark className="w-4 h-4" />
-                    <span>Saved</span>
-                    {activeSubTab === 'saved' && (
-                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] rounded-full" />
+                    <Grid className="w-4 h-4 stroke-[1.8]" />
+                    <span>Posts</span>
+                    {activeSubTab === 'posts' && (
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-2)] shadow-[0_0_8px_var(--shadow-accent)]" />
                     )}
                   </button>
-                )}
-                {/* THEME END */}
 
-              </div>
-            </div>
-
-            {/* Tab display */}
-            {activeSubTab === 'posts' && (
-              posts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
-                  <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center text-slate-500 mb-3">
-                    <Grid className="w-6 h-6 text-slate-400" />
-                  </div>
-                  <p className="text-sm font-semibold text-slate-300">No posts shared yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-0.5 sm:gap-4 animate-fade-in">
-                  {posts.map((post, idx) => (
-                    <div 
-                      key={post.id} 
-                      onClick={() => {
-                        window.history.pushState({}, '', `/?post=${post.id}`);
-                        onNavigate('feed');
-                      }}
-                      style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
-                      className="relative aspect-square sm:rounded-[18px] overflow-hidden bg-slate-900 border border-white/[0.04] group cursor-pointer shadow-md select-none animate-fade-in"
+                  {isOwnProfile && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveSubTab('saved')}
+                      className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-xs sm:text-sm font-semibold transition-all relative cursor-pointer ${
+                        activeSubTab === 'saved'
+                          ? 'text-[var(--accent-2)]'
+                          : 'text-[var(--muted)] hover:text-[var(--text)]'
+                      }`}
                     >
-                      {post.media && post.media[0] ? (
-                        post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
-                          <video 
-                            src={`/api/media/file/${post.media[0].r2_key}`} 
-                            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
-                            preload="metadata"
-                            muted
-                            playsInline
-                          />
-                        ) : (
-                          <img 
-                            src={`/api/media/file/${post.media[0].r2_key}`} 
-                            alt={post.caption ? `Post: ${post.caption}` : `Post by ${profile.username}`} 
-                            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
-                            loading="lazy"
-                          />
-                        )
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-700 text-xs">Media unavailable</div>
+                      <Bookmark className="w-4 h-4 stroke-[1.8]" />
+                      <span>Saved</span>
+                      {activeSubTab === 'saved' && (
+                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--accent-2)] shadow-[0_0_8px_var(--shadow-accent)]" />
                       )}
-                      
-                      {/* Gradient overlay & Stats (zoom on hover + fade in from bottom) */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 flex items-center justify-center transition-opacity duration-200">
-                        <div className="flex items-center gap-5 text-white">
-                          <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                    </button>
+                  )}
+
+                </div>
+              </div>
+
+              {/* Tab display */}
+              {activeSubTab === 'posts' && (
+                posts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
+                    <div className="w-14 h-14 rounded-2xl bg-[var(--card)] border border-[var(--card-border)] flex items-center justify-center text-[var(--muted)] mb-3">
+                      <Grid className="w-6 h-6 stroke-[1.8]" />
+                    </div>
+                    <p className="text-sm font-semibold text-[var(--text)]">No posts shared yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-0.5 sm:gap-3 animate-fade-in">
+                    {posts.map((post, idx) => (
+                      <div 
+                        key={post.id} 
+                        onClick={() => {
+                          window.history.pushState({}, '', `/?post=${post.id}`);
+                          onNavigate('feed');
+                        }}
+                        style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+                        className="relative aspect-square sm:rounded-2xl overflow-hidden bg-[var(--card)] border border-[var(--card-border)] group cursor-pointer shadow-sm select-none animate-fade-in"
+                      >
+                        {post.media && post.media[0] ? (
+                          post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
+                            <video 
+                              src={`/api/media/file/${post.media[0].r2_key}`} 
+                              className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                              preload="metadata"
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img 
+                              src={`/api/media/file/${post.media[0].r2_key}`} 
+                              alt={post.caption ? `Post: ${post.caption}` : `Post by ${profile.username}`} 
+                              className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                              loading="lazy"
+                            />
+                          )
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[var(--muted)] text-xs">Media unavailable</div>
+                        )}
+                        
+                        {/* Gradient overlay & Stats on hover/tap */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 flex items-center justify-center transition-opacity duration-200">
+                          <div className="flex items-center gap-4 text-white">
+                            <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                              <Heart className="w-4 h-4 fill-white" />
+                              <span>{post.likes_count}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                              <MessageCircle className="w-4 h-4 fill-white" />
+                              <span>{post.comments_count}</span>
+                            </div>
+                          </div>
+
+                          {/* Top-right Trash Button inside overlay if owner/admin */}
+                          {(isOwnProfile || currentUser?.is_admin || currentUser?.is_top_admin) && (
+                            <button
+                              type="button"
+                              aria-label="Delete Post"
+                              onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
+                              className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-red-600/90 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-all active:scale-90 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                              title="Delete Post"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {activeSubTab === 'saved' && (
+                loadingSaved ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
+                  </div>
+                ) : savedPosts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
+                    <div className="w-14 h-14 rounded-2xl bg-[var(--card)] border border-[var(--card-border)] flex items-center justify-center text-[var(--muted)] mb-3">
+                      <Bookmark className="w-6 h-6 stroke-[1.8]" />
+                    </div>
+                    <p className="text-sm font-semibold text-[var(--text)]">No saved posts yet.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-0.5 sm:gap-3 animate-fade-in">
+                    {savedPosts.map((post, idx) => (
+                      <div 
+                        key={post.id}
+                        onClick={() => onNavigate('feed')}
+                        style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+                        className="relative aspect-square sm:rounded-2xl overflow-hidden border border-[var(--card-border)] bg-[var(--card)] group cursor-pointer select-none animate-fade-in"
+                      >
+                        {post.media && post.media[0] && (
+                          post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
+                            <video 
+                              src={`/api/media/file/${post.media[0].r2_key}`} 
+                              className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
+                              preload="metadata"
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img 
+                              src={`/api/media/file/${post.media[0].r2_key}`} 
+                              alt={post.caption ? `Saved post: ${post.caption}` : 'Saved post'} 
+                              className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
+                              loading="lazy"
+                            />
+                          )
+                        )}
+                        
+                        {/* Gradient Hover Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-4 z-10">
+                          <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
                             <Heart className="w-4 h-4 fill-white" />
                             <span>{post.likes_count}</span>
                           </div>
-                          <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                          <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
                             <MessageCircle className="w-4 h-4 fill-white" />
                             <span>{post.comments_count}</span>
                           </div>
                         </div>
-
-                        {/* Top-right Trash Button inside overlay if owner/admin */}
-                        {(isOwnProfile || currentUser?.is_admin || currentUser?.is_top_admin) && (
-                          <button
-                            type="button"
-                            aria-label="Delete Post"
-                            onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
-                            className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-red-650/90 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-all active:scale-90 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                            title="Delete Post"
-                          >
-                            <Trash className="w-3.5 h-3.5" />
-                          </button>
-                        )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            )}
-
-            {activeSubTab === 'saved' && (
-              loadingSaved ? (
-                <div className="flex items-center justify-center py-20">
-                  <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
-                </div>
-              ) : savedPosts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
-                  <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center text-slate-500 mb-3">
-                    <Bookmark className="w-6 h-6 text-slate-400" />
+                    ))}
                   </div>
-                  <p className="text-sm font-semibold text-slate-300">No saved posts yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-0.5 sm:gap-4 animate-fade-in">
-                  {savedPosts.map((post, idx) => (
-                    <div 
-                      key={post.id}
-                      onClick={() => onNavigate('feed')}
-                      style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
-                      className="relative aspect-square sm:rounded-[18px] overflow-hidden border border-white/[0.04] bg-slate-900 group cursor-pointer select-none animate-fade-in"
-                    >
-                      {post.media && post.media[0] && (
-                        post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
-                          <video 
-                            src={`/api/media/file/${post.media[0].r2_key}`} 
-                            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
-                            preload="metadata"
-                            muted
-                            playsInline
-                          />
-                        ) : (
-                          <img 
-                            src={`/api/media/file/${post.media[0].r2_key}`} 
-                            alt={post.caption ? `Saved post: ${post.caption}` : 'Saved post'} 
-                            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
-                            loading="lazy"
-                          />
-                        )
-                      )}
-                      
-                      {/* Gradient Hover Overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-5 z-10">
-                        <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
-                          <Heart className="w-4 h-4 fill-white" />
-                          <span>{post.likes_count}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
-                          <MessageCircle className="w-4 h-4 fill-white" />
-                          <span>{post.comments_count}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            )}
-          </>
-        )}
+                )
+              )}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* FOLLOWERS / FOLLOWING CONNECTIONS LIST MODAL */}
       {showConnectionsModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in select-none">
           <div 
@@ -3570,8 +3394,6 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
           </div>
         </div>
       )}
-
-      </div>
 
       {avatarToCrop && (
         <ImageCropper

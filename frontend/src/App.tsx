@@ -5,6 +5,7 @@ import {
   Search, 
   LogOut, 
   Loader2, 
+  Plus,
   PlusSquare, 
   Heart, 
   Send, 
@@ -346,7 +347,7 @@ const AppContent: React.FC = () => {
           ? 'h-[var(--vvh,100dvh)] min-h-0 overflow-hidden' 
           : 'min-h-[100dvh]'
       }`}
-      style={activeView === 'messages' ? { height: 'var(--vvh, 100dvh)' } : undefined}
+      style={activeView === 'messages' ? { height: 'var(--vvh, 100dvh)' } : { background: 'var(--bg-gradient, var(--bg))' }}
     >
       {/* Skip to Main Content Link for Keyboard and Screen Reader Accessibility */}
       <a 
@@ -356,8 +357,57 @@ const AppContent: React.FC = () => {
         Skip to main content
       </a>
 
-      {/* Background Ambient Glow */}
-      <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[140px] rounded-full pointer-events-none z-0"></div>
+      {/* Two soft blurred aurora glows (top-left and lower-right) fixed behind content */}
+      <div 
+        aria-hidden="true"
+        className="fixed top-0 left-0 w-[550px] h-[550px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[140px] rounded-full pointer-events-none -translate-x-1/3 -translate-y-1/3 z-0" 
+      />
+      <div 
+        aria-hidden="true"
+        className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[160px] rounded-full pointer-events-none translate-x-1/3 translate-y-1/3 z-0" 
+      />
+
+      {/* MOBILE TOP APP BAR (below 768px) - Reference: Logo tile + wordmark on left, action icons on right */}
+      {!hideBottomNav && activeView !== 'messages' && (
+        <header aria-label="Mobile Top Bar" className="md:hidden sticky top-0 left-0 right-0 h-14 bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border-b border-[var(--line)] flex items-center justify-between px-4 z-40 flex-shrink-0">
+          <div 
+            onClick={() => navigate('feed')}
+            className="flex items-center gap-2 cursor-pointer active:scale-95 transition-transform"
+          >
+            <div className="w-8 h-8 rounded-xl bg-[var(--side)] border border-[color-mix(in_srgb,var(--accent-2)_35%,transparent)] flex items-center justify-center p-1 shadow-sm">
+              <img 
+                src="/logo.png?v=2" 
+                alt="DataVerse Logo" 
+                width="22"
+                height="22"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <span className="text-base font-semibold tracking-wide">
+              <span className="text-[var(--text)]">Data</span><span className="text-[var(--accent-2)]">Verse</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => navigate('search')}
+              className="p-2 text-[var(--muted)] hover:text-[var(--text)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)] min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer"
+              aria-label="Search"
+            >
+              <Search className="w-5 h-5 stroke-[1.8]" />
+            </button>
+            <button
+              onClick={() => navigate('notifications')}
+              className="p-2 text-[var(--muted)] hover:text-[var(--text)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)] min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer relative"
+              aria-label="Notifications"
+            >
+              <Heart className="w-5 h-5 stroke-[1.8]" />
+              {unreadCount > 0 && (
+                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[var(--accent-2)]" />
+              )}
+            </button>
+          </div>
+        </header>
+      )}
 
       {/* Spacer to prevent content overlap with fixed sidebar on md and lg */}
       <div className="hidden md:block w-20 flex-shrink-0" />
@@ -381,7 +431,7 @@ const AppContent: React.FC = () => {
         
         <div className="w-full space-y-6">
           
-          {/* Logo DV circle -> DataVerse Text */}
+          {/* Logo tile + Wordmark */}
           <div 
             onClick={() => { navigate('feed'); }}
             className={`flex items-center gap-0 group-hover/sidebar:gap-3 px-2 py-2 cursor-pointer hover:bg-[var(--hover)] rounded-2xl transition-all duration-300 overflow-hidden w-full ${
@@ -389,22 +439,22 @@ const AppContent: React.FC = () => {
             }`}
           >
             <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-              <div className="w-9 h-9 rounded-xl bg-[#040b0d] border border-white/10 flex items-center justify-center p-1 shadow-sm">
+              <div className="w-9 h-9 rounded-xl bg-[var(--side)] border border-[color-mix(in_srgb,var(--accent-2)_35%,transparent)] flex items-center justify-center p-1 shadow-sm">
                 <img 
                   src="/logo.png?v=2" 
                   alt="DataVerse Logo" 
-                  width="32"
-                  height="32"
-                  className="w-8 h-8 object-contain"
+                  width="26"
+                  height="26"
+                  className="w-full h-full object-contain"
                 />
               </div>
             </div>
-            <span className={`text-base font-black tracking-wide whitespace-nowrap bg-gradient-to-r from-[var(--text)] to-[var(--accent-2)] bg-clip-text text-transparent transition-all duration-300 overflow-hidden ${
+            <span className={`text-base font-semibold tracking-wide whitespace-nowrap transition-all duration-300 overflow-hidden ${
               isSidebarHovered 
                 ? 'max-w-xs opacity-100' 
                 : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
             }`}>
-              DataVerse
+              <span className="text-[var(--text)]">Data</span><span className="text-[var(--accent-2)]">Verse</span>
             </span>
           </div>
 
@@ -419,12 +469,12 @@ const AppContent: React.FC = () => {
                 isSidebarHovered ? 'gap-3.5' : ''
               } ${
                 activeView === 'feed'
-                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)] font-semibold shadow-sm relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-r before:bg-[var(--accent-2)]'
                   : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
               <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                <Home className="w-5 h-5" />
+                <Home className="w-5 h-5 stroke-[1.8]" />
               </div>
               <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
                 isSidebarHovered 
@@ -443,12 +493,12 @@ const AppContent: React.FC = () => {
                 isSidebarHovered ? 'gap-3.5' : ''
               } ${
                 activeView === 'messages'
-                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)] font-semibold shadow-sm relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-r before:bg-[var(--accent-2)]'
                   : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
               <div className="relative w-6 h-6 flex items-center justify-center flex-shrink-0">
-                <Send className="w-5 h-5 transform rotate-[-25deg] translate-y-[-2px] translate-x-[-1px]" />
+                <Send className="w-5 h-5 stroke-[1.8] transform rotate-[-25deg] translate-y-[-2px] translate-x-[-1px]" />
                 {unreadChatsCount > 0 && activeView !== 'messages' && (
                   <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[12px] h-3 px-0.5 bg-[var(--accent)] rounded-full border border-[var(--side)] text-[7px] font-black text-[var(--on-accent)] shadow shadow-[var(--shadow-accent)]">
                     {unreadChatsCount}
@@ -472,12 +522,12 @@ const AppContent: React.FC = () => {
                 isSidebarHovered ? 'gap-3.5' : ''
               } ${
                 activeView === 'search'
-                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)] font-semibold shadow-sm relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-r before:bg-[var(--accent-2)]'
                   : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
               <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                <Search className="w-5 h-5" />
+                <Search className="w-5 h-5 stroke-[1.8]" />
               </div>
               <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
                 isSidebarHovered 
@@ -496,12 +546,12 @@ const AppContent: React.FC = () => {
                 isSidebarHovered ? 'gap-3.5' : ''
               } ${
                 activeView === 'notifications'
-                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)] font-semibold shadow-sm relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-r before:bg-[var(--accent-2)]'
                   : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
               <div className="relative w-6 h-6 flex items-center justify-center flex-shrink-0">
-                <Heart className="w-5 h-5" />
+                <Heart className="w-5 h-5 stroke-[1.8]" />
                 {unreadCount > 0 && activeView !== 'notifications' && (
                   <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[var(--accent-2)] rounded-full border border-[var(--side)] shadow shadow-[var(--shadow-accent)]" />
                 )}
@@ -523,12 +573,12 @@ const AppContent: React.FC = () => {
                 isSidebarHovered ? 'gap-3.5' : ''
               } ${
                 activeView === 'create'
-                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)] font-semibold shadow-sm relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-r before:bg-[var(--accent-2)]'
                   : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
               <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                <PlusSquare className="w-5 h-5" />
+                <PlusSquare className="w-5 h-5 stroke-[1.8]" />
               </div>
               <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
                 isSidebarHovered 
@@ -547,7 +597,7 @@ const AppContent: React.FC = () => {
                 isSidebarHovered ? 'gap-3.5' : ''
               } ${
                 activeView === 'profile'
-                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)] font-semibold shadow-sm relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-r before:bg-[var(--accent-2)]'
                   : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
               }`}
             >
@@ -576,12 +626,12 @@ const AppContent: React.FC = () => {
                   isSidebarHovered ? 'gap-3.5' : ''
                 } ${
                   activeView === 'admin'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] font-bold'
+                    ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)] font-semibold shadow-sm relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-r before:bg-[var(--accent-2)]'
                     : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
                 }`}
               >
                 <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                  <Shield className="w-5 h-5" />
+                  <Shield className="w-5 h-5 stroke-[1.8]" />
                 </div>
                 <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
                   isSidebarHovered 
@@ -689,67 +739,93 @@ const AppContent: React.FC = () => {
         {/* Home */}
         <button
           onClick={() => navigate('feed')}
-          className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all ${activeView === 'feed' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all ${
+            activeView === 'feed'
+              ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
+              : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
+          }`}
           aria-label="Home"
         >
-          <Home className="w-5.5 h-5.5" />
+          <Home className="w-5 h-5 stroke-[1.8]" />
+          <span className="text-[11px] tracking-tight mt-0.5">Home</span>
         </button>
 
         {/* Search */}
         <button
           onClick={() => navigate('search')}
-          className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all ${activeView === 'search' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
-          aria-label="Search"
+          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all ${
+            activeView === 'search'
+              ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
+              : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
+          }`}
+          aria-label="Explore"
         >
-          <Search className="w-5.5 h-5.5" />
+          <Search className="w-5 h-5 stroke-[1.8]" />
+          <span className="text-[11px] tracking-tight mt-0.5">Explore</span>
         </button>
 
         {/* Raised Create Button in Center */}
-        <button
-          onClick={() => navigate('create')}
-          aria-label="Create Post"
-          className="relative -top-4 w-12 h-12 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center shadow-lg shadow-[var(--shadow-accent)] border-2 border-[var(--side)] active:scale-95 hover:scale-105 transition-all flex-shrink-0"
-        >
-          <PlusSquare className="w-5 h-5" />
-        </button>
+        <div className="relative -top-4 flex flex-col items-center">
+          <button
+            onClick={() => navigate('create')}
+            aria-label="Create Post"
+            className="w-14 h-14 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center shadow-lg shadow-[var(--shadow-accent)] border-4 border-[var(--bg)] active:scale-95 hover:scale-105 transition-all flex-shrink-0 cursor-pointer"
+          >
+            <Plus className="w-6 h-6 stroke-[2.2]" />
+          </button>
+        </div>
 
         {/* Notifications */}
         <button
           onClick={() => navigate('notifications')}
-          className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all relative ${activeView === 'notifications' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all relative ${
+            activeView === 'notifications'
+              ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
+              : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
+          }`}
           aria-label="Notifications"
         >
           <div className="relative">
-            <Heart className="w-5.5 h-5.5" />
+            <Heart className="w-5 h-5 stroke-[1.8]" />
             {unreadCount > 0 && activeView !== 'notifications' && (
               <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[var(--accent-2)] rounded-full border border-[var(--side)]" />
             )}
           </div>
+          <span className="text-[11px] tracking-tight mt-0.5">Alerts</span>
         </button>
 
         {/* Messages */}
         <button
           onClick={() => navigate('messages')}
-          className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all relative ${activeView === 'messages' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all relative ${
+            activeView === 'messages'
+              ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
+              : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
+          }`}
           aria-label="Messages"
         >
           <div className="relative">
-            <Send className="w-5.5 h-5.5 transform rotate-[-25deg]" />
+            <Send className="w-5 h-5 stroke-[1.8] transform rotate-[-25deg]" />
             {unreadChatsCount > 0 && activeView !== 'messages' && (
               <span className="absolute -top-1 -right-1.5 flex items-center justify-center min-w-[12px] h-3 px-0.5 bg-[var(--accent)] rounded-full border border-[var(--side)] text-[7px] font-black text-[var(--on-accent)] shadow shadow-[var(--shadow-accent)]">
                 {unreadChatsCount}
               </span>
             )}
           </div>
+          <span className="text-[11px] tracking-tight mt-0.5">Chats</span>
         </button>
 
         {/* Profile */}
         <button
           onClick={() => navigate('profile')}
-          className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2"
+          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all ${
+            activeView === 'profile'
+              ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
+              : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
+          }`}
           aria-label="Profile"
         >
-          <div className={`w-6 h-6 rounded-full overflow-hidden border transition-all ${
+          <div className={`w-5.5 h-5.5 rounded-full overflow-hidden border transition-all ${
             activeView === 'profile' ? 'border-[var(--accent-2)] ring-2 ring-[var(--accent-2)]/30 scale-105' : 'border-[var(--line)]'
           }`}>
             {user.avatar_url ? (
@@ -760,16 +836,22 @@ const AppContent: React.FC = () => {
               </div>
             )}
           </div>
+          <span className="text-[11px] tracking-tight mt-0.5">Profile</span>
         </button>
 
         {/* Admin Console (Admin & Top Admin) */}
         {(user.is_admin || user.is_top_admin) && (
           <button
             onClick={() => navigate('admin')}
-            className={`min-w-[44px] min-h-[44px] flex items-center justify-center p-2 transition-all ${activeView === 'admin' ? 'text-[var(--accent-2)] scale-105' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+            className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all ${
+              activeView === 'admin'
+                ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
+                : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
+            }`}
             aria-label="Admin Panel"
           >
-            <Shield className="w-5.5 h-5.5" />
+            <Shield className="w-5 h-5 stroke-[1.8]" />
+            <span className="text-[11px] tracking-tight mt-0.5">Admin</span>
           </button>
         )}
 

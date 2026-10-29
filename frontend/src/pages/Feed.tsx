@@ -481,14 +481,14 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
       {/* Primary Page Heading for Screen Readers and Landmarks */}
       <h1 className="sr-only">Home Feed</h1>
 
-      <div className="px-0 sm:px-3 pt-3 sm:pt-5">
-        {/* COMPOSER - Single clean row on phone, slightly lighter card on desktop (#0c0c13) */}
+      <div className="px-0 sm:px-3 pt-2 sm:pt-4">
+        {/* COMPOSER - Single clean row on phone, themed card on desktop */}
         <div 
           onClick={() => onNavigate('create')}
-          className="sm:bg-[#0c0c13] sm:border sm:border-[#1c1c2b] sm:rounded-[20px] bg-transparent border-b border-[#1c1c2b]/80 p-4 sm:p-4 sm:mb-4 cursor-pointer group select-none transition-all duration-200 hover:border-brand-500/30"
+          className="sm:bg-[var(--card)] sm:border sm:border-[var(--card-border)] sm:rounded-[20px] bg-transparent border-b border-[var(--card-border)] p-4 sm:mb-4 cursor-pointer group select-none transition-all duration-200 hover:border-[var(--accent-2)]/40"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-400 shadow-inner flex-shrink-0">
+            <div className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--card-border)] overflow-hidden flex items-center justify-center text-xs font-bold text-[var(--accent-2)] shadow-inner flex-shrink-0">
               {user?.avatar_url ? (
                 <img src={`/api/media/file/${user.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
               ) : (
@@ -499,9 +499,10 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
               <span className="text-[var(--muted)] text-sm font-medium">What's happening?</span>
             </div>
             <button 
+              type="button"
               onClick={(e) => { e.stopPropagation(); onNavigate('create'); }}
               aria-label="Create a post"
-              className="min-h-[44px] px-4 py-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold rounded-full shadow-md shadow-[var(--shadow-accent)] active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              className="min-h-[40px] px-4 py-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold rounded-full shadow-md shadow-[var(--shadow-accent)] active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <PlusSquare className="w-4 h-4" aria-hidden="true" />
               <span>Post</span>
@@ -511,9 +512,10 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
 
         {/* Shared Post Filter Notice Banner */}
         {isSinglePostFiltered && (
-          <div className="p-3 bg-brand-950/20 border border-brand-900/30 rounded-2xl flex items-center justify-between text-xs max-w-md mx-auto mb-4 mx-4">
-            <span className="font-bold text-[var(--text)]">Viewing a shared post</span>
+          <div className="p-3 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl flex items-center justify-between text-xs max-w-md mx-auto mb-4 mx-4">
+            <span className="font-semibold text-[var(--text)]">Viewing a shared post</span>
             <button 
+              type="button"
               onClick={() => {
                 setIsSinglePostFiltered(false);
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -521,7 +523,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                 fetchFeed();
               }}
               aria-label="View full feed"
-              className="px-3 py-1 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-extrabold rounded-lg transition-colors uppercase tracking-wider text-[10px]"
+              className="px-3 py-1 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-bold rounded-lg transition-colors uppercase tracking-wider text-[10px] cursor-pointer"
             >
               View Full Feed
             </button>
@@ -540,9 +542,10 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
             <h2 className="font-extrabold text-sm text-[var(--text)]">Your Feed is Empty</h2>
             <p className="text-xs text-[var(--muted)] max-w-xs leading-relaxed">Follow creators or upload your first photo to begin!</p>
             <button 
+              type="button"
               onClick={() => onNavigate('create')}
               aria-label="Upload photo to start feed"
-              className="mt-2 py-2.5 px-5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold rounded-xl shadow-md transition-all uppercase tracking-wider"
+              className="mt-2 py-2.5 px-5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold rounded-full shadow-md transition-all uppercase tracking-wider cursor-pointer"
             >
               Upload Photo
             </button>
@@ -550,23 +553,21 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
         ) : (
           posts.map((post, index) => {
             const { caption: cleanCaption, room: postRoom } = getCleanCaptionAndRoom(post.caption);
-            /* THEME START */
             return (
               <article 
                 key={post.id} 
                 aria-labelledby={`post-${post.id}-title`}
-                className="post-card sm:bg-[var(--card)] sm:border sm:border-[var(--line)] sm:rounded-[20px] bg-transparent border-b border-[var(--line)] p-4 sm:p-5 sm:mb-4 sm:shadow-lg sm:shadow-[var(--shadow-card)] transition-all duration-200 relative lazy-content gpu post-enter"
+                className="post-card sm:bg-[var(--card)] sm:border sm:border-[var(--card-border)] sm:rounded-[20px] bg-transparent border-b border-[var(--card-border)] px-4 sm:p-5 py-4 sm:mb-4 sm:shadow-lg sm:shadow-[var(--shadow-card)] transition-all duration-200 relative lazy-content gpu post-enter"
                 style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}
               >
-                {/* POST CARD POLISH - #0c0c13 card with 20px radius on desktop, edge-to-edge with divider on mobile */}
-                {/* Header Line: Avatar, name, verified badge, handle, time on one line + more menu on right */}
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
+                {/* Header Line: 40px avatar, name + verified badge, time + visibility, 3-dots menu on right */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <button 
                       type="button"
                       onClick={() => onNavigate('profile', post.username)}
                       aria-label={`View ${post.username}'s profile`}
-                      className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 overflow-hidden flex items-center justify-center text-xs font-bold text-brand-400 select-none shadow flex-shrink-0 cursor-pointer hover:border-brand-500/50 transition-colors focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+                      className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--card-border)] overflow-hidden flex items-center justify-center text-xs font-bold text-[var(--accent-2)] select-none shadow-sm flex-shrink-0 cursor-pointer hover:border-[var(--accent-2)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
                     >
                       {post.avatar_url ? (
                         <img src={`/api/media/file/${post.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
@@ -575,23 +576,28 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                       )}
                     </button>
 
-                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                      <h2 
-                        id={`post-${post.id}-title`}
-                        onClick={() => onNavigate('profile', post.username)}
-                        className="font-bold text-sm text-[var(--text)] hover:text-[var(--accent-2)] cursor-pointer truncate flex items-center gap-1"
-                      >
-                        {post.display_name || post.username}
-                        {!!post.is_verified && <VerifiedBadge />}
-                      </h2>
-                      <span className="text-xs text-[var(--muted)] font-medium truncate">@{post.username}</span>
-                      <span className="text-[var(--muted)] text-xs font-bold" aria-hidden="true">·</span>
-                      <span className="text-xs text-[var(--muted)] font-medium whitespace-nowrap">{formatTime(post.created_at)}</span>
-                      {postRoom && (
-                        <span className="ml-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-500/15 text-[var(--accent-2)] border border-[var(--accent-2)]/30">
-                          {postRoom}
-                        </span>
-                      )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <h2 
+                          id={`post-${post.id}-title`}
+                          onClick={() => onNavigate('profile', post.username)}
+                          className="font-semibold text-[15px] text-[var(--text)] hover:text-[var(--accent-2)] cursor-pointer truncate flex items-center gap-1"
+                        >
+                          <span>{post.display_name || post.username}</span>
+                          {!!post.is_verified && <VerifiedBadge size={15} />}
+                        </h2>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-[var(--muted)] font-medium mt-0.5">
+                        <span>{formatTime(post.created_at)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{post.is_private ? 'Private' : 'Public'}</span>
+                        {postRoom && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-[var(--accent-2)] font-semibold">{postRoom}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -606,15 +612,15 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                       aria-label={`Options for post by ${post.username}`}
                       aria-haspopup="true"
                       aria-expanded={openMenuPostId === post.id}
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] rounded-full hover:bg-[var(--hover)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+                      className="min-w-[40px] min-h-[40px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] rounded-full hover:bg-[var(--hover)] transition-colors focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
                     >
-                      <MoreHorizontal className="w-5 h-5" aria-hidden="true" />
+                      <MoreHorizontal className="w-5 h-5 stroke-[1.8]" aria-hidden="true" />
                     </button>
 
                     {openMenuPostId === post.id && (
                       <div 
                         onClick={(e) => e.stopPropagation()}
-                        className="absolute right-0 top-11 z-30 w-44 rounded-xl bg-[var(--card)] border border-[var(--line)] shadow-2xl p-1.5 select-none"
+                        className="absolute right-0 top-11 z-30 w-44 rounded-xl bg-[var(--card)] border border-[var(--card-border)] shadow-2xl p-1.5 select-none"
                       >
                         <button
                           type="button"
@@ -622,9 +628,9 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                             setOpenMenuPostId(null);
                             handleShareExternally(post);
                           }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] rounded-lg transition-colors min-h-[38px]"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] rounded-lg transition-colors min-h-[38px] cursor-pointer"
                         >
-                          <Share2 className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+                          <Share2 className="w-4 h-4 text-[var(--accent-2)]" aria-hidden="true" />
                           Share Link
                         </button>
                         
@@ -635,7 +641,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                               setOpenMenuPostId(null);
                               handleDeletePost(post.id);
                             }}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] rounded-lg transition-colors min-h-[38px]"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] rounded-lg transition-colors min-h-[38px] cursor-pointer"
                           >
                             <Trash className="w-4 h-4" aria-hidden="true" />
                             Delete Post
@@ -646,17 +652,9 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                   </div>
                 </div>
 
-                {/* Caption / Text */}
-                {cleanCaption && (
-                  <p className="text-[14px] text-[var(--text)] leading-relaxed whitespace-pre-wrap mb-2 font-normal">
-                    {cleanCaption}
-                  </p>
-                )}
-
-                {/* THEME START */}
-                {/* Media Image or Video: object-fit contain with blurred dimmed background copy */}
+                {/* Media Image or Video: full width on phone, 20px radius on desktop, max-height 560px */}
                 {post.media && post.media[0] && (
-                  <div className="relative w-full max-h-[560px] overflow-hidden rounded-2xl bg-[var(--card)] flex items-center justify-center my-3 border border-[var(--line)]">
+                  <div className="relative w-full -mx-4 sm:mx-0 sm:w-full max-h-[560px] overflow-hidden sm:rounded-[20px] bg-[var(--card)] flex items-center justify-center my-2 sm:border sm:border-[var(--card-border)]" style={{ width: 'calc(100% + 2rem)', marginInline: '-1rem' }}>
                     {post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
                       <video 
                         src={`/api/media/file/${post.media[0].r2_key}`} 
@@ -685,64 +683,85 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
                     )}
                   </div>
                 )}
-                {/* THEME END */}
 
-                {/* Action Row: Grouped icons with counts on left, bookmark on far right */}
-                <div className="flex items-center justify-between text-[var(--muted)] pt-1 mt-1">
-                  <div className="flex items-center gap-1 sm:gap-3">
-                    {/* Comment */}
-                    <button 
-                      type="button"
-                      onClick={() => handleOpenComments(post.id)}
-                      className="min-w-[44px] min-h-[44px] flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--accent-2)] transition-colors p-2 rounded-full hover:bg-[var(--hover)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
-                      aria-label={`View comments, ${post.comments_count} ${post.comments_count === 1 ? 'comment' : 'comments'}`}
-                    >
-                      <MessageCircle className="w-5 h-5" aria-hidden="true" />
-                      <span className="text-xs font-semibold">{post.comments_count}</span>
-                    </button>
-
-                    {/* THEME START */}
+                {/* Action Row: Like with count, Comment with count, Share on left; Bookmark on right */}
+                <div className="flex items-center justify-between text-[var(--muted)] pt-1.5 mt-1">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     {/* Like with Heart Pop Animation */}
                     <button 
                       type="button"
                       onClick={() => handleLike(post.id, post.is_liked)}
-                      className={`min-w-[44px] min-h-[44px] flex items-center gap-1.5 transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--like)_12%,transparent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--like)] ${
+                      className={`min-w-[40px] min-h-[40px] flex items-center gap-1.5 transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--like)_12%,transparent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--like)] cursor-pointer ${
                         post.is_liked ? 'text-[var(--like)]' : 'text-[var(--muted)] hover:text-[var(--like)]'
                       }`}
-                      aria-label={post.is_liked ? `Unlike post, ${post.likes_count} ${post.likes_count === 1 ? 'like' : 'likes'}` : `Like post, ${post.likes_count} ${post.likes_count === 1 ? 'like' : 'likes'}`}
+                      aria-label={post.is_liked ? `Unlike post, ${post.likes_count} likes` : `Like post, ${post.likes_count} likes`}
                       aria-pressed={post.is_liked}
                     >
-                      <Heart className={`w-5 h-5 transition-transform ${post.is_liked ? 'fill-[var(--like)] text-[var(--like)] heart-pop' : ''}`} aria-hidden="true" />
+                      <Heart className={`w-5 h-5 stroke-[1.8] transition-transform ${post.is_liked ? 'fill-[var(--like)] text-[var(--like)] heart-pop' : ''}`} aria-hidden="true" />
                       <span className="text-xs font-semibold">{post.likes_count}</span>
+                    </button>
+
+                    {/* Comment */}
+                    <button 
+                      type="button"
+                      onClick={() => handleOpenComments(post.id)}
+                      className="min-w-[40px] min-h-[40px] flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--accent-2)] transition-colors p-2 rounded-full hover:bg-[var(--hover)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
+                      aria-label={`View comments, ${post.comments_count} comments`}
+                    >
+                      <MessageCircle className="w-5 h-5 stroke-[1.8]" aria-hidden="true" />
+                      <span className="text-xs font-semibold">{post.comments_count}</span>
                     </button>
 
                     {/* Share */}
                     <button 
                       type="button"
                       onClick={() => openShareModal(post)}
-                      className="min-w-[44px] min-h-[44px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--accent-2)] transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+                      className="min-w-[40px] min-h-[40px] flex items-center justify-center text-[var(--muted)] hover:text-[var(--accent-2)] transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
                       aria-label="Share post"
                     >
-                      <Share2 className="w-5 h-5" aria-hidden="true" />
+                      <Share2 className="w-5 h-5 stroke-[1.8]" aria-hidden="true" />
                     </button>
                   </div>
 
-                  {/* Bookmark with Bounce Animation */}
+                  {/* Bookmark with Bounce Animation on right */}
                   <div>
                     <button 
                       type="button"
                       onClick={() => handleToggleSave(post.id)}
-                      className={`min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--gold)_12%,transparent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--gold)] ${
+                      className={`min-w-[40px] min-h-[40px] flex items-center justify-center transition-colors p-2 rounded-full hover:bg-[color-mix(in_srgb,var(--gold)_12%,transparent)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--gold)] cursor-pointer ${
                         savedPostIds.includes(post.id) ? 'text-[var(--gold)]' : 'text-[var(--muted)] hover:text-[var(--gold)]'
                       }`}
                       aria-label={savedPostIds.includes(post.id) ? "Remove bookmark" : "Bookmark post"}
                       aria-pressed={savedPostIds.includes(post.id)}
                     >
-                      <Bookmark className={`w-5 h-5 ${savedPostIds.includes(post.id) ? 'fill-[var(--gold)] text-[var(--gold)] bookmark-bounce' : ''}`} aria-hidden="true" />
+                      <Bookmark className={`w-5 h-5 stroke-[1.8] ${savedPostIds.includes(post.id) ? 'fill-[var(--gold)] text-[var(--gold)] bookmark-bounce' : ''}`} aria-hidden="true" />
                     </button>
                   </div>
-                  {/* THEME END */}
                 </div>
+
+                {/* Caption below: Bold username then text, hashtags as var(--accent-2) links */}
+                {cleanCaption && (
+                  <div className="mt-2 text-[14px] text-[var(--text)] leading-relaxed">
+                    <span 
+                      onClick={() => onNavigate('profile', post.username)}
+                      className="font-bold text-[var(--text)] hover:text-[var(--accent-2)] mr-2 cursor-pointer transition-colors"
+                    >
+                      {post.username}
+                    </span>
+                    <span>
+                      {cleanCaption.split(/(#[a-zA-Z0-9_]+)/g).map((part, i) => {
+                        if (part.startsWith('#')) {
+                          return (
+                            <span key={i} className="text-[var(--accent-2)] font-medium cursor-pointer hover:underline">
+                              {part}
+                            </span>
+                          );
+                        }
+                        return part;
+                      })}
+                    </span>
+                  </div>
+                )}
 
                 {/* Comment Box: Pill input with Post button inside */}
                 {/* THEME START */}

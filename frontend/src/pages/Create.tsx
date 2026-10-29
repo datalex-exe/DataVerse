@@ -212,7 +212,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
       {/* Background Radial Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[140px] rounded-full pointer-events-none -z-10" />
 
-      <div className="rounded-3xl border border-[var(--line)] bg-[var(--card)] backdrop-blur-2xl shadow-2xl shadow-[var(--shadow-card)] overflow-hidden">
+      <div className="rounded-[22px] border border-[var(--card-border)] bg-[var(--card)] backdrop-blur-2xl shadow-xl shadow-[var(--shadow-card)] overflow-hidden">
       {/* THEME END */}
         <div className="grid grid-cols-1 md:grid-cols-2 min-h-[520px]">
           
@@ -395,7 +395,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                 <button
                   type="submit"
                   disabled={uploading || selectedFiles.length === 0 || success}
-                  className="w-full min-h-[48px] py-3.5 px-6 font-bold rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm tracking-wide bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-[var(--shadow-accent)] active:scale-[0.99] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none disabled:bg-[var(--input)] disabled:border disabled:border-[var(--line)] disabled:text-[var(--muted)]"
+                  className="w-full min-h-[48px] py-3.5 px-6 font-bold rounded-full shadow-lg transition-all flex items-center justify-center gap-2 text-sm tracking-wide bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-[var(--shadow-accent)] active:scale-[0.99] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none disabled:bg-[var(--input)] disabled:border disabled:border-[var(--card-border)] disabled:text-[var(--muted)]"
                 >
                   {uploading ? (
                     <>
