@@ -11,7 +11,7 @@ import {
   Shield 
 } from 'lucide-react';
 /* THEME START */
-import { SidebarThemeSwitch, ThemeIconButton } from './utils/theme';
+import { SidebarThemeSwitch } from './utils/theme';
 /* THEME END */
 
 import { ToastProvider } from './context/ToastContext';
@@ -358,39 +358,6 @@ const AppContent: React.FC = () => {
 
       {/* Background Ambient Glow */}
       <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[140px] rounded-full pointer-events-none z-0"></div>
-
-      {/* MOBILE SLIM TOP BAR (below 768px) - Hidden in Messages view so Chats header is the single top bar */}
-      {!hideBottomNav && activeView !== 'messages' && (
-        <header aria-label="Mobile Top Bar" className="md:hidden sticky top-0 left-0 right-0 h-14 bg-[color-mix(in_srgb,var(--side)_85%,transparent)] backdrop-blur-md border-b border-[var(--line)] flex items-center justify-between px-4 z-40 flex-shrink-0">
-          <div 
-            onClick={() => navigate('feed')}
-            className="flex items-center gap-2 cursor-pointer active:scale-95 transition-transform"
-          >
-            <div className="w-8 h-8 rounded-lg bg-[#040b0d] border border-white/10 flex items-center justify-center p-0.5 shadow-sm">
-              <img 
-                src="/logo.png?v=2" 
-                alt="DataVerse Logo" 
-                width="32"
-                height="32"
-                className="w-full h-full object-contain"
-              />
-            </div>
-            <span className="text-base font-black tracking-wide bg-gradient-to-r from-[var(--text)] to-[var(--accent-2)] bg-clip-text text-transparent">
-              DataVerse
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <ThemeIconButton />
-            <button
-              onClick={() => logout()}
-              className="p-2 text-[var(--muted)] hover:text-[var(--danger)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)] min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer"
-              aria-label="Log Out"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </header>
-      )}
 
       {/* Spacer to prevent content overlap with fixed sidebar on md and lg */}
       <div className="hidden md:block w-20 flex-shrink-0" />

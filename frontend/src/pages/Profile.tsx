@@ -1519,6 +1519,22 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
               </div>
             ))}
 
+            {/* Phone Log Out Button */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to log out of DataVerse?')) {
+                    logout();
+                  }
+                }}
+                className="w-full h-[52px] min-h-[52px] rounded-[16px] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] text-[var(--danger)] text-[15px] font-semibold flex items-center justify-center gap-2.5 hover:bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] active:scale-[0.99] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger)]"
+              >
+                <LogOut className="w-4.5 h-4.5 stroke-[2.2]" />
+                <span>Log Out</span>
+              </button>
+            </div>
+
             <div className="h-[1px] bg-[var(--line)] my-6 w-full" />
 
             <button
@@ -1652,8 +1668,21 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
 
                 <button
                   type="button"
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to log out of DataVerse?')) {
+                      logout();
+                    }
+                  }}
+                  className="w-full h-[44px] min-h-[44px] px-3 rounded-[12px] text-[15px] font-medium text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_10%,transparent)] transition-colors flex items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger)] cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4 text-[var(--danger)] shrink-0" />
+                  <span>Log Out</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleCloseSettings}
-                  className="w-full h-[44px] min-h-[44px] px-3 rounded-[12px] text-[15px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition-colors flex items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+                  className="w-full h-[44px] min-h-[44px] px-3 mt-1 rounded-[12px] text-[15px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition-colors flex items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
                 >
                   <ArrowLeft className="w-4 h-4 text-[var(--muted)] shrink-0" />
                   <span>Back to profile</span>
