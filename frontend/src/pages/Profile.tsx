@@ -830,10 +830,16 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
 
   const handleSaveCoverPosition = async () => {
-    if (!profile) return;
+    if (!profile) {
+      toast.error('Profile not loaded');
+      return;
+    }
 
     if (pendingCoverFile) {
-      if (!token || !currentUser) return;
+      if (!token || !currentUser) {
+        toast.error('Authentication required to save cover photo');
+        return;
+      }
       setUploadingCover(true);
       try {
         const compressedCover = await compressImage(pendingCoverFile, 1400, 0.88);
@@ -876,6 +882,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
         setIsRepositioningCover(false);
         toast.success('Cover photo updated successfully');
       } catch (err: any) {
+        console.error('Save cover error:', err);
         toast.error(err.message || 'Failed to update cover photo');
       } finally {
         setUploadingCover(false);
@@ -927,9 +934,14 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
 
   const handleCoverPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isRepositioningCover) return;
+    if ((e.target as HTMLElement).closest('button, input, [role="button"], a, label, .reposition-controls')) {
+      return;
+    }
     dragStartYRef.current = e.clientY;
     dragStartPosRef.current = tempCoverPosY;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
   };
 
   const handleCoverPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -3134,7 +3146,10 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
         {isRepositioningCover ? (
           <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex flex-col justify-between p-3 sm:p-4 z-30 pointer-events-auto">
             {/* Top Reposition Status & Actions */}
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div 
+              onPointerDown={(e) => e.stopPropagation()}
+              className="reposition-controls flex items-center justify-between gap-2 flex-wrap z-40 relative"
+            >
               <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white text-xs font-semibold shadow-lg">
                 <Move className="w-3.5 h-3.5 text-[var(--accent-2)] animate-pulse" />
                 <span>Drag photo to place</span>
@@ -3143,16 +3158,24 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                 <button
                   type="button"
                   disabled={uploadingCover}
-                  onClick={handleCancelCoverPosition}
-                  className="px-3.5 py-1.5 rounded-full bg-black/75 hover:bg-black/90 text-white border border-white/20 text-xs font-semibold active:scale-95 transition-all cursor-pointer shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCancelCoverPosition();
+                  }}
+                  className="px-3.5 py-1.5 rounded-full bg-black/75 hover:bg-black/90 text-white border border-white/20 text-xs font-semibold active:scale-95 transition-all cursor-pointer shadow disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   disabled={uploadingCover}
-                  onClick={handleSaveCoverPosition}
-                  className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold active:scale-95 transition-all cursor-pointer shadow-md shadow-[var(--shadow-accent)] flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSaveCoverPosition();
+                  }}
+                  className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold active:scale-95 transition-all cursor-pointer shadow-md shadow-[var(--shadow-accent)] flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                 >
                   {uploadingCover ? (
                     <>
@@ -3170,28 +3193,34 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
             </div>
 
             {/* Bottom Fine-tune Slider & Presets */}
-            <div className="bg-black/80 backdrop-blur-md p-2.5 rounded-2xl border border-white/15 max-w-md mx-auto w-full flex flex-col gap-2 shadow-2xl">
+            <div 
+              onPointerDown={(e) => e.stopPropagation()}
+              className="reposition-controls bg-black/80 backdrop-blur-md p-2.5 rounded-2xl border border-white/15 max-w-md mx-auto w-full flex flex-col gap-2 shadow-2xl z-40 relative"
+            >
               <div className="flex items-center justify-between text-[11px] text-white/80 font-medium px-1">
                 <span>Vertical Position: {tempCoverPosY}%</span>
                 <div className="flex items-center gap-1.5">
                   <button 
                     type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => setTempCoverPosY(0)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${tempCoverPosY === 0 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${tempCoverPosY === 0 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
                   >
                     Top
                   </button>
                   <button 
                     type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => setTempCoverPosY(50)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${tempCoverPosY === 50 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${tempCoverPosY === 50 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
                   >
                     Center
                   </button>
                   <button 
                     type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => setTempCoverPosY(100)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${tempCoverPosY === 100 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer ${tempCoverPosY === 100 ? 'bg-[var(--accent-2)] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
                   >
                     Bottom
                   </button>
@@ -3202,6 +3231,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                 min="0"
                 max="100"
                 value={tempCoverPosY}
+                onPointerDown={(e) => e.stopPropagation()}
                 onChange={(e) => setTempCoverPosY(Number(e.target.value))}
                 className="w-full accent-[var(--accent-2)] cursor-pointer h-1.5 bg-white/20 rounded-lg"
               />
