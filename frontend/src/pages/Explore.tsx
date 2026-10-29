@@ -53,7 +53,7 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
   }, [searchQuery, token]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto self-center px-4 py-8 space-y-8 animate-fade-in select-none">
+    <div className="w-full max-w-4xl mx-auto self-center px-4 pt-3 sm:pt-8 pb-24 md:pb-12 space-y-6 sm:space-y-8 animate-fade-in select-none">
       
       {/* Centralized Search Bar */}
       <div className="relative max-w-xl mx-auto space-y-4">

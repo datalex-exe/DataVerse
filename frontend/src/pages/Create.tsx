@@ -206,7 +206,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
 
   /* UI UPDATE START - Create Post Page UI Redesign (Desktop & Phone responsive) */
   return (
-    <div className="w-full max-w-[1080px] mx-auto self-center px-4 sm:px-6 py-6 sm:py-10 animate-fade-in select-none relative z-10 pb-28 md:pb-12">
+    <div className="w-full max-w-[1080px] mx-auto self-center px-4 sm:px-6 pt-3 sm:pt-8 animate-fade-in select-none relative z-10 pb-28 md:pb-12">
       
       {/* THEME START */}
       {/* Background Radial Glow */}

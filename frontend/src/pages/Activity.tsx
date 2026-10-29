@@ -377,14 +377,15 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
   }
 
   return (
-    <div className="w-full max-w-[720px] mx-auto self-center px-4 sm:px-6 py-6 sm:py-8 animate-fade-in space-y-6 sm:space-y-8 relative z-10 pb-24 md:pb-12">
+    <div className="w-full max-w-[720px] mx-auto self-center px-4 sm:px-6 pt-3 sm:pt-8 pb-24 md:pb-12 animate-fade-in relative z-10">
 
       {/* THEME START */}
       {/* Faint radial glow behind the header */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[radial-gradient(ellipse_at_center,var(--glow),transparent)] blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      {/* Unified Main Heading */}
-      <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
+      <div className="space-y-4 sm:space-y-6">
+        {/* Unified Main Heading */}
+        <div className="flex items-center justify-between pb-2 border-b border-[var(--line)]">
         <div className="flex items-center gap-3">
           <h1 className="text-xl sm:text-2xl md:text-[28px] font-semibold text-[var(--text)] tracking-tight">Notifications</h1>
           {unreadCount > 0 && (
@@ -436,6 +437,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
           )}
         </div>
       )}
+      </div>
       {/* THEME END */}
 
     </div>

@@ -2899,13 +2899,14 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
 
   /* UI UPDATE START - Profile Page UI Redesign (Desktop & Phone responsive) */
   return (
-    <div className="w-full max-w-[980px] mx-auto self-center px-4 sm:px-6 py-6 sm:py-8 space-y-8 animate-fade-in relative z-10 pb-24 md:pb-12">
+    <div className="w-full max-w-[980px] mx-auto self-center px-4 sm:px-6 pt-2 sm:pt-8 pb-24 md:pb-12 animate-fade-in relative z-10">
       
       {/* Background Ambient Glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-b from-brand-600/15 via-brand-500/5 to-transparent blur-[120px] rounded-full pointer-events-none -z-10" />
 
-      {/* Profile Header card */}
-      <div className="select-none">
+      <div className="space-y-6 sm:space-y-8">
+        {/* Profile Header card */}
+        <div className="select-none">
         
         {/* DESKTOP HEADER (min-width: 768px / md) */}
         <div className="hidden md:flex items-start gap-10">
@@ -3569,6 +3570,8 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
           </div>
         </div>
       )}
+
+      </div>
 
       {avatarToCrop && (
         <ImageCropper
