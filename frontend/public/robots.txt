@@ -17,6 +17,9 @@ Allow: /refund
 Allow: /contact
 Allow: /favicon.svg
 Allow: /logo.png
+Allow: /apple-touch-icon.png
+Allow: /og-image.png
+Allow: /manifest.json
 Allow: /arcade.js
 Allow: /arcade-sw.js
 Allow: /arcade-offline.html

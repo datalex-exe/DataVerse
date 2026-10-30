@@ -5060,7 +5060,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                       <div className="flex items-center gap-1.5">
                                         <div className="w-5 h-5 rounded-md bg-[#040b0d] border border-[var(--line)] flex items-center justify-center p-0.5 overflow-hidden flex-shrink-0">
                                           <img 
-                                            src="/logo.png" 
+                                            src="/logo.png?v=3" 
                                             alt="DV" 
                                             className="w-full h-full object-contain"
                                           />

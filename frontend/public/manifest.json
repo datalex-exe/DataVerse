@@ -1,0 +1,28 @@
+{
+  "short_name": "DataVerse",
+  "name": "DataVerse — Social Network by Datalex",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180"
+    },
+    {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#040b0d",
+  "theme_color": "#040b0d",
+  "display": "standalone",
+  "orientation": "portrait",
+  "description": "Connect, share photos and videos, chat in real time, and explore vibrant creators on DataVerse."
+}

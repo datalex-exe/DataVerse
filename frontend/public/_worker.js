@@ -187,7 +187,7 @@ export default {
     let pageTitle = 'DataVerse — Social Network by Datalex';
     let pageDescription = 'Connect, share photos and videos, chat in real time, and explore vibrant creators on DataVerse.';
     let canonicalUrl = `${BASE_URL}${url.pathname === '/' ? '' : url.pathname}`;
-    let ogImage = `${BASE_URL}/logo.png`;
+    let ogImage = `${BASE_URL}/og-image.png`;
     let ogType = 'website';
     let robotsDirective = 'index, follow';
     let jsonLd = null;

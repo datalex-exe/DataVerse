@@ -551,7 +551,7 @@ export const Auth: React.FC = () => {
           {/* Logo in rounded tile with dark --bg color (#040b0d) and 1px border */}
           <div className="w-16 h-16 mb-4 flex items-center justify-center relative p-2 rounded-2xl bg-[#040b0d] border border-white/10 shadow-md">
             <img 
-              src="/logo.png?v=2" 
+              src="/logo.png?v=3" 
               alt="DataVerse Logo" 
               width="64"
               height="64"

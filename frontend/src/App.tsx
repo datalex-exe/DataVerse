@@ -590,7 +590,7 @@ const AppContent: React.FC = () => {
           >
             <div className="w-8 h-8 rounded-xl bg-[var(--side)] border border-[color-mix(in_srgb,var(--accent-2)_35%,transparent)] flex items-center justify-center p-1 shadow-sm">
               <img 
-                src="/logo.png?v=2" 
+                src="/logo.png?v=3" 
                 alt="DataVerse Logo" 
                 width="22"
                 height="22"
@@ -655,7 +655,7 @@ const AppContent: React.FC = () => {
             <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
               <div className="w-9 h-9 rounded-xl bg-[var(--side)] border border-[color-mix(in_srgb,var(--accent-2)_35%,transparent)] flex items-center justify-center p-1 shadow-sm">
                 <img 
-                  src="/logo.png?v=2" 
+                  src="/logo.png?v=3" 
                   alt="DataVerse Logo" 
                   width="26"
                   height="26"
