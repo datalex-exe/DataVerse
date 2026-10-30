@@ -187,7 +187,7 @@ export default {
     let pageTitle = 'DataVerse — Social Network by Datalex';
     let pageDescription = 'Connect, share photos and videos, chat in real time, and explore vibrant creators on DataVerse.';
     let canonicalUrl = `${BASE_URL}${url.pathname === '/' ? '' : url.pathname}`;
-    let ogImage = `${BASE_URL}/og-image.png?v=6`;
+    let ogImage = `${BASE_URL}/og-image.png?v=8`;
     let ogType = 'website';
     let robotsDirective = 'index, follow';
     let jsonLd = null;
@@ -447,7 +447,7 @@ export default {
               '@type': 'Organization',
               'name': 'Datalex Cloud Technologies',
               'url': 'https://datalexcloud.tech',
-              'logo': `${BASE_URL}/logo.png?v=6`,
+              'logo': `${BASE_URL}/logo.png?v=8`,
             },
             'potentialAction': {
               '@type': 'SearchAction',
@@ -460,7 +460,7 @@ export default {
             '@id': `${BASE_URL}/#organization`,
             'name': 'DataVerse',
             'url': `${BASE_URL}/`,
-            'logo': `${BASE_URL}/logo.png?v=6`,
+            'logo': `${BASE_URL}/logo.png?v=8`,
             'sameAs': [
               'https://github.com/datalex-exe/DataVerse',
             ],

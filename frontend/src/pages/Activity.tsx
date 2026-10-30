@@ -11,7 +11,6 @@ import {
   Shield,
   AlertTriangle
 } from 'lucide-react';
-import { DataVerseLogo } from '../components/DataVerseLogo';
 
 interface NotificationItem {
   id: string;
@@ -186,7 +185,13 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
           <div className="relative flex-shrink-0">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm">
               {!item.notifier_id || isWelcome ? (
-                <DataVerseLogo size={44} rounded="full" className="w-full h-full object-cover" />
+                <img 
+                  src="/logo.png?v=8" 
+                  alt="DataVerse" 
+                  className="w-full h-full object-cover select-none" 
+                  loading="eager"
+                  decoding="sync"
+                />
               ) : item.avatar_url ? (
                 <img src={`/api/media/file/${item.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
               ) : (
