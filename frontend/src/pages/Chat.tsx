@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
+import { DataVerseLogo } from '../components/DataVerseLogo';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
 
@@ -5059,11 +5060,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                     >
                                       <div className="flex items-center gap-1.5">
                                         <div className="w-5 h-5 rounded-md bg-[#040b0d] border border-[var(--line)] flex items-center justify-center p-0.5 overflow-hidden flex-shrink-0">
-                                          <img 
-                                            src="/logo.png?v=3" 
-                                            alt="DV" 
-                                            className="w-full h-full object-contain"
-                                          />
+                                          <DataVerseLogo size={18} rounded="md" className="w-full h-full object-contain" />
                                         </div>
                                         <span className="text-[9px] font-black text-[var(--muted)] tracking-wide uppercase">Shared Post</span>
                                       </div>
