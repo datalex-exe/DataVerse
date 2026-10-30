@@ -67,6 +67,7 @@ interface ProfileUser {
   bio: string | null;
   avatar_url: string | null;
   cover_url?: string | null;
+  cover_pos_y?: number | null;
   is_verified?: boolean;
   is_admin?: boolean;
   is_top_admin?: boolean;
@@ -164,13 +165,17 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
   const coverMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try {
-      const saved = usernameToLoad ? localStorage.getItem(`dv_cover_pos_${usernameToLoad.toLowerCase()}`) : null;
-      setCoverPosY(saved !== null ? Number(saved) : 50);
-    } catch {
-      setCoverPosY(50);
+    if (profile?.cover_pos_y !== undefined && profile?.cover_pos_y !== null) {
+      setCoverPosY(Number(profile.cover_pos_y));
+    } else {
+      try {
+        const saved = usernameToLoad ? localStorage.getItem(`dv_cover_pos_${usernameToLoad.toLowerCase()}`) : null;
+        setCoverPosY(saved !== null ? Number(saved) : 50);
+      } catch {
+        setCoverPosY(50);
+      }
     }
-  }, [usernameToLoad]);
+  }, [profile?.cover_pos_y, usernameToLoad]);
 
   useEffect(() => {
     if (!showCoverMenu) return;
@@ -863,7 +868,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
         } catch {}
 
         setCoverPosY(tempCoverPosY);
-        setProfile(prev => prev ? { ...prev, cover_url: r2Key } : prev);
+        setProfile(prev => prev ? { ...prev, cover_url: r2Key, cover_pos_y: tempCoverPosY } : prev);
 
         try {
           await fetch('/api/users/profile', {
@@ -876,7 +881,8 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
               display_name: profile.display_name || profile.username,
               bio: profile.bio || '',
               avatar_url: profile.avatar_url,
-              cover_url: r2Key
+              cover_url: r2Key,
+              cover_pos_y: tempCoverPosY
             })
           });
         } catch {}
@@ -896,6 +902,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
       }
     } else {
       setCoverPosY(tempCoverPosY);
+      setProfile(prev => prev ? { ...prev, cover_pos_y: tempCoverPosY } : prev);
       setIsRepositioningCover(false);
       if (profile?.username) {
         try {
@@ -904,6 +911,25 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
             localStorage.setItem(`dv_cover_pos_${currentUser.username.toLowerCase()}`, String(tempCoverPosY));
           }
         } catch {}
+
+        if (token) {
+          try {
+            await fetch('/api/users/profile', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                display_name: profile.display_name || profile.username,
+                bio: profile.bio || '',
+                avatar_url: profile.avatar_url,
+                cover_url: profile.cover_url || null,
+                cover_pos_y: tempCoverPosY
+              })
+            });
+          } catch {}
+        }
       }
       toast.success('Cover position saved!');
     }
@@ -934,7 +960,25 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
         localStorage.removeItem(`dv_cover_pos_${currentUser.username.toLowerCase()}`);
       }
     } catch {}
-    setProfile(prev => prev ? { ...prev, cover_url: null } : prev);
+    setProfile(prev => prev ? { ...prev, cover_url: null, cover_pos_y: 50 } : prev);
+    if (token) {
+      try {
+        fetch('/api/users/profile', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            display_name: profile.display_name || profile.username,
+            bio: profile.bio || '',
+            avatar_url: profile.avatar_url,
+            cover_url: null,
+            cover_pos_y: 50
+          })
+        }).catch(() => {});
+      } catch {}
+    }
     setShowCoverMenu(false);
     toast.info('Cover photo removed.');
   };
@@ -3154,10 +3198,23 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
 
         {/* Repositioning Overlay Bar (when active) */}
         {isRepositioningCover ? (
-          <div className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex flex-col justify-between p-3 sm:p-4 z-30 pointer-events-auto">
+          <div 
+            onPointerDown={(e) => {
+              if ((e.target as HTMLElement).closest('.reposition-controls, button, input, label')) {
+                e.stopPropagation();
+              }
+            }}
+            onTouchStart={(e) => {
+              if ((e.target as HTMLElement).closest('.reposition-controls, button, input, label')) {
+                e.stopPropagation();
+              }
+            }}
+            className="absolute inset-0 bg-black/35 backdrop-blur-[1px] flex flex-col justify-between p-3 sm:p-4 z-30 pointer-events-auto"
+          >
             {/* Top Reposition Status & Actions */}
             <div 
               onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               className="reposition-controls flex items-center justify-between gap-2 flex-wrap z-40 relative"
             >
               <div className="flex items-center gap-2 bg-black/75 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 text-white text-xs font-semibold shadow-lg">
@@ -3169,11 +3226,13 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                   type="button"
                   disabled={uploadingCover}
                   onPointerDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
+                    e.preventDefault();
                     handleCancelCoverPosition();
                   }}
-                  className="btn-secondary px-3.5 py-1.5 text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                  className="btn-secondary px-3.5 py-1.5 text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto z-50 relative"
                 >
                   Cancel
                 </button>
@@ -3181,11 +3240,13 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                   type="button"
                   disabled={uploadingCover}
                   onPointerDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
+                    e.preventDefault();
                     handleSaveCoverPosition();
                   }}
-                  className="btn-primary px-4 py-1.5 text-xs font-bold cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                  className="btn-primary px-4 py-1.5 text-xs font-bold cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto z-50 relative"
                 >
                   {uploadingCover ? (
                     <>

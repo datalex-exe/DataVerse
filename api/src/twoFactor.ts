@@ -408,7 +408,7 @@ twoFactorApp.post('/verify', async (c) => {
 
   // Fetch full user record
   const user = await c.env.DB.prepare(
-    'SELECT id, username, email, display_name, bio, avatar_url, is_verified, is_admin, is_top_admin, is_blocked, is_private, created_at FROM users WHERE id = ?'
+    'SELECT id, username, email, display_name, bio, avatar_url, cover_url, cover_pos_y, is_verified, is_admin, is_top_admin, is_blocked, is_private, created_at FROM users WHERE id = ?'
   )
     .bind(userId)
     .first<any>();

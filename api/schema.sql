@@ -22,9 +22,13 @@ CREATE TABLE IF NOT EXISTS users (
   verification_document_url TEXT,
   verification_reason TEXT,
   verification_status TEXT DEFAULT 'none',
+  cover_url TEXT,
+  cover_pos_y INTEGER DEFAULT 50,
   created_at INTEGER NOT NULL
 );
 -- Migration: add columns if upgrading existing DB
+-- ALTER TABLE users ADD COLUMN cover_url TEXT;
+-- ALTER TABLE users ADD COLUMN cover_pos_y INTEGER DEFAULT 50;
 -- ALTER TABLE users ADD COLUMN is_private INTEGER DEFAULT 0;
 -- ALTER TABLE users ADD COLUMN chat_restricted_until INTEGER DEFAULT 0;
 -- ALTER TABLE users ADD COLUMN is_verification_paid INTEGER DEFAULT 0;

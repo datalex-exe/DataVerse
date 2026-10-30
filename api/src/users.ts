@@ -141,11 +141,11 @@ usersApp.get('/', authMiddleware, async (c) => {
 // ─── UPDATE PROFILE ────────────────────────────────────────────────────────────
 usersApp.put('/profile', authMiddleware, async (c) => {
   const userId = c.get('userId');
-  const { username, email, display_name, bio, avatar_url, new_password, current_password } = await c.req.json();
+  const { username, email, display_name, bio, avatar_url, cover_url, cover_pos_y, new_password, current_password } = await c.req.json();
 
   try {
     // Fetch current user details including password credentials
-    const currentUser = await c.env.DB.prepare('SELECT username, email, display_name, bio, avatar_url, password_hash, password_salt FROM users WHERE id = ?')
+    const currentUser = await c.env.DB.prepare('SELECT username, email, display_name, bio, avatar_url, cover_url, cover_pos_y, password_hash, password_salt FROM users WHERE id = ?')
       .bind(userId)
       .first<any>();
 
@@ -156,6 +156,10 @@ usersApp.put('/profile', authMiddleware, async (c) => {
     const targetUsername = (username && String(username).trim() !== '') ? String(username).trim().toLowerCase() : currentUser.username;
     const targetEmail = (email && String(email).trim() !== '') ? String(email).trim().toLowerCase() : currentUser.email;
     const targetAvatarUrl = (avatar_url !== undefined && avatar_url !== null) ? avatar_url : currentUser.avatar_url;
+    const targetCoverUrl = cover_url !== undefined ? (cover_url || null) : (currentUser.cover_url || null);
+    const targetCoverPosY = (cover_pos_y !== undefined && cover_pos_y !== null)
+      ? Math.max(0, Math.min(100, Math.round(Number(cover_pos_y))))
+      : (currentUser.cover_pos_y !== undefined && currentUser.cover_pos_y !== null ? currentUser.cover_pos_y : 50);
 
     const isChangingPassword = new_password && String(new_password).trim() !== '';
     const isChangingEmail = (email && String(email).trim() !== '') && (targetEmail.toLowerCase() !== currentUser.email.toLowerCase());
@@ -227,19 +231,19 @@ usersApp.put('/profile', authMiddleware, async (c) => {
       const salt = await generateSalt();
       const passwordHash = await hashPassword(String(new_password).trim(), salt);
       await c.env.DB.prepare(
-        'UPDATE users SET username = ?, email = ?, display_name = ?, bio = ?, avatar_url = ?, password_hash = ?, password_salt = ? WHERE id = ?'
+        'UPDATE users SET username = ?, email = ?, display_name = ?, bio = ?, avatar_url = ?, cover_url = ?, cover_pos_y = ?, password_hash = ?, password_salt = ? WHERE id = ?'
       )
-        .bind(targetUsername, targetEmail, safeDisplayName, safeBio, targetAvatarUrl || '', passwordHash, salt, userId)
+        .bind(targetUsername, targetEmail, safeDisplayName, safeBio, targetAvatarUrl || '', targetCoverUrl, targetCoverPosY, passwordHash, salt, userId)
         .run();
     } else {
       await c.env.DB.prepare(
-        'UPDATE users SET username = ?, email = ?, display_name = ?, bio = ?, avatar_url = ? WHERE id = ?'
+        'UPDATE users SET username = ?, email = ?, display_name = ?, bio = ?, avatar_url = ?, cover_url = ?, cover_pos_y = ? WHERE id = ?'
       )
-        .bind(targetUsername, targetEmail, safeDisplayName, safeBio, targetAvatarUrl || '', userId)
+        .bind(targetUsername, targetEmail, safeDisplayName, safeBio, targetAvatarUrl || '', targetCoverUrl, targetCoverPosY, userId)
         .run();
     }
 
-    return c.json({ success: true, message: 'Profile updated' });
+    return c.json({ success: true, message: 'Profile updated', cover_url: targetCoverUrl, cover_pos_y: targetCoverPosY });
   } catch (err: any) {
     return c.json({ error: err.message || 'Update failed' }, 500);
   }
@@ -886,7 +890,7 @@ usersApp.get('/:username', async (c) => {
   }
 
   const queryUser = await c.env.DB.prepare(`
-    SELECT id, username, display_name, bio, avatar_url, created_at, is_verified, is_admin, is_top_admin, is_blocked, is_private,
+    SELECT id, username, display_name, bio, avatar_url, cover_url, cover_pos_y, created_at, is_verified, is_admin, is_top_admin, is_blocked, is_private,
       (SELECT COUNT(*) FROM follows WHERE following_id = users.id AND is_accepted = 1) AS followers_count,
       (SELECT COUNT(*) FROM follows WHERE follower_id = users.id AND is_accepted = 1) AS following_count,
       (SELECT COUNT(*) FROM posts WHERE user_id = users.id) AS posts_count,

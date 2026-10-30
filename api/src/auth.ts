@@ -326,7 +326,7 @@ authApp.post('/logout', authMiddleware, async (c) => {
 // GET CURRENT USER PROFILE
 authApp.get('/me', authMiddleware, async (c) => {
   const userId = c.get('userId');
-  const user = await c.env.DB.prepare('SELECT id, username, email, display_name, bio, avatar_url, is_verified, is_admin, is_top_admin, is_blocked, is_private, is_verification_paid, verification_paid_at, verification_category, verification_document_url, verification_reason, verification_status, created_at FROM users WHERE id = ?')
+  const user = await c.env.DB.prepare('SELECT id, username, email, display_name, bio, avatar_url, cover_url, cover_pos_y, is_verified, is_admin, is_top_admin, is_blocked, is_private, is_verification_paid, verification_paid_at, verification_category, verification_document_url, verification_reason, verification_status, created_at FROM users WHERE id = ?')
     .bind(userId)
     .first<any>();
 

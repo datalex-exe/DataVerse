@@ -42,12 +42,17 @@ export default {
       url.pathname === '/arcade.js' ||
       url.pathname === '/arcade-sw.js'
     ) {
-      const asset = await env.ASSETS.fetch(request);
+      // Strip query parameters so env.ASSETS.fetch correctly matches the file in static assets
+      const cleanAssetUrl = new URL(url.pathname, url.origin);
+      const asset = await env.ASSETS.fetch(new Request(cleanAssetUrl.toString(), {
+        method: request.method,
+        headers: request.headers,
+      }));
       const newHeaders = new Headers(asset.headers);
       if (url.pathname.endsWith('.html')) {
         newHeaders.set('Content-Type', 'text/html; charset=utf-8');
         newHeaders.set('Cache-Control', 'public, max-age=86400');
-        newHeaders.set('Content-Security-Policy', "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+        newHeaders.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'");
       } else if (url.pathname.endsWith('.js')) {
         newHeaders.set('Content-Type', 'application/javascript; charset=utf-8');
         newHeaders.set('Cache-Control', 'public, max-age=0, must-revalidate');

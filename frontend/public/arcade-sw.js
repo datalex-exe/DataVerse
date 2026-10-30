@@ -6,7 +6,7 @@
 // told when it's ready and reloading serves the finished response from a short-lived stash.
 //
 // Bump VERSION whenever arcade-offline.html changes so returning visitors get it.
-const VERSION = "v2";
+const VERSION = "v3";
 
 // Show the games if a page is still loading after this many ms. 0 = offline only.
 const SLOW_MS = 6000;
@@ -37,10 +37,19 @@ const PENDING_MAX_AGE = 10 * 60 * 1000;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.add(new Request(OFFLINE_URL, { cache: "reload" })))
-      .then(() => self.skipWaiting())
+    (async () => {
+      try {
+        const cache = await caches.open(CACHE);
+        try {
+          await cache.add(new Request(OFFLINE_URL, { cache: "reload" }));
+        } catch (_) {
+          await cache.add(new Request(OFFLINE_URL));
+        }
+      } catch (err) {
+        console.warn("Pre-cache offline arcade failed:", err);
+      }
+      await self.skipWaiting();
+    })()
   );
 });
 
@@ -63,7 +72,20 @@ self.addEventListener("fetch", (event) => {
   if (request.mode !== "navigate" || request.method !== "GET") return;
   const { pathname } = new URL(request.url);
   if (pathname === OFFLINE_URL) {
-    event.respondWith(offlinePage("offline").then((res) => res || fetch(request)));
+    event.respondWith(
+      (async () => {
+        const cached = await offlinePage("offline");
+        if (cached) return cached;
+        try {
+          const net = await fromNetwork(event);
+          if (net && net.ok) return net;
+        } catch (_) {}
+        return (await offlinePage("offline")) || new Response("<!doctype html><html><body style='background:#040b0d;color:#fff;font-family:sans-serif;padding:20px;'><h2>DataVerse Offline Arcade</h2><p>Please reconnect to the internet to initialize the arcade.</p></body></html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" }
+        });
+      })()
+    );
   } else if (SKIP_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     // No slow timer, no stash; games only if the network fails outright.
     event.respondWith(fromNetwork(event).catch(async () => (await offlinePage("offline")) || Response.error()));
@@ -114,17 +136,34 @@ async function handleNavigation(event) {
 }
 
 async function offlinePage(mode) {
-  const cached = await (await caches.open(CACHE)).match(OFFLINE_URL);
-  if (!cached) return null;
-  const html = (await cached.text()).replace('data-mode="offline"', `data-mode="${mode}"`);
-  return new Response(html, {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      // The page is self-contained: allow its own inline code, nothing external, no framing.
-      "Content-Security-Policy": "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-ancestors 'none'",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
+  try {
+    const cache = await caches.open(CACHE);
+    let cached = await cache.match(OFFLINE_URL, { ignoreSearch: true });
+    if (!cached) {
+      cached = await cache.match("/arcade-offline.html", { ignoreSearch: true });
+    }
+    if (!cached) {
+      for (const key of await caches.keys()) {
+        if (key.startsWith("offline-arcade-")) {
+          const oldCache = await caches.open(key);
+          cached = await oldCache.match(OFFLINE_URL, { ignoreSearch: true });
+          if (cached) break;
+        }
+      }
+    }
+    if (!cached) return null;
+    const html = (await cached.text()).replace('data-mode="offline"', `data-mode="${mode}"`);
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        // The page is self-contained: allow its own inline code, nothing external, allow framing on self
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch (_) {
+    return null;
+  }
 }
 
 // Keeps a slow page's finished response for a few minutes so "Open page" is instant.

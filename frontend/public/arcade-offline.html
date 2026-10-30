@@ -8,6 +8,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self';">
 <title>You're offline | DataVerse</title>
 <style>
   /* CUSTOMIZE: DataVerse theme palette matching dark and light mode */
@@ -562,13 +563,21 @@
   dark.addEventListener("change", () => { setColors(); if (!game) renderMenu(); });
 
   // ---- Connection status ----
+  const isIframe = window.self !== window.top;
   let poll = 0;
   function status(mode) {
-    const [title, sub, note, cta] = COPY[mode];
+    const entry = COPY[mode] || COPY.offline;
+    const title = entry[0];
+    const sub = entry[1];
+    const note = entry[2];
+    const cta = entry[3];
     $("#title").textContent = title;
     $("#sub").textContent = sub;
     $("#notice-text").textContent = note;
-    document.title = `${note} | ${$(".logo").textContent}`;
+    const logoEl = $(".logo");
+    if (logoEl) {
+      document.title = `${note} | ${logoEl.textContent}`;
+    }
     $("#go").hidden = !cta;
     $("#go").textContent = cta || "";
     if (mode === "offline" && !poll) {
@@ -580,11 +589,22 @@
     if (cta) clearInterval(poll);
   }
   $("#go").onclick = () => {
+    if (isIframe) {
+      window.parent.postMessage("close_arcade", "*");
+      return;
+    }
     if (location.pathname !== SELF) return location.reload();
     // Opened from the offline bar: go back to the page they left (same site, path only).
     const from = new URL(new URLSearchParams(location.search).get("from") || "/", location.origin);
     location.assign(from.origin === location.origin ? from.pathname + from.search + from.hash : "/");
   };
+  const logoLink = $(".logo");
+  if (logoLink && isIframe) {
+    logoLink.onclick = (e) => {
+      e.preventDefault();
+      window.parent.postMessage("close_arcade", "*");
+    };
+  }
   if ("serviceWorker" in navigator) {
     // From the worker after a slow page: "ready" (kept, opens instantly), "online"
     // (arrived but couldn't be kept), "failed" (the connection dropped).

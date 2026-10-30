@@ -7,6 +7,8 @@ export interface User {
   display_name: string | null;
   bio: string | null;
   avatar_url: string | null;
+  cover_url?: string | null;
+  cover_pos_y?: number | null;
   is_verified?: boolean;
   is_admin?: boolean;
   is_top_admin?: boolean;

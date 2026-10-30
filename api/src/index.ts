@@ -220,29 +220,34 @@ app.post('/api/media/upload', authMiddleware, async (c) => {
       const totalSize = body.byteLength;
       const CHUNK_SIZE = 20 * 1024 * 1024; // Slice into 20MB chunks to stay under KV limit
 
-      if (totalSize <= CHUNK_SIZE) {
-        // Direct single upload
-        await c.env.SESSION_KV.put(`media:${key}`, body);
-      } else {
-        // Server-side chunked upload
-        const numChunks = Math.ceil(totalSize / CHUNK_SIZE);
-        const chunkPromises = [];
-        for (let i = 0; i < numChunks; i++) {
-          const start = i * CHUNK_SIZE;
-          const end = Math.min(start + CHUNK_SIZE, totalSize);
-          const chunk = body.slice(start, end);
-          chunkPromises.push(c.env.SESSION_KV.put(`media:${key}:chunk:${i}`, chunk));
+      // Attempt KV storage first; if KV daily put limit is exceeded or KV fails, gracefully fallback to D1
+      try {
+        if (totalSize <= CHUNK_SIZE) {
+          // Direct single upload to KV
+          await c.env.SESSION_KV.put(`media:${key}`, body);
+        } else {
+          // Server-side chunked upload to KV
+          const numChunks = Math.ceil(totalSize / CHUNK_SIZE);
+          const chunkPromises = [];
+          for (let i = 0; i < numChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, totalSize);
+            const chunk = body.slice(start, end);
+            chunkPromises.push(c.env.SESSION_KV.put(`media:${key}:chunk:${i}`, chunk));
+          }
+          await Promise.all(chunkPromises);
+          await c.env.SESSION_KV.put(`media:${key}:manifest`, JSON.stringify({ numChunks, totalSize }));
         }
-        await Promise.all(chunkPromises);
-        // Save manifest file in KV
-        await c.env.SESSION_KV.put(`media:${key}:manifest`, JSON.stringify({ numChunks, totalSize }));
+      } catch (kvErr) {
+        console.warn(`[Media Upload] KV storage failed or quota limit reached, saving to D1:`, kvErr);
       }
 
-      // Put metadata into D1 database for backwards-compatibility
+      // Persist full file binary into D1 media_files table as guaranteed fallback
+      const binaryPayload = new Uint8Array(body);
       await c.env.DB.prepare(
         'INSERT OR REPLACE INTO media_files (key, content, content_type, created_at) VALUES (?, ?, ?, ?)'
       )
-        .bind(key, new Uint8Array([0]), contentType, Date.now())
+        .bind(key, binaryPayload, contentType, Date.now())
         .run();
 
       return c.json({ success: true, key });

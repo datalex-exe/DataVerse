@@ -46,9 +46,87 @@
     });
   }
 
+  // Cache arcade HTML in browser storage when online so in-page modal is instant and 100% offline-ready
+  if (navigator.onLine) {
+    fetch("/arcade-offline.html")
+      .then((r) => (r.ok ? r.text() : ""))
+      .then((html) => {
+        if (html) {
+          try {
+            sessionStorage.setItem("arcade_offline_html", html);
+            localStorage.setItem("arcade_offline_html", html);
+          } catch (_) {}
+        }
+      })
+      .catch(() => {});
+  }
+
+  const openArcadeModal = () => {
+    let overlay = document.getElementById("arcade-modal-overlay");
+    if (overlay) return;
+
+    overlay = document.createElement("div");
+    overlay.id = "arcade-modal-overlay";
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:2147483647;background:#040b0d;display:flex;flex-direction:column;width:100vw;height:100dvh;overflow:hidden;";
+
+    const topBar = document.createElement("div");
+    topBar.style.cssText =
+      "display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#040b0d;border-bottom:1px solid rgba(45,212,191,0.2);color:#ffffff;font:14px/1.4 'Outfit',ui-monospace,sans-serif;";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.style.cssText = "display:flex;align-items:center;gap:10px;";
+    titleWrap.innerHTML =
+      '<span style="font-weight:800;font-size:16px;letter-spacing:0.06em;text-transform:uppercase;">DataVerse<span style="color:#2dd4bf;">.</span></span> <span style="font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(45,212,191,0.12);color:#2dd4bf;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Offline Arcade</span>';
+
+    const exitBtn = document.createElement("button");
+    exitBtn.textContent = "Back to DataVerse ✕";
+    exitBtn.style.cssText =
+      "background:rgba(255,255,255,0.06);color:#ffffff;border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:6px 14px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.15s ease;";
+    exitBtn.onmouseover = () => {
+      exitBtn.style.background = "rgba(45,212,191,0.15)";
+      exitBtn.style.borderColor = "#2dd4bf";
+    };
+    exitBtn.onmouseout = () => {
+      exitBtn.style.background = "rgba(255,255,255,0.06)";
+      exitBtn.style.borderColor = "rgba(255,255,255,0.18)";
+    };
+    exitBtn.onclick = () => {
+      overlay.remove();
+    };
+
+    topBar.append(titleWrap, exitBtn);
+
+    const frame = document.createElement("iframe");
+    frame.style.cssText = "flex:1;width:100%;height:100%;border:none;background:#040b0d;";
+    frame.title = "Offline Arcade Mini Games";
+
+    let cachedHtml = "";
+    try {
+      cachedHtml = sessionStorage.getItem("arcade_offline_html") || localStorage.getItem("arcade_offline_html") || "";
+    } catch (_) {}
+
+    if (cachedHtml) {
+      frame.srcdoc = cachedHtml;
+    } else {
+      frame.src = "/arcade-offline.html?from=" + encodeURIComponent(location.pathname + location.search);
+    }
+
+    overlay.append(topBar, frame);
+    document.body.append(overlay);
+
+    const onMessage = (e) => {
+      if (e.data === "close_arcade" || e.data?.type === "close_arcade") {
+        overlay.remove();
+        window.removeEventListener("message", onMessage);
+      }
+    };
+    window.addEventListener("message", onMessage);
+  };
+
   let bar = null;
   const update = () => {
-    const show = !navigator.onLine && !!navigator.serviceWorker.controller;
+    const show = !navigator.onLine;
     if (show && !bar) {
       bar = document.createElement("div");
       bar.setAttribute("role", "status");
@@ -63,9 +141,9 @@
       const play = document.createElement("button");
       play.textContent = BUTTON;
       play.style.cssText = `background:${ACCENT};color:${ACCENT_TEXT};border:0;border-radius:8px;padding:6px 16px;font:inherit;font-weight:700;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;box-shadow:0 2px 10px rgba(45,212,191,.3)`;
-      // The worker serves its cached copy when the network is down.
-      play.onclick = () =>
-        location.assign("/arcade-offline.html?from=" + encodeURIComponent(location.pathname + location.search));
+      play.onclick = () => {
+        openArcadeModal();
+      };
       const close = document.createElement("button");
       close.textContent = "×";
       close.setAttribute("aria-label", "Dismiss");
