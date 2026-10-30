@@ -21,11 +21,11 @@ export const DataVerseLogo: React.FC<DataVerseLogoProps> = ({
 
   return (
     <img 
-      src="/logo.png?v=8" 
+      src="/logo.png?v=10" 
       alt="DataVerse Logo" 
       width={size} 
       height={size} 
-      className={`${roundClass} ${className} select-none object-cover`}
+      className={`${roundClass} ${className} select-none object-contain`}
       loading="eager"
       decoding="sync"
     />

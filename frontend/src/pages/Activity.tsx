@@ -183,12 +183,12 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
           
           {/* Avatar (40px mobile, 44px desktop) with 20px badge on bottom-right */}
           <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm p-0.5">
               {!item.notifier_id || isWelcome ? (
                 <img 
-                  src="/logo.png?v=8" 
+                  src="/logo.png?v=10" 
                   alt="DataVerse" 
-                  className="w-full h-full object-cover select-none" 
+                  className="w-full h-full object-contain select-none" 
                   loading="eager"
                   decoding="sync"
                 />
