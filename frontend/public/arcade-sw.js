@@ -1,19 +1,14 @@
-// Offline Arcade service worker for DataVerse.
-//
-// Serves /arcade-offline.html (four mini games: Runner, Snake, Flappy, Breakout)
-// when a page can't load (no internet, network error) or is still loading after SLOW_MS.
-// In the slow case the real page keeps loading in the background; the games page is
-// told when it's ready and reloading serves the finished response from a short-lived stash.
-//
-// Bump VERSION whenever arcade-offline.html changes so returning visitors get it.
-const VERSION = "v3";
-
-// Show the games if a page is still loading after this many ms. 0 = offline only.
+// Offline Arcade service worker for DataVerse (v4)
+const VERSION = "v4";
 const SLOW_MS = 6000;
+const OFFLINE_URL = "/arcade-offline.html";
+const CACHE = `offline-arcade-${VERSION}`;
+const PENDING = "offline-arcade-pending";
+const PENDING_MAX_AGE = 10 * 60 * 1000;
 
-// Paths that are never swapped for the games while slow, and never stored
-// (matched as "/path" or "/path/..."). They still get the games when offline.
-// DataVerse sensitive paths, auth, APIs, chat, and admin routes:
+// Embedded self-contained offline arcade HTML as permanent fallback
+const EMBEDDED_OFFLINE_HTML = "<!doctype html>\n<!-- Offline Arcade: four mini games, served by /arcade-sw.js when a page can't load.\n     Self-contained on purpose: nothing else is reachable when this shows.\n     CUSTOMIZE: the site name in .logo, the colours in :root, the text in COPY.\n     After editing, bump VERSION in /arcade-sw.js so returning visitors get the new copy. -->\n<html lang=\"en\" data-mode=\"offline\" data-arcade>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<meta name=\"robots\" content=\"noindex\">\n<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self';\">\n<title>You're offline | DataVerse</title>\n<style>\n  /* CUSTOMIZE: DataVerse theme palette matching dark and light mode */\n  :root { \n    --bg: #040b0d; \n    --ink: #e0f2f1; \n    --accent: #2dd4bf; \n    --on-accent: #031614; \n    color-scheme: dark light; \n  }\n  @media (prefers-color-scheme: light) { \n    :root { \n      --bg: #faf6ee; \n      --ink: #1f2a28; \n      --accent: #0f766e; \n      --on-accent: #ffffff; \n    } \n  }\n  * { box-sizing: border-box; margin: 0; }\n  html, body { height: 100%; }\n  body { background: var(--bg); color: var(--ink); font: 14px/1.5 'Outfit', ui-monospace, \"SF Mono\", Menlo, Consolas, monospace; -webkit-font-smoothing: antialiased; }\n  main { max-width: 760px; min-height: 100%; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 24px; }\n  header { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; min-height: 40px; }\n  .logo { font-weight: 800; font-size: 20px; letter-spacing: .08em; color: inherit; text-decoration: none; text-transform: uppercase; }\n  .logo span { color: var(--accent); }\n  #notice { display: flex; align-items: center; gap: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }\n  button { font: inherit; color: inherit; background: none; border: 2px solid var(--ink); border-radius: 8px; padding: 6px 14px; cursor: pointer; text-transform: uppercase; letter-spacing: .06em; transition: all .15s ease; }\n  button:hover, button:focus-visible, #go { background: var(--ink); color: var(--bg); outline: none; }\n  #go:hover, #go:focus-visible { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }\n  [hidden] { display: none !important; }\n  h1 { font-size: clamp(28px, 8vw, 44px); line-height: 1.1; letter-spacing: .04em; font-weight: 800; }\n  #sub { margin-top: 8px; max-width: 48ch; opacity: 0.85; }\n  #grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 24px; }\n  .card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 18px; text-align: left; text-transform: none; letter-spacing: 0; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); border-radius: 14px; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }\n  .card:hover, .card:focus-visible { background: rgba(45,212,191,0.06); border-color: var(--accent); color: inherit; transform: translate(-3px, -3px); box-shadow: 4px 4px 0 var(--accent); }\n  .card canvas { height: 40px; width: auto; image-rendering: pixelated; margin-bottom: 8px; }\n  .card b { font-size: 16px; letter-spacing: .08em; text-transform: uppercase; }\n  .card small { font-size: 12px; opacity: 0.8; }\n  #play { flex: 1; display: flex; flex-direction: column; gap: 12px; }\n  .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }\n  #stage { flex: 1; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; cursor: pointer; }\n  #screen { display: block; image-rendering: pixelated; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,.4); }\n  @media (max-width: 420px) { .card { padding: 12px; } #grid { gap: 8px; } }\n</style>\n</head>\n<body>\n<main>\n  <header>\n    <!-- CUSTOMIZE: your site name. The optional <span> is drawn in the accent colour. -->\n    <a class=\"logo\" href=\"/\">DataVerse<span>.</span></a>\n    <div id=\"notice\" role=\"status\"><span id=\"notice-text\"></span><button id=\"go\" hidden></button></div>\n  </header>\n  <section id=\"menu\">\n    <h1 id=\"title\"></h1>\n    <p id=\"sub\"></p>\n    <div id=\"grid\"></div>\n  </section>\n  <section id=\"play\" hidden>\n    <div class=\"bar\"><button id=\"back\">&lt; Games</button><span id=\"hint\"></span></div>\n    <div id=\"stage\"><canvas id=\"screen\" aria-label=\"Game screen\"></canvas></div>\n  </section>\n</main>\n<script>\n(() => {\n  \"use strict\";\n  // CUSTOMIZE: [heading, sub-heading, status text, button label]\n  const COPY = {\n    offline: [\"NO INTERNET.\", \"Pick a game while you wait. We'll let you know when you're back online.\", \"Offline\"],\n    slow: [\"SLOW CONNECTION.\", \"Your page is still loading. Pick a game, we'll let you know when it's ready.\", \"Loading your page...\"],\n    online: [\"BACK ONLINE.\", \"Your connection is back.\", \"You're back online.\", \"Continue\"],\n    ready: [\"PAGE READY.\", \"Your page has finished loading.\", \"Your page is ready.\", \"Open page\"],\n  };\n  const SELF = \"/arcade-offline.html\";\n\n  const $ = (s) => document.querySelector(s);\n  const touch = matchMedia(\"(pointer: coarse)\").matches;\n  const dark = matchMedia(\"(prefers-color-scheme: dark)\");\n  let INK = \"#e0f2f1\", BG = \"#040b0d\";\n  const setColors = () => {\n    try {\n      const css = getComputedStyle(document.documentElement);\n      INK = css.getPropertyValue(\"--ink\").trim() || (dark.matches ? \"#e0f2f1\" : \"#1f2a28\");\n      BG = css.getPropertyValue(\"--bg\").trim() || (dark.matches ? \"#040b0d\" : \"#faf6ee\");\n    } catch {\n      INK = dark.matches ? \"#e0f2f1\" : \"#1f2a28\";\n      BG = dark.matches ? \"#040b0d\" : \"#faf6ee\";\n    }\n  };\n  setColors();\n\n  // ---- Pixel drawing ----\n  const rand = (n) => Math.random() * n;\n  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));\n  const pad = (n) => String(n).padStart(5, \"0\");\n  const rect = (c, x, y, w, h) => c.fillRect(Math.round(x), Math.round(y), w, h);\n  const box = (c, x, y, w, h) => { rect(c, x, y, w, 1); rect(c, x, y + h - 1, w, 1); rect(c, x, y, 1, h); rect(c, x + w - 1, y, 1, h); };\n  function sprite(c, rows, x, y) {\n    x = Math.round(x); y = Math.round(y);\n    for (let j = 0; j < rows.length; j++)\n      for (let i = 0; i < rows[j].length; i++) if (rows[j][i] === \"#\") c.fillRect(x + i, y + j, 1, 1);\n  }\n  // 3x5 pixel font, 15 bits per glyph, row by row.\n  const GLYPHS = \"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ.:!-'\";\n  const BITS = (\"111101101101111 010110010010111 111001111100111 111001111001111 101101111001001 111100111001111 \" +\n    \"111100111101111 111001001001001 111101111101111 111101111001111 010101111101101 110101110101110 \" +\n    \"011100100100011 110101101101110 111100110100111 111100110100100 011100101101011 101101111101101 \" +\n    \"111010010010111 001001001101010 101101110101101 100100100100111 101111111101101 110101101101101 \" +\n    \"010101101101010 110101110100100 010101101110011 110101110101101 011100010001110 111010010010010 \" +\n    \"101101101101111 101101101101010 101101111111101 101101010101101 101101010010010 111001010100111 \" +\n    \"000000000000010 000010000010000 010010010000010 000000111000000 010010000000000\").split(\" \");\n  function text(c, str, x, y, align) {\n    str = String(str).toUpperCase();\n    const w = str.length * 4 - 1;\n    if (align === \"center\") x -= Math.floor(w / 2);\n    else if (align === \"right\") x -= w;\n    for (let i = 0; i < str.length; i++) {\n      const b = BITS[GLYPHS.indexOf(str[i])];\n      if (b) for (let p = 0; p < 15; p++) if (b[p] === \"1\") c.fillRect(x + i * 4 + (p % 3), y + ((p / 3) | 0), 1, 1);\n    }\n  }\n\n  // ---- Sprites ----\n  const ROBOT = [\n    \"......#.....\",\n    \".......#....\",\n    \"..########..\",\n    \".##########.\",\n    \".#####.##.#.\",\n    \".#####.##.#.\",\n    \".##########.\",\n    \"..########..\",\n    \"....####....\",\n    \"..########..\",\n    \".#.######.#.\",\n    \"....####....\",\n  ];\n  const LEGS = [\n    [\"....#..#....\", \"...##..##...\"],\n    [\"...#....#...\", \"..##....##..\"],\n  ];\n  const CONE = [\n    \"...#...\",\n    \"..###..\",\n    \"..#.#..\",\n    \"..###..\",\n    \".#####.\",\n    \".#...#.\",\n    \".#####.\",\n    \"#######\",\n    \"#######\",\n  ];\n  const CRATE = [\n    \"########\",\n    \"##....##\",\n    \"#.#..#.#\",\n    \"#..##..#\",\n    \"#..##..#\",\n    \"#.#..#.#\",\n    \"##....##\",\n    \"########\",\n  ];\n  const CLOUD = [\n    \".....####.....\",\n    \"...##....##...\",\n    \".##........###\",\n    \"##############\",\n  ];\n  const BIRD = [\n    [\n      \"##.........\",\n      \"###.####...\",\n      \".#######.#.\",\n      \"..#####.##.\",\n      \"..#########\",\n      \"...######..\",\n      \"....###....\",\n    ],\n    [\n      \"....####...\",\n      \"...####.#..\",\n      \"..######.#.\",\n      \".###########\",\n      \"####.####..\",\n      \"###.####...\",\n      \"##.........\",\n    ],\n  ];\n  const APPLE = [\n    \"...#...\",\n    \"..#....\",\n    \".#####.\",\n    \"#######\",\n    \"#######\",\n    \".#####.\",\n    \"..###..\",\n  ];\n  const SNAKE_ICON = [\n    \"###.###.###......#.\",\n    \"###.###.###.....###\",\n    \"###.###.###......#.\",\n    \"...................\",\n    \"........###........\",\n    \"........###........\",\n    \"........###........\",\n    \"...................\",\n    \"........###.###....\",\n    \"........###.###....\",\n    \"........###.###....\",\n  ];\n  const BRICKS_ICON = [\n    \"#####.#####.#####\",\n    \"#####.#####.#####\",\n    \".................\",\n    \"#####.#####......\",\n    \"#####.#####......\",\n    \".................\",\n    \"..........##.....\",\n    \"..........##.....\",\n    \".................\",\n    \".................\",\n    \"......######.....\",\n  ];\n\n  // ---- Games ----\n  // Each game: W/H (logical pixels), reset(), update(dt), draw(c), score, dead.\n  // Optional: press() for jump/flap, dir(dx, dy) for steering, pointer(x) for paddles.\n  const HUD = 9; // top rows reserved for the score\n\n  const Runner = {\n    id: \"runner\", name: \"Runner\", hint: touch ? \"Tap to jump\" : \"Space or up to jump\",\n    W: matchMedia(\"(max-width: 600px)\").matches ? 180 : 240, H: 90, GROUND: 80, icon: ROBOT.concat(LEGS[0]),\n    reset() {\n      this.y = 0; this.vy = 0; this.speed = 110; this.dist = 0; this.t = 0; this.buffer = 0;\n      this.obs = []; this.next = 140; this.dead = false;\n      this.clouds = [[50, 22], [150, 34], [220, 18]];\n      this.bumps = Array.from({ length: 24 }, () => [rand(this.W), 2 + (rand(4) | 0), 1 + (rand(3) | 0)]);\n    },\n    get score() { return Math.floor(this.dist / 10); },\n    press() { this.buffer = 0.12; },\n    spawn() {\n      const kinds = [[[CONE, 0, 0]], [[CONE, 0, 0], [CONE, 7, 0]], [[CRATE, 0, 0]], [[CRATE, 0, 0], [CRATE, 0, 8]], [[CRATE, 0, 0], [CRATE, 9, 0]]];\n      const parts = kinds[rand(this.score > 150 ? kinds.length : 3) | 0];\n      const w = Math.max(...parts.map(([s, dx]) => dx + s[0].length));\n      const h = Math.max(...parts.map(([s, , dy]) => dy + s.length));\n      this.obs.push({ x: this.W, parts, w, h });\n      this.next = this.speed * 0.6 + 40 + rand(this.speed * 0.9);\n    },\n    update(dt) {\n      this.t += dt;\n      this.speed = Math.min(260, this.speed + 3 * dt);\n      const dx = this.speed * dt;\n      this.dist += dx;\n      this.buffer -= dt;\n      if (this.buffer > 0 && this.y === 0) { this.vy = -260; this.buffer = 0; }\n      this.vy += 900 * dt;\n      this.y += this.vy * dt;\n      if (this.y >= 0) { this.y = 0; this.vy = 0; }\n      if ((this.next -= dx) <= 0) this.spawn();\n      for (const o of this.obs) o.x -= dx;\n      this.obs = this.obs.filter((o) => o.x + o.w > 0);\n      for (const c of this.clouds) if ((c[0] -= dx * 0.2) < -14) { c[0] = this.W + rand(60); c[1] = 14 + rand(26); }\n      const px = 18, py = this.GROUND - 14 + this.y + 2;\n      this.dead = this.obs.some((o) => px < o.x + o.w - 1 && px + 8 > o.x + 1 && py + 11 > this.GROUND - o.h + 1);\n    },\n    draw(c) {\n      const off = this.dist % this.W;\n      rect(c, 0, this.GROUND, this.W, 1);\n      for (const [x, dy, w] of this.bumps) rect(c, (x - off + this.W) % this.W, this.GROUND + dy, w, 1);\n      c.globalAlpha = 0.35;\n      for (const [x, y] of this.clouds) sprite(c, CLOUD, x, y);\n      c.globalAlpha = 1;\n      for (const o of this.obs) for (const [s, dx, dy] of o.parts) sprite(c, s, o.x + dx, this.GROUND - dy - s.length);\n      const legs = this.y < 0 || !this.t ? LEGS[0] : LEGS[(this.t * 12 | 0) % 2];\n      sprite(c, ROBOT.concat(legs), 16, this.GROUND - 14 + this.y);\n    },\n  };\n\n  const Snake = {\n    id: \"snake\", name: \"Snake\", hint: touch ? \"Swipe to steer\" : \"Arrow keys to steer\",\n    W: 162, H: 171, N: 20, icon: SNAKE_ICON,\n    reset() {\n      this.body = [[9, 10], [8, 10], [7, 10]]; this.d = [1, 0]; this.queue = [];\n      this.acc = 0; this.step = 0.13; this.eaten = 0; this.dead = false; this.food = this.place();\n    },\n    get score() { return this.eaten * 10; },\n    dir(dx, dy) {\n      const last = this.queue[this.queue.length - 1] || this.d;\n      if (this.queue.length > 2 || (dx === -last[0] && dy === -last[1]) || (dx === last[0] && dy === last[1])) return;\n      this.queue.push([dx, dy]);\n    },\n    place() {\n      let p;\n      do p = [rand(this.N) | 0, rand(this.N) | 0];\n      while (this.body.some((b) => b[0] === p[0] && b[1] === p[1]));\n      return p;\n    },\n    update(dt) {\n      for (this.acc += dt; this.acc >= this.step && !this.dead; this.acc -= this.step) {\n        if (this.queue.length) this.d = this.queue.shift();\n        const n = [this.body[0][0] + this.d[0], this.body[0][1] + this.d[1]];\n        const eat = n[0] === this.food[0] && n[1] === this.food[1];\n        const out = n[0] < 0 || n[1] < 0 || n[0] >= this.N || n[1] >= this.N;\n        // The tail moves out of the way this tick unless we're growing.\n        if (out || this.body.some((b, i) => (eat || i < this.body.length - 1) && b[0] === n[0] && b[1] === n[1])) { this.dead = true; return; }\n        this.body.unshift(n);\n        if (!eat) this.body.pop();\n        else {\n          this.eaten++;\n          this.step = Math.max(0.06, this.step - 0.003);\n          if (this.body.length === this.N * this.N) { this.dead = true; return; } // board full\n          this.food = this.place();\n        }\n      }\n    },\n    draw(c) {\n      box(c, 0, HUD - 1, this.W, this.H - HUD + 1);\n      const at = ([x, y]) => [1 + x * 8, HUD + y * 8];\n      if (!this.dead || (Date.now() / 250 | 0) % 2) for (const b of this.body) rect(c, ...at(b), 7, 7);\n      sprite(c, APPLE, ...at(this.food));\n    },\n  };\n\n  const Flappy = {\n    id: \"flappy\", name: \"Flappy\", hint: touch ? \"Tap to flap\" : \"Space or up to flap\",\n    W: 144, H: 200, GROUND: 188, GAP: 58, PW: 18, icon: BIRD[0],\n    reset() { this.y = 90; this.vy = 0; this.pipes = []; this.next = 40; this.passed = 0; this.t = 0; this.dist = 0; this.dead = false; },\n    get score() { return this.passed; },\n    press() { this.vy = -175; },\n    update(dt) {\n      this.t += dt;\n      this.vy = Math.min(this.vy + 560 * dt, 260);\n      this.y += this.vy * dt;\n      if (this.y < HUD) { this.y = HUD; this.vy = 0; }\n      const dx = 58 * dt;\n      this.dist += dx;\n      if ((this.next -= dx) <= 0) {\n        this.pipes.push({ x: this.W, gap: HUD + 18 + rand(this.GROUND - HUD - 36 - this.GAP) });\n        this.next = 80;\n      }\n      for (const p of this.pipes) {\n        p.x -= dx;\n        if (!p.done && p.x + this.PW < 30) { p.done = true; this.passed++; }\n      }\n      this.pipes = this.pipes.filter((p) => p.x + this.PW > -2);\n      const bx = 31, by = this.y + 1, bw = 9, bh = 5;\n      this.dead = this.y + 7 >= this.GROUND || this.pipes.some((p) =>\n        bx < p.x + this.PW && bx + bw > p.x && (by < p.gap || by + bh > p.gap + this.GAP));\n    },\n    draw(c) {\n      for (const p of this.pipes) {\n        box(c, p.x, HUD - 1, this.PW, p.gap - HUD + 1);\n        box(c, p.x - 2, p.gap - 6, this.PW + 4, 6);\n        box(c, p.x, p.gap + this.GAP, this.PW, this.GROUND - p.gap - this.GAP);\n        box(c, p.x - 2, p.gap + this.GAP, this.PW + 4, 6);\n        rect(c, p.x + 4, HUD, 1, p.gap - HUD - 6);\n        rect(c, p.x + 4, p.gap + this.GAP + 6, 1, this.GROUND - p.gap - this.GAP - 6);\n      }\n      rect(c, 0, this.GROUND, this.W, 1);\n      for (let x = -(this.dist % 12); x < this.W; x += 12) rect(c, x, this.GROUND + 4, 6, 1);\n      sprite(c, BIRD[this.vy < 0 || (this.t * 6 | 0) % 2 ? 1 : 0], 30, this.y);\n    },\n  };\n\n  const Breakout = {\n    id: \"breakout\", name: \"Breakout\", hint: touch ? \"Drag to move\" : \"Mouse or arrows to move\",\n    W: 160, H: 200, PY: 188, PW: 28, icon: BRICKS_ICON,\n    reset() { this.level = 1; this.lives = 3; this.points = 0; this.px = (this.W - this.PW) / 2; this.dead = false; this.build(); this.serve(); },\n    get score() { return this.points; },\n    build() {\n      this.bricks = [];\n      for (let r = 0; r < 5; r++) for (let col = 0; col < 8; col++) this.bricks.push({ x: 1 + col * 20, y: 22 + r * 8, w: 18, h: 5, r });\n    },\n    serve() {\n      const sp = 95 + this.level * 15;\n      this.wait = 0.6; this.vx = sp * 0.5 * (Math.random() < 0.5 ? -1 : 1); this.vy = -sp * 0.87;\n      this.bx = this.px + this.PW / 2 - 1; this.by = this.PY - 3;\n    },\n    pointer(x) { this.px = clamp(x - this.PW / 2, 0, this.W - this.PW); },\n    hit() {\n      const i = this.bricks.findIndex((b) => this.bx < b.x + b.w && this.bx + 3 > b.x && this.by < b.y + b.h && this.by + 3 > b.y);\n      if (i < 0) return false;\n      this.bricks.splice(i, 1);\n      this.points += 10;\n      return true;\n    },\n    update(dt) {\n      const move = ((held.ArrowRight || held.KeyD ? 1 : 0) - (held.ArrowLeft || held.KeyA ? 1 : 0)) * 160 * dt;\n      this.px = clamp(this.px + move, 0, this.W - this.PW);\n      if (this.wait > 0) { this.wait -= dt; this.bx = this.px + this.PW / 2 - 1; return; }\n      const steps = Math.ceil(Math.max(Math.abs(this.vx), Math.abs(this.vy)) * dt);\n      for (let s = 0; s < steps; s++) {\n        const sx = this.vx * dt / steps, sy = this.vy * dt / steps;\n        this.bx += sx;\n        if (this.bx < 0 || this.bx + 3 > this.W) { this.vx = -this.vx; this.bx = clamp(this.bx, 0, this.W - 3); }\n        else if (this.hit()) { this.vx = -this.vx; this.bx -= sx; }\n        this.by += sy;\n        if (this.by < HUD) { this.vy = Math.abs(this.vy); this.by = HUD; }\n        else if (this.hit()) { this.vy = -this.vy; this.by -= sy; }\n        if (this.vy > 0 && this.by + 3 >= this.PY && this.by + 3 <= this.PY + 3 && this.bx + 3 > this.px && this.bx < this.px + this.PW) {\n          // Where the ball lands on the paddle sets the bounce angle.\n          const sp = Math.hypot(this.vx, this.vy);\n          const a = clamp((this.bx + 1.5 - this.px - this.PW / 2) / (this.PW / 2), -1, 1) * 1.05;\n          this.vx = sp * Math.sin(a); this.vy = -sp * Math.cos(a); this.by = this.PY - 3;\n        }\n        if (this.by > this.H) {\n          if (--this.lives <= 0) { this.dead = true; return; }\n          return this.serve();\n        }\n      }\n      if (!this.bricks.length) { this.level++; this.build(); this.serve(); }\n    },\n    draw(c) {\n      rect(c, 0, HUD - 1, this.W, 1);\n      for (let i = 0; i < this.lives; i++) rect(c, 2 + i * 5, 2, 3, 3);\n      for (const b of this.bricks) b.r % 2 ? box(c, b.x, b.y, b.w, b.h) : rect(c, b.x, b.y, b.w, b.h);\n      rect(c, this.px, this.PY, this.PW, 3);\n      rect(c, this.bx, this.by, 3, 3);\n    },\n  };\n\n  const GAMES = [Runner, Snake, Flappy, Breakout];\n\n  // ---- High scores ----\n  const getHi = (g) => {\n    try {\n      if (typeof window !== \"undefined\" && window.localStorage) {\n        return +window.localStorage.getItem(\"arcade-hi-\" + g.id) || 0;\n      }\n    } catch (_) {}\n    return 0;\n  };\n  const setHi = (g, v) => {\n    try {\n      if (typeof window !== \"undefined\" && window.localStorage) {\n        window.localStorage.setItem(\"arcade-hi-\" + g.id, v);\n      }\n    } catch (_) {}\n  };\n\n  // ---- Menu ----\n  function renderMenu() {\n    const grid = $(\"#grid\");\n    grid.textContent = \"\";\n    for (const g of GAMES) {\n      const card = document.createElement(\"button\");\n      card.className = \"card\";\n      const icon = document.createElement(\"canvas\");\n      icon.width = g.icon[0].length; icon.height = g.icon.length;\n      const c = icon.getContext(\"2d\");\n      c.fillStyle = INK;\n      sprite(c, g.icon, 0, 0);\n      const name = document.createElement(\"b\"), hint = document.createElement(\"small\"), hi = document.createElement(\"small\");\n      name.textContent = g.name; hint.textContent = g.hint; hi.textContent = \"HI \" + pad(getHi(g));\n      card.append(icon, name, hint, hi);\n      card.onclick = () => open(g);\n      grid.append(card);\n    }\n  }\n\n  // ---- Game screen ----\n  const canvas = $(\"#screen\"), ctx = canvas.getContext(\"2d\"), stage = $(\"#stage\");\n  const held = {};\n  let game = null, state = \"ready\", overAt = 0;\n\n  function open(g) {\n    game = g; state = \"ready\"; g.reset();\n    canvas.width = g.W; canvas.height = g.H;\n    $(\"#hint\").textContent = g.hint;\n    $(\"#menu\").hidden = true; $(\"#play\").hidden = false;\n    fit();\n    requestAnimationFrame(fit);\n    setTimeout(fit, 60);\n  }\n  function close() {\n    game = null;\n    $(\"#play\").hidden = true; $(\"#menu\").hidden = false;\n    renderMenu();\n  }\n  function fit() {\n    if (!game) return;\n    const w = stage.clientWidth, h = innerHeight - stage.getBoundingClientRect().top - 16;\n    const s = Math.max(1, Math.min(w / game.W, h / game.H));\n    canvas.style.width = Math.floor(game.W * s) + \"px\";\n    canvas.style.height = Math.floor(game.H * s) + \"px\";\n  }\n  function press() {\n    if (!game) return;\n    if (state === \"play\") return game.press && game.press();\n    if (state === \"over\" && performance.now() - overAt < 500) return;\n    game.reset(); state = \"play\";\n    if (game.press) game.press();\n  }\n\n  let last = 0;\n  function frame(t) {\n    requestAnimationFrame(frame);\n    const dt = Math.min((t - last) / 1000, 1 / 30);\n    last = t;\n    if (!game) return;\n    if (state === \"play\") {\n      game.update(dt);\n      if (game.dead) {\n        state = \"over\"; overAt = performance.now();\n        if (game.score > getHi(game)) setHi(game, game.score);\n      }\n    }\n    ctx.fillStyle = BG; ctx.fillRect(0, 0, game.W, game.H);\n    ctx.fillStyle = INK;\n    game.draw(ctx);\n    const hi = getHi(game);\n    text(ctx, (hi ? \"HI \" + pad(hi) + \"  \" : \"\") + pad(game.score), game.W - 2, 2, \"right\");\n    if (state !== \"play\") {\n      const lines = state === \"ready\"\n        ? [touch ? \"TAP TO START\" : \"PRESS SPACE TO START\"]\n        : [\"GAME OVER\", touch ? \"TAP TO RETRY\" : \"SPACE TO RETRY\"];\n      const w = Math.max(...lines.map((l) => l.length * 4 - 1)), y = Math.round(game.H / 2) - lines.length * 4;\n      ctx.fillStyle = BG; ctx.fillRect(Math.round((game.W - w) / 2) - 4, y - 4, w + 8, lines.length * 8 + 6);\n      ctx.fillStyle = INK;\n      lines.forEach((l, i) => text(ctx, l, Math.round(game.W / 2), y + i * 8, \"center\"));\n    }\n  }\n  requestAnimationFrame(frame);\n\n  // ---- Input ----\n  const DIRS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0], KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] };\n  addEventListener(\"keydown\", (e) => {\n    if (!game) return;\n    if (e.code === \"Escape\") return close();\n    const d = DIRS[e.code];\n    if (!d && e.code !== \"Space\" && e.code !== \"Enter\") return;\n    e.preventDefault();\n    held[e.code] = true;\n    if (e.repeat) return;\n    if (state !== \"play\") press();\n    else if (!d || (!game.dir && d[1] < 0)) game.press && game.press();\n    if (d && game.dir) game.dir(d[0], d[1]);\n  });\n  addEventListener(\"keyup\", (e) => { held[e.code] = false; });\n\n  let down = false, sx = 0, sy = 0;\n  const pointer = (e) => {\n    if (!game || !game.pointer) return;\n    const r = canvas.getBoundingClientRect();\n    game.pointer((e.clientX - r.left) / r.width * game.W);\n  };\n  stage.addEventListener(\"pointerdown\", (e) => {\n    if (!game) return;\n    e.preventDefault();\n    down = true; sx = e.clientX; sy = e.clientY;\n    if (stage.setPointerCapture) stage.setPointerCapture(e.pointerId);\n    press();\n    pointer(e);\n  });\n  stage.addEventListener(\"pointermove\", (e) => {\n    if (e.pointerType === \"mouse\" || down) pointer(e);\n    if (!down || !game || !game.dir || state !== \"play\") return;\n    const dx = e.clientX - sx, dy = e.clientY - sy;\n    if (Math.hypot(dx, dy) < 20) return;\n    if (Math.abs(dx) > Math.abs(dy)) game.dir(Math.sign(dx), 0);\n    else game.dir(0, Math.sign(dy));\n    sx = e.clientX; sy = e.clientY;\n  });\n  addEventListener(\"pointerup\", () => { down = false; });\n  addEventListener(\"pointercancel\", () => { down = false; });\n  addEventListener(\"resize\", fit);\n  $(\"#back\").onclick = close;\n  dark.addEventListener(\"change\", () => { setColors(); if (!game) renderMenu(); });\n\n  // ---- Connection status ----\n  const isIframe = window.self !== window.top;\n  let poll = 0;\n  function status(mode) {\n    const entry = COPY[mode] || COPY.offline;\n    const title = entry[0];\n    const sub = entry[1];\n    const note = entry[2];\n    const cta = entry[3];\n    $(\"#title\").textContent = title;\n    $(\"#sub\").textContent = sub;\n    $(\"#notice-text\").textContent = note;\n    const logoEl = $(\".logo\");\n    if (logoEl) {\n      document.title = `${note} | ${logoEl.textContent}`;\n    }\n    $(\"#go\").hidden = !cta;\n    $(\"#go\").textContent = cta || \"\";\n    if (mode === \"offline\" && !poll) {\n      // onLine=false is reliable; onLine=true still needs a real request to confirm.\n      const check = () => {\n        try {\n          if (navigator.onLine) {\n            fetch(SELF, { method: \"HEAD\", cache: \"no-store\" }).then(() => status(\"online\"), () => {});\n          }\n        } catch (_) {}\n      };\n      try { addEventListener(\"online\", check); } catch (_) {}\n      poll = setInterval(check, 5000);\n    }\n    if (cta && poll) {\n      clearInterval(poll);\n      poll = 0;\n    }\n  }\n  $(\"#go\").onclick = () => {\n    if (isIframe) {\n      try {\n        window.parent.postMessage(\"close_arcade\", \"*\");\n      } catch (_) {}\n      return;\n    }\n    try {\n      if (location.pathname !== SELF) return location.reload();\n      const from = new URL(new URLSearchParams(location.search).get(\"from\") || \"/\", location.origin);\n      location.assign(from.origin === location.origin ? from.pathname + from.search + from.hash : \"/\");\n    } catch (_) {\n      location.assign(\"/\");\n    }\n  };\n  const logoLink = $(\".logo\");\n  if (logoLink && isIframe) {\n    logoLink.onclick = (e) => {\n      e.preventDefault();\n      try {\n        window.parent.postMessage(\"close_arcade\", \"*\");\n      } catch (_) {}\n    };\n  }\n  try {\n    if (\"serviceWorker\" in navigator && navigator.serviceWorker) {\n      navigator.serviceWorker.onmessage = (e) => {\n        try {\n          if (!e.data || e.data.url !== location.href.split(\"#\")[0]) return;\n          status(e.data.type === \"failed\" ? \"offline\" : e.data.type);\n        } catch (_) {}\n      };\n    }\n  } catch (_) {}\n\n  try {\n    status(document.documentElement.dataset.mode === \"slow\" ? \"slow\" : \"offline\");\n  } catch (_) {}\n  renderMenu();\n})();\n</script>\n</body>\n</html>\n";
+
 const SKIP_PATHS = [
   "/api", 
   "/admin", 
@@ -30,23 +25,28 @@ const SKIP_PATHS = [
   "/reset-password"
 ];
 
-const OFFLINE_URL = "/arcade-offline.html";
-const CACHE = `offline-arcade-${VERSION}`;
-const PENDING = "offline-arcade-pending";
-const PENDING_MAX_AGE = 10 * 60 * 1000;
-
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       try {
         const cache = await caches.open(CACHE);
+        // Pre-populate with embedded copy immediately
+        await cache.put(
+          new Request(OFFLINE_URL),
+          new Response(EMBEDDED_OFFLINE_HTML, {
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'",
+              "X-Content-Type-Options": "nosniff",
+            }
+          })
+        );
+        // Also attempt fresh fetch from server
         try {
           await cache.add(new Request(OFFLINE_URL, { cache: "reload" }));
-        } catch (_) {
-          await cache.add(new Request(OFFLINE_URL));
-        }
+        } catch (_) {}
       } catch (err) {
-        console.warn("Pre-cache offline arcade failed:", err);
+        console.warn("Pre-cache offline arcade error:", err);
       }
       await self.skipWaiting();
     })()
@@ -57,11 +57,15 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       for (const key of await caches.keys()) {
-        if (key.startsWith("offline-arcade-") && key !== CACHE && key !== PENDING) await caches.delete(key);
+        if (key.startsWith("offline-arcade-") && key !== CACHE && key !== PENDING) {
+          await caches.delete(key);
+        }
       }
-      // Lets the browser start the page request while the worker boots, so the
-      // worker never slows down a normal page load.
-      if (self.registration.navigationPreload) await self.registration.navigationPreload.enable();
+      if (self.registration.navigationPreload) {
+        try {
+          await self.registration.navigationPreload.enable();
+        } catch (_) {}
+      }
       await self.clients.claim();
     })()
   );
@@ -71,6 +75,7 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.mode !== "navigate" || request.method !== "GET") return;
   const { pathname } = new URL(request.url);
+
   if (pathname === OFFLINE_URL) {
     event.respondWith(
       (async () => {
@@ -80,36 +85,35 @@ self.addEventListener("fetch", (event) => {
           const net = await fromNetwork(event);
           if (net && net.ok) return net;
         } catch (_) {}
-        return (await offlinePage("offline")) || new Response("<!doctype html><html><body style='background:#040b0d;color:#fff;font-family:sans-serif;padding:20px;'><h2>DataVerse Offline Arcade</h2><p>Please reconnect to the internet to initialize the arcade.</p></body></html>", {
-          status: 200,
-          headers: { "Content-Type": "text/html; charset=utf-8" }
-        });
+        return renderOfflineResponse("offline");
       })()
     );
   } else if (SKIP_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
-    // No slow timer, no stash; games only if the network fails outright.
-    event.respondWith(fromNetwork(event).catch(async () => (await offlinePage("offline")) || Response.error()));
+    event.respondWith(fromNetwork(event).catch(async () => (await offlinePage("offline")) || renderOfflineResponse("offline")));
   } else {
     event.respondWith(handleNavigation(event));
   }
 });
 
-// Uses the navigation preload response when there is one, so the request is sent once.
 const fromNetwork = (event) => Promise.resolve(event.preloadResponse).then((res) => res || fetch(event.request));
+
 const setPreload = async (on) => {
-  const preload = self.registration.navigationPreload;
-  if (preload && (await preload.getState()).enabled !== on) await (on ? preload.enable() : preload.disable());
+  try {
+    const preload = self.registration.navigationPreload;
+    if (preload && (await preload.getState()).enabled !== on) {
+      await (on ? preload.enable() : preload.disable());
+    }
+  } catch (_) {}
 };
 
 async function handleNavigation(event) {
   const url = event.request.url;
   const stashed = await takeStash(url);
-  // Preload is paused while a page is stashed (see stash()); resume it.
   event.waitUntil(setPreload(true));
   if (stashed) return stashed;
 
   const network = fromNetwork(event);
-  if (!SLOW_MS) return network.catch(async () => (await offlinePage("offline")) || Response.error());
+  if (!SLOW_MS) return network.catch(async () => (await offlinePage("offline")) || renderOfflineResponse("offline"));
 
   let timer;
   const slow = new Promise((resolve) => (timer = setTimeout(resolve, SLOW_MS, "slow")));
@@ -121,11 +125,9 @@ async function handleNavigation(event) {
     }
   } catch {
     clearTimeout(timer);
-    return (await offlinePage("offline")) || Response.error();
+    return (await offlinePage("offline")) || renderOfflineResponse("offline");
   }
 
-  // Slow: show the games now, keep loading, tell the page when it's done.
-  // "ready" = stashed, opens instantly; "online" = arrived but can't be kept, reload fetches again.
   event.waitUntil(
     network.then(
       async (res) => notify(url, (await stash(url, res)) ? "ready" : "online"),
@@ -133,6 +135,18 @@ async function handleNavigation(event) {
     )
   );
   return (await offlinePage("slow")) || network;
+}
+
+function renderOfflineResponse(mode) {
+  const html = EMBEDDED_OFFLINE_HTML.replace('data-mode="offline"', `data-mode="${mode}"`);
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 async function offlinePage(mode) {
@@ -151,51 +165,57 @@ async function offlinePage(mode) {
         }
       }
     }
-    if (!cached) return null;
-    const html = (await cached.text()).replace('data-mode="offline"', `data-mode="${mode}"`);
+    const htmlText = cached ? (await cached.text()) : EMBEDDED_OFFLINE_HTML;
+    const html = htmlText.replace('data-mode="offline"', `data-mode="${mode}"`);
     return new Response(html, {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        // The page is self-contained: allow its own inline code, nothing external, allow framing on self
         "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'",
         "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (_) {
+    return renderOfflineResponse(mode);
+  }
+}
+
+async function stash(url, res) {
+  try {
+    const type = res.headers.get("content-type") || "";
+    const cacheControl = res.headers.get("cache-control") || "";
+    if (!res.ok || !type.includes("text/html") || /no-store|private/i.test(cacheControl)) return false;
+    const headers = new Headers(res.headers);
+    headers.delete("content-encoding");
+    headers.delete("content-length");
+    headers.set("x-stashed-at", String(Date.now()));
+    const body = await res.blob();
+    const cache = await caches.open(PENDING);
+    for (const key of await cache.keys()) {
+      const old = await cache.match(key);
+      if (!old || Date.now() - Number(old.headers.get("x-stashed-at")) > PENDING_MAX_AGE) await cache.delete(key);
+    }
+    await cache.put(url, new Response(body, { status: res.status, statusText: res.statusText, headers }));
+    await setPreload(false);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function takeStash(url) {
+  try {
+    const cache = await caches.open(PENDING);
+    const res = await cache.match(url);
+    if (!res) return null;
+    await cache.delete(url);
+    return Date.now() - Number(res.headers.get("x-stashed-at")) < PENDING_MAX_AGE ? res : null;
+  } catch (_) {
     return null;
   }
 }
 
-// Keeps a slow page's finished response for a few minutes so "Open page" is instant.
-// Only plain, cacheable HTML: never private/no-store pages, redirects or downloads.
-async function stash(url, res) {
-  const type = res.headers.get("content-type") || "";
-  const cacheControl = res.headers.get("cache-control") || "";
-  if (!res.ok || !type.includes("text/html") || /no-store|private/i.test(cacheControl)) return false;
-  const headers = new Headers(res.headers);
-  headers.delete("content-encoding");
-  headers.delete("content-length");
-  headers.set("x-stashed-at", String(Date.now()));
-  const body = await res.blob();
-  const cache = await caches.open(PENDING);
-  for (const key of await cache.keys()) {
-    const old = await cache.match(key);
-    if (!old || Date.now() - Number(old.headers.get("x-stashed-at")) > PENDING_MAX_AGE) await cache.delete(key);
-  }
-  await cache.put(url, new Response(body, { status: res.status, statusText: res.statusText, headers }));
-  // "Open page" reloads this URL; without preload the server isn't asked to build it a second time.
-  await setPreload(false);
-  return true;
-}
-
-async function takeStash(url) {
-  const cache = await caches.open(PENDING);
-  const res = await cache.match(url);
-  if (!res) return null;
-  await cache.delete(url);
-  return Date.now() - Number(res.headers.get("x-stashed-at")) < PENDING_MAX_AGE ? res : null;
-}
-
 async function notify(url, type) {
-  for (const client of await self.clients.matchAll({ type: "window" })) client.postMessage({ type, url });
+  try {
+    for (const client of await self.clients.matchAll({ type: "window" })) client.postMessage({ type, url });
+  } catch (_) {}
 }
