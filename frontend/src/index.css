@@ -26,6 +26,29 @@
   --img-dim: .55;           /* brightness of the blurred post backdrop */
   --bg-gradient: linear-gradient(180deg, var(--side) 0%, var(--bg) 100%);
   --card-border: color-mix(in srgb, var(--accent-2) 14%, var(--line));
+
+  /* Button “4 shadows + 1 gradient” Design System Variables */
+  --btn-radius: 9999px;
+
+  /* Primary Button (Brand Accent) */
+  --btn-primary-top: color-mix(in srgb, white 20%, var(--accent-2));
+  --btn-primary-bottom: color-mix(in srgb, black 16%, var(--accent));
+  --btn-primary-glow: color-mix(in srgb, var(--accent-2) 45%, transparent);
+  --btn-primary-text: var(--on-accent);
+
+  /* Secondary Button (Neutral Surface / Card) */
+  --btn-secondary-top: color-mix(in srgb, var(--text) 10%, var(--card));
+  --btn-secondary-bottom: color-mix(in srgb, black 18%, var(--card));
+  --btn-secondary-glow: color-mix(in srgb, var(--line) 45%, transparent);
+  --btn-secondary-text: var(--text);
+  --btn-secondary-border: color-mix(in srgb, var(--accent-2) 18%, var(--line));
+
+  /* Danger Button */
+  --btn-danger-top: color-mix(in srgb, white 20%, var(--danger));
+  --btn-danger-bottom: color-mix(in srgb, black 16%, var(--danger));
+  --btn-danger-glow: color-mix(in srgb, var(--danger) 45%, transparent);
+  --btn-danger-text: #ffffff;
+  --btn-danger-border: color-mix(in srgb, var(--danger) 50%, transparent);
 }
 
 /* LIGHT MODE: Warm Sand */
@@ -51,6 +74,29 @@
   --img-dim: .9;
   --bg-gradient: linear-gradient(180deg, var(--side) 0%, var(--bg) 100%);
   --card-border: color-mix(in srgb, var(--accent-2) 14%, var(--line));
+
+  /* Button “4 shadows + 1 gradient” Design System Variables */
+  --btn-radius: 9999px;
+
+  /* Primary Button (Brand Accent) */
+  --btn-primary-top: color-mix(in srgb, white 22%, var(--accent-2));
+  --btn-primary-bottom: color-mix(in srgb, black 14%, var(--accent));
+  --btn-primary-glow: color-mix(in srgb, var(--accent) 45%, transparent);
+  --btn-primary-text: var(--on-accent);
+
+  /* Secondary Button (Neutral Surface / Card) */
+  --btn-secondary-top: color-mix(in srgb, white 70%, var(--card));
+  --btn-secondary-bottom: color-mix(in srgb, black 8%, var(--card));
+  --btn-secondary-glow: color-mix(in srgb, var(--line) 45%, transparent);
+  --btn-secondary-text: var(--text);
+  --btn-secondary-border: var(--card-border);
+
+  /* Danger Button */
+  --btn-danger-top: color-mix(in srgb, white 18%, var(--danger));
+  --btn-danger-bottom: color-mix(in srgb, black 16%, var(--danger));
+  --btn-danger-glow: color-mix(in srgb, var(--danger) 45%, transparent);
+  --btn-danger-text: #ffffff;
+  --btn-danger-border: color-mix(in srgb, var(--danger) 50%, transparent);
 }
 
 /* Cross-fade 250ms transition on theme colors */
@@ -170,21 +216,142 @@ select:focus {
   color: var(--muted);
 }
 
-/* Ensure buttons with accent background have proper on-accent text color */
-button[class*="from-brand-"],
-button[class*="from-\[var\(--accent\)\]"],
-button[class*="bg-brand-600"],
-button[class*="bg-brand-500"] {
-  background: linear-gradient(90deg, var(--accent), var(--accent-2)) !important;
-  color: var(--on-accent) !important;
-  box-shadow: 0 8px 22px var(--shadow-accent) !important;
+/* ==========================================================================
+   BUTTON DESIGN SYSTEM: “4 SHADOWS + 1 GRADIENT” TECHNIQUE
+   ========================================================================== */
+
+/* Base button properties */
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+button.btn-primary,
+button.btn-secondary,
+button.btn-danger {
+  border-radius: var(--btn-radius) !important;
+  transition: transform 120ms ease, box-shadow 150ms ease, background 150ms ease !important;
+  cursor: pointer;
+  user-select: none;
 }
 
+/* 1. PRIMARY BUTTONS (Brand Color) */
+.btn-primary,
+button.btn-primary,
+button[class*="from-[var(--accent)"],
+button[class*="from-brand-"],
+button[class*="bg-brand-600"],
+button[class*="bg-brand-500"],
+button[class*="bg-gradient-to-r"][class*="var(--accent)"],
+.intro-btn {
+  background: linear-gradient(180deg, var(--btn-primary-top) 0%, var(--btn-primary-bottom) 100%) !important;
+  color: var(--btn-primary-text) !important;
+  border-radius: var(--btn-radius) !important;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 30%, transparent) !important;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30),
+    0 2px 3px rgba(0, 0, 0, 0.45),
+    0 12px 32px var(--btn-primary-glow) !important;
+  transition: transform 120ms ease, box-shadow 150ms ease, background 150ms ease !important;
+  cursor: pointer;
+}
+
+.btn-primary *,
+button.btn-primary *,
+button[class*="from-[var(--accent)"] *,
 button[class*="from-brand-"] *,
-button[class*="from-\[var\(--accent\)\]"] *,
 button[class*="bg-brand-600"] *,
-button[class*="bg-brand-500"] * {
-  color: var(--on-accent) !important;
+button[class*="bg-brand-500"] *,
+button[class*="bg-gradient-to-r"][class*="var(--accent)"] *,
+.intro-btn * {
+  color: var(--btn-primary-text) !important;
+}
+
+.btn-primary:active,
+button.btn-primary:active,
+button[class*="from-[var(--accent)"]:active,
+button[class*="from-brand-"]:active,
+button[class*="bg-brand-600"]:active,
+button[class*="bg-brand-500"]:active,
+button[class*="bg-gradient-to-r"][class*="var(--accent)"]:active,
+.intro-btn:active {
+  background: linear-gradient(0deg, var(--btn-primary-top) 0%, var(--btn-primary-bottom) 100%) !important;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.40) !important;
+  transform: translateY(2px) !important;
+}
+
+/* 2. SECONDARY BUTTONS (Neutral Surface / Card) */
+.btn-secondary,
+button.btn-secondary {
+  background: linear-gradient(180deg, var(--btn-secondary-top) 0%, var(--btn-secondary-bottom) 100%) !important;
+  color: var(--btn-secondary-text) !important;
+  border-radius: var(--btn-radius) !important;
+  border: 1px solid var(--btn-secondary-border) !important;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30),
+    0 2px 3px rgba(0, 0, 0, 0.45),
+    0 12px 32px var(--btn-secondary-glow) !important;
+  transition: transform 120ms ease, box-shadow 150ms ease, background 150ms ease !important;
+  cursor: pointer;
+}
+
+.btn-secondary *,
+button.btn-secondary * {
+  color: var(--btn-secondary-text) !important;
+}
+
+.btn-secondary:active,
+button.btn-secondary:active {
+  background: linear-gradient(0deg, var(--btn-secondary-top) 0%, var(--btn-secondary-bottom) 100%) !important;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.40) !important;
+  transform: translateY(2px) !important;
+}
+
+/* 3. DANGER BUTTONS */
+.btn-danger,
+button.btn-danger,
+button.btn-remove,
+button[class*="btn-remove"] {
+  background: linear-gradient(180deg, var(--btn-danger-top) 0%, var(--btn-danger-bottom) 100%) !important;
+  color: var(--btn-danger-text) !important;
+  border-radius: var(--btn-radius) !important;
+  border: 1px solid var(--btn-danger-border) !important;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30),
+    0 2px 3px rgba(0, 0, 0, 0.45),
+    0 12px 32px var(--btn-danger-glow) !important;
+  transition: transform 120ms ease, box-shadow 150ms ease, background 150ms ease !important;
+  cursor: pointer;
+}
+
+.btn-danger *,
+button.btn-danger *,
+button.btn-remove *,
+button[class*="btn-remove"] * {
+  color: var(--btn-danger-text) !important;
+}
+
+.btn-danger:active,
+button.btn-danger:active,
+button.btn-remove:active,
+button[class*="btn-remove"]:active {
+  background: linear-gradient(0deg, var(--btn-danger-top) 0%, var(--btn-danger-bottom) 100%) !important;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.40) !important;
+  transform: translateY(2px) !important;
+}
+
+/* Disabled State: remove shadows, prevent depression */
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled,
+button[class*="from-[var(--accent)"]:disabled,
+button[type="submit"]:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 /* THEME END */
 

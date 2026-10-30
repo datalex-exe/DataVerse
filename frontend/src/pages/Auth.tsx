@@ -686,7 +686,7 @@ export const Auth: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading || twoFactorCode.length < (isBackupCodeMode ? 8 : 6)}
-                className="w-full py-3 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs cursor-pointer disabled:cursor-not-allowed"
+                className="btn-primary w-full py-3 font-bold tracking-wide outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs cursor-pointer disabled:cursor-not-allowed"
               >
                 {loading ? 'Verifying...' : 'Verify & Continue'}
               </button>
@@ -912,7 +912,7 @@ export const Auth: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading || (!isLogin && !acceptedTerms)}
-                className="w-full py-3 mt-2 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl font-bold tracking-wide shadow-lg shadow-[var(--shadow-accent)] active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs glow-hover intro-btn relative overflow-hidden cursor-pointer disabled:cursor-not-allowed"
+                className="btn-primary w-full py-3 mt-2 font-bold tracking-wide outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs relative overflow-hidden cursor-pointer disabled:cursor-not-allowed"
               >
                 <span className="relative z-10">{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
                 <span className="intro-btn-shimmer" aria-hidden="true" />

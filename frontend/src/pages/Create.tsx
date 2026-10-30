@@ -395,7 +395,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                 <button
                   type="submit"
                   disabled={uploading || selectedFiles.length === 0 || success}
-                  className="w-full min-h-[48px] py-3.5 px-6 font-bold rounded-full shadow-lg transition-all flex items-center justify-center gap-2 text-sm tracking-wide bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-[var(--shadow-accent)] active:scale-[0.99] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none disabled:bg-[var(--input)] disabled:border disabled:border-[var(--card-border)] disabled:text-[var(--muted)]"
+                  className="btn-primary w-full min-h-[48px] py-3.5 px-6 font-bold flex items-center justify-center gap-2 text-sm tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {uploading ? (
                     <>

@@ -1737,7 +1737,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     logout();
                   }
                 }}
-                className="w-full h-[52px] min-h-[52px] rounded-[16px] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,transparent)] text-[var(--danger)] text-[15px] font-semibold flex items-center justify-center gap-2.5 hover:bg-[color-mix(in_srgb,var(--danger)_15%,transparent)] active:scale-[0.99] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger)]"
+                className="btn-danger w-full h-[52px] min-h-[52px] text-[15px] font-semibold flex items-center justify-center gap-2.5 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger)]"
               >
                 <LogOut className="w-4.5 h-4.5 stroke-[2.2]" />
                 <span>Log Out</span>
@@ -1749,7 +1749,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
             <button
               type="button"
               onClick={handleCloseSettings}
-              className="w-full h-[48px] min-h-[48px] rounded-[14px] border border-[var(--line)] bg-[var(--card)] text-[var(--text)] text-[15px] font-medium flex items-center justify-center gap-2 hover:bg-[var(--hover)] active:scale-[0.99] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+              className="btn-secondary w-full h-[48px] min-h-[48px] text-[15px] font-medium flex items-center justify-center gap-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
             >
               <ArrowLeft className="w-5 h-5 text-[var(--muted)]" />
               Back to profile
@@ -2079,7 +2079,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                       <div className="pt-4 border-t border-[var(--line)] flex items-center justify-end">
                         <button
                           type="submit"
-                          className="w-full sm:w-auto h-[46px] px-7 rounded-[14px] bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-semibold text-[15px] shadow-[var(--shadow-accent)] hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                          className="btn-primary w-full sm:w-auto h-[46px] px-7 font-semibold text-[15px] flex items-center justify-center gap-2"
                         >
                           Save changes
                         </button>
@@ -3163,7 +3163,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     e.stopPropagation();
                     handleCancelCoverPosition();
                   }}
-                  className="px-3.5 py-1.5 rounded-full bg-black/75 hover:bg-black/90 text-white border border-white/20 text-xs font-semibold active:scale-95 transition-all cursor-pointer shadow disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                  className="btn-secondary px-3.5 py-1.5 text-xs font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                 >
                   Cancel
                 </button>
@@ -3175,7 +3175,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     e.stopPropagation();
                     handleSaveCoverPosition();
                   }}
-                  className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold active:scale-95 transition-all cursor-pointer shadow-md shadow-[var(--shadow-accent)] flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
+                  className="btn-primary px-4 py-1.5 text-xs font-bold cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed pointer-events-auto"
                 >
                   {uploadingCover ? (
                     <>
@@ -3449,14 +3449,14 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     setSettingsTab('edit_profile');
                     setShowSettings(true);
                   }}
-                  className="flex-1 h-10 px-4 rounded-full border border-[var(--card-border)] text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] hover:border-[var(--accent-2)] transition-all flex items-center justify-center active:scale-[0.98] cursor-pointer"
+                  className="btn-secondary flex-1 h-10 px-4 text-xs sm:text-sm font-semibold flex items-center justify-center cursor-pointer"
                 >
                   Edit Profile
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowSettings(true)}
-                  className="w-10 h-10 rounded-xl border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)] transition-all flex items-center justify-center active:scale-95 cursor-pointer flex-shrink-0"
+                  className="btn-secondary w-10 h-10 flex items-center justify-center cursor-pointer flex-shrink-0"
                   aria-label="Settings"
                   title="Settings"
                 >
@@ -3470,12 +3470,12 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     <button
                       type="button"
                       onClick={handleFollowToggle}
-                      className={`flex-1 h-10 px-4 text-xs sm:text-sm font-semibold rounded-full transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] cursor-pointer ${
+                      className={`flex-1 h-10 px-4 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
                         profile.is_following
-                          ? 'border border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--hover)]'
+                          ? 'btn-secondary'
                           : profile.is_requested
-                          ? 'border border-[var(--card-border)] text-[var(--muted)] bg-[var(--card)]'
-                          : 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
+                          ? 'btn-secondary'
+                          : 'btn-primary'
                       }`}
                     >
                       {profile.is_following ? (
@@ -3499,7 +3499,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     <button
                       type="button"
                       onClick={handleMessageUser}
-                      className="flex-1 h-10 px-4 border border-[var(--card-border)] text-[var(--accent-2)] hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] text-xs sm:text-sm font-semibold rounded-full transition-all text-center flex items-center justify-center active:scale-[0.98] cursor-pointer"
+                      className="btn-secondary flex-1 h-10 px-4 text-xs sm:text-sm font-semibold text-center flex items-center justify-center cursor-pointer"
                     >
                       Message
                     </button>
@@ -3507,7 +3507,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     <button
                       type="button"
                       onClick={handleBlockUser}
-                      className="h-10 px-4 border border-[var(--card-border)] text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] text-xs sm:text-sm font-semibold rounded-full transition-all flex items-center justify-center active:scale-[0.98] cursor-pointer"
+                      className="btn-danger h-10 px-4 text-xs sm:text-sm font-semibold flex items-center justify-center cursor-pointer"
                     >
                       Block
                     </button>
@@ -3518,7 +3518,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                       <button
                         type="button"
                         onClick={handleUnblockUser}
-                        className="w-full h-10 border border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--hover)] text-xs sm:text-sm font-semibold rounded-full transition-all flex items-center justify-center cursor-pointer"
+                        className="btn-secondary w-full h-10 text-xs sm:text-sm font-semibold flex items-center justify-center cursor-pointer"
                       >
                         Unblock
                       </button>
