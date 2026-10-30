@@ -47,6 +47,7 @@ const AppContent: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
   const [messagesParam, setMessagesParam] = useState<string | undefined>(undefined);
+  const [postParam, setPostParam] = useState<string | undefined>(undefined);
   const [hideBottomNav, setHideBottomNav] = useState<boolean>(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState<boolean>(false);
   // All primary tabs are mounted in DOM for 0ms instantaneous tab switching
@@ -173,9 +174,10 @@ const AppContent: React.FC = () => {
   React.useEffect(() => {
     const titles: Record<string, string> = {
       feed: 'DataVerse — Feed',
-      messages: 'DataVerse — Messages & Chat',
+      messages: 'DataVerse — Direct Messages',
       search: 'DataVerse — Explore Creators',
       notifications: 'DataVerse — Activity & Notifications',
+      settings: 'DataVerse — Settings',
       create: 'DataVerse — Create Post',
       admin: 'DataVerse — Admin Console',
       terms: 'Terms of Service — DataVerse',
@@ -188,120 +190,332 @@ const AppContent: React.FC = () => {
 
     if (activeView === 'profile') {
       document.title = profileParam ? `@${profileParam} — DataVerse` : 'Your Profile — DataVerse';
+    } else if (activeView === 'messages' && messagesParam) {
+      document.title = 'Chat — DataVerse';
+    } else if (activeView === 'feed' && postParam) {
+      document.title = 'Post — DataVerse';
     } else {
       document.title = titles[activeView] || 'DataVerse — Social Network by Datalex';
     }
-  }, [activeView, profileParam]);
+  }, [activeView, profileParam, messagesParam, postParam]);
+
+  // Reserved paths that should never be captured by dynamic :username routes
+  const RESERVED_ROUTES = React.useMemo(() => new Set([
+    'direct',
+    'explore',
+    'search',
+    'notifications',
+    'settings',
+    'create',
+    'admin',
+    'p',
+    'post',
+    'reel',
+    'reels',
+    'terms',
+    'privacy',
+    'cookies',
+    'refund',
+    'contact',
+    'api',
+    'login',
+    'logout',
+    'signup',
+    'auth',
+    'feed',
+    'messages',
+    '404',
+  ]), []);
+
+  const resolveRoute = React.useCallback((pathname: string, hash: string) => {
+    let raw = '';
+    let fromHash = false;
+
+    // 1. Detect and migrate legacy hash links (e.g. #/messages/123 or #/feed)
+    if (hash && hash.length > 1) {
+      fromHash = true;
+      raw = hash.replace(/^#\/?/, '');
+    } else {
+      // 2. Modern HTML5 History API pathname
+      raw = pathname.replace(/^\/+|\/+$/g, '');
+    }
+
+    // A. Root / Feed
+    if (!raw || raw === 'feed') {
+      return {
+        view: 'feed',
+        canonicalPath: '/',
+        shouldReplaceState: fromHash || pathname !== '/',
+      };
+    }
+
+    // B. Direct Messages
+    if (raw === 'direct' || raw === 'messages') {
+      return {
+        view: 'messages',
+        canonicalPath: '/direct/',
+        shouldReplaceState: fromHash || pathname !== '/direct/',
+      };
+    }
+
+    if (raw.startsWith('direct/t/')) {
+      const convoId = raw.slice('direct/t/'.length).replace(/\/+$/, '');
+      return {
+        view: 'messages',
+        messagesParam: convoId,
+        canonicalPath: `/direct/t/${convoId}/`,
+        shouldReplaceState: fromHash || pathname !== `/direct/t/${convoId}/`,
+      };
+    }
+
+    if (raw.startsWith('messages/')) {
+      const convoId = raw.slice('messages/'.length).replace(/\/+$/, '');
+      return {
+        view: 'messages',
+        messagesParam: convoId,
+        canonicalPath: `/direct/t/${convoId}/`,
+        shouldReplaceState: true,
+      };
+    }
+
+    // C. Explore / Search
+    if (raw === 'explore' || raw === 'search') {
+      return {
+        view: 'search',
+        canonicalPath: '/explore/',
+        shouldReplaceState: fromHash || pathname !== '/explore/',
+      };
+    }
+
+    // D. Notifications / Activity
+    if (raw === 'notifications' || raw === 'activity') {
+      return {
+        view: 'notifications',
+        canonicalPath: '/notifications/',
+        shouldReplaceState: fromHash || pathname !== '/notifications/',
+      };
+    }
+
+    // E. Settings
+    if (raw === 'settings') {
+      return {
+        view: 'settings',
+        canonicalPath: '/settings/',
+        shouldReplaceState: fromHash || pathname !== '/settings/',
+      };
+    }
+
+    // F. Create
+    if (raw === 'create') {
+      return {
+        view: 'create',
+        canonicalPath: '/create/',
+        shouldReplaceState: fromHash || pathname !== '/create/',
+      };
+    }
+
+    // G. Posts & Reels
+    if (raw.startsWith('p/') || raw.startsWith('post/')) {
+      const postId = (raw.startsWith('p/') ? raw.slice('p/'.length) : raw.slice('post/'.length)).replace(/\/+$/, '');
+      return {
+        view: 'feed',
+        postParam: postId,
+        canonicalPath: `/p/${postId}/`,
+        shouldReplaceState: fromHash || pathname !== `/p/${postId}/`,
+      };
+    }
+
+    if (raw.startsWith('reel/') || raw.startsWith('reels/')) {
+      const reelId = (raw.startsWith('reel/') ? raw.slice('reel/'.length) : raw.slice('reels/'.length)).replace(/\/+$/, '');
+      return {
+        view: 'feed',
+        postParam: reelId,
+        canonicalPath: `/reel/${reelId}/`,
+        shouldReplaceState: fromHash || pathname !== `/reel/${reelId}/`,
+      };
+    }
+
+    // H. Admin Console
+    if (raw === 'admin') {
+      return {
+        view: 'admin',
+        canonicalPath: '/admin/',
+        shouldReplaceState: fromHash || pathname !== '/admin/',
+      };
+    }
+
+    // I. Public Legal & Contact Pages
+    if (['terms', 'privacy', 'cookies', 'refund', 'contact'].includes(raw)) {
+      return {
+        view: raw,
+        canonicalPath: `/${raw}/`,
+        shouldReplaceState: fromHash || pathname !== `/${raw}/`,
+      };
+    }
+
+    // J. User Profiles (/@username, /profile/:username, or modern /:username/)
+    if (raw.startsWith('@')) {
+      const username = raw.slice(1).replace(/\/+$/, '');
+      return {
+        view: 'profile',
+        profileParam: username,
+        canonicalPath: `/${username}/`,
+        shouldReplaceState: fromHash || pathname !== `/${username}/`,
+      };
+    }
+
+    if (raw.startsWith('profile/')) {
+      const username = raw.slice('profile/'.length).replace(/\/+$/, '');
+      return {
+        view: 'profile',
+        profileParam: username,
+        canonicalPath: `/${username}/`,
+        shouldReplaceState: fromHash || pathname !== `/${username}/`,
+      };
+    }
+
+    if (raw === 'profile') {
+      const targetPath = user?.username ? `/${user.username}/` : '/profile/';
+      return {
+        view: 'profile',
+        profileParam: undefined,
+        canonicalPath: targetPath,
+        shouldReplaceState: fromHash || pathname !== targetPath,
+      };
+    }
+
+    // Dynamic creator username route (when not matching reserved paths)
+    if (!RESERVED_ROUTES.has(raw) && /^[a-zA-Z0-9_.\-@]{2,64}$/.test(raw)) {
+      return {
+        view: 'profile',
+        profileParam: raw,
+        canonicalPath: `/${raw}/`,
+        shouldReplaceState: fromHash || pathname !== `/${raw}/`,
+      };
+    }
+
+    // 404 Fallback
+    return {
+      view: '404',
+      canonicalPath: pathname,
+      shouldReplaceState: false,
+    };
+  }, [user, RESERVED_ROUTES]);
 
   React.useEffect(() => {
-    const handleHashChange = () => {
-      let rawRoute = window.location.hash ? window.location.hash.replace(/^#\/?/, '') : window.location.pathname.replace(/^\//, '');
-      if (!rawRoute || rawRoute === 'feed') {
-        setActiveView('feed');
-        setHideBottomNav(false);
-        return;
+    const handleLocationChange = () => {
+      const resolved = resolveRoute(window.location.pathname, window.location.hash);
+
+      setActiveView(resolved.view);
+      setProfileParam(resolved.profileParam);
+      setMessagesParam(resolved.messagesParam);
+      setPostParam(resolved.postParam);
+      setHideBottomNav(resolved.view === 'messages' && Boolean(resolved.messagesParam));
+
+      if (resolved.view === 'notifications') {
+        setUnreadCount(0);
       }
 
-      if (rawRoute.startsWith('@')) {
-        const username = rawRoute.substring(1);
-        setActiveView('profile');
-        setProfileParam(username);
-      } else if (rawRoute.startsWith('profile/')) {
-        const username = rawRoute.substring(8);
-        setActiveView('profile');
-        setProfileParam(username);
-      } else if (rawRoute === 'profile') {
-        setActiveView('profile');
-        setProfileParam(undefined);
-      } else if (rawRoute.startsWith('post/') || rawRoute.startsWith('p/')) {
-        setActiveView('feed');
-        setMessagesParam(undefined);
-        setProfileParam(undefined);
-      } else if (rawRoute.startsWith('messages/')) {
-        const convoId = rawRoute.substring(9);
-        setActiveView('messages');
-        setMessagesParam(convoId);
-        setHideBottomNav(true);
-        return;
-      } else if (rawRoute === 'messages') {
-        setActiveView('messages');
-        setMessagesParam(undefined);
-        setHideBottomNav(false);
-      } else if (rawRoute === 'search' || rawRoute === 'explore') {
-        setActiveView('search');
-        setMessagesParam(undefined);
-        setProfileParam(undefined);
-      } else if (rawRoute === 'notifications') {
-        setActiveView('notifications');
-        setMessagesParam(undefined);
-        setProfileParam(undefined);
-        setUnreadCount(0);
-      } else if (rawRoute === 'create') {
-        setActiveView('create');
-        setMessagesParam(undefined);
-        setProfileParam(undefined);
-      } else if (rawRoute === 'admin') {
-        setActiveView('admin');
-      } else if (rawRoute === 'terms') {
-        setActiveView('terms');
-      } else if (rawRoute === 'privacy') {
-        setActiveView('privacy');
-      } else if (rawRoute === 'cookies') {
-        setActiveView('cookies');
-      } else if (rawRoute === 'refund') {
-        setActiveView('refund');
-      } else if (rawRoute === 'contact') {
-        setActiveView('contact');
-      } else {
-        setActiveView('404');
+      if (resolved.shouldReplaceState) {
+        window.history.replaceState(null, '', resolved.canonicalPath + window.location.search);
       }
-      setHideBottomNav(false);
     };
 
-    window.addEventListener('hashchange', handleHashChange);
-    window.addEventListener('popstate', handleHashChange);
-    handleHashChange();
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    handleLocationChange();
 
     return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-      window.removeEventListener('popstate', handleHashChange);
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
     };
-  }, [user]);
+  }, [resolveRoute]);
 
   const navigate = (newView: string, param?: string) => {
-    // Synchronously switch view state for instant 0ms UI reaction
-    if (newView === 'profile') {
-      setActiveView('profile');
-      setProfileParam(param || undefined);
+    let targetPath = '/';
+
+    if (newView === 'feed' || newView === 'feed_redirect') {
+      setActiveView('feed');
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
       setHideBottomNav(false);
+      targetPath = '/';
     } else if (newView === 'messages') {
       setActiveView('messages');
       setMessagesParam(param || undefined);
+      setProfileParam(undefined);
+      setPostParam(undefined);
       setHideBottomNav(Boolean(param));
+      targetPath = param ? `/direct/t/${param}/` : '/direct/';
+    } else if (newView === 'profile') {
+      setActiveView('profile');
+      setProfileParam(param || undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
+      setHideBottomNav(false);
+      targetPath = param ? `/${param}/` : (user?.username ? `/${user.username}/` : '/profile/');
+    } else if (newView === 'search' || newView === 'explore') {
+      setActiveView('search');
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
+      setHideBottomNav(false);
+      targetPath = '/explore/';
+    } else if (newView === 'notifications') {
+      setActiveView('notifications');
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
+      setHideBottomNav(false);
+      setUnreadCount(0);
+      targetPath = '/notifications/';
+    } else if (newView === 'settings') {
+      setActiveView('settings');
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
+      setHideBottomNav(false);
+      targetPath = '/settings/';
+    } else if (newView === 'create') {
+      setActiveView('create');
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
+      setHideBottomNav(false);
+      targetPath = '/create/';
+    } else if (newView === 'post' || newView === 'p') {
+      setActiveView('feed');
+      setPostParam(param);
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setHideBottomNav(false);
+      targetPath = `/p/${param}/`;
+    } else if (newView === 'reel') {
+      setActiveView('feed');
+      setPostParam(param);
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setHideBottomNav(false);
+      targetPath = `/reel/${param}/`;
+    } else if (newView === 'admin') {
+      setActiveView('admin');
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
+      setHideBottomNav(false);
+      targetPath = '/admin/';
     } else {
       setActiveView(newView);
-      if (newView !== 'profile') setProfileParam(undefined);
-      if (newView !== 'messages') setMessagesParam(undefined);
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
       setHideBottomNav(false);
+      targetPath = `/${newView}/`;
     }
 
-    if (newView === 'feed' || newView === 'feed_redirect') {
-      window.location.hash = '#/feed';
-    } else if (newView === 'profile') {
-      window.location.hash = param ? `#/profile/${param}` : '#/profile';
-    } else if (newView === 'search') {
-      window.location.hash = '#/search';
-    } else if (newView === 'messages') {
-      window.location.hash = param ? `#/messages/${param}` : '#/messages';
-    } else if (newView === 'notifications') {
-      window.location.hash = '#/notifications';
-      setUnreadCount(0);
-    } else if (newView === 'create') {
-      window.location.hash = '#/create';
-    } else if (newView === 'admin') {
-      window.location.hash = '#/admin';
-    } else {
-      window.location.hash = `#/${newView}`;
+    if (window.location.pathname !== targetPath || window.location.hash) {
+      window.history.pushState(null, '', targetPath);
     }
     window.scrollTo(0, 0);
   };
@@ -685,7 +899,7 @@ const AppContent: React.FC = () => {
             {/* Primary Core Views - Kept mounted once visited for 0ms instant tab switching */}
             {visitedTabs.has('feed') && (
               <div className={activeView === 'feed' ? 'block w-full flex-1' : 'hidden'}>
-                <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} />
+                <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} targetPostId={postParam} />
               </div>
             )}
 
@@ -713,13 +927,14 @@ const AppContent: React.FC = () => {
               </div>
             )}
 
-            {visitedTabs.has('profile') && !profileParam && (
+            {visitedTabs.has('profile') && !profileParam && activeView !== 'settings' && (
               <div className={activeView === 'profile' && !profileParam ? 'block w-full flex-1' : 'hidden'}>
                 <Profile onNavigate={navigate} />
               </div>
             )}
 
             {/* Dynamic / Parameter-based Views */}
+            {activeView === 'settings' && <Profile initialShowSettings={true} onNavigate={navigate} />}
             {activeView === 'profile' && !!profileParam && <Profile targetUsername={profileParam} onNavigate={navigate} />}
             {activeView === 'admin' && <Admin />}
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (

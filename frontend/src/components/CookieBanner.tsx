@@ -34,7 +34,8 @@ export const CookieBanner: React.FC<CookieBannerProps> = ({ onNavigate }) => {
     if (onNavigate) {
       onNavigate('cookies');
     } else {
-      window.location.hash = '#/cookies';
+      window.history.pushState(null, '', '/cookies/');
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 

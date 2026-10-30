@@ -26,7 +26,8 @@ export const Contact: React.FC<ContactProps> = ({ onNavigate }) => {
     if (onNavigate) {
       onNavigate('feed');
     } else {
-      window.location.hash = '#/feed';
+      window.history.pushState(null, '', '/');
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 

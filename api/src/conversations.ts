@@ -224,6 +224,127 @@ conversationsApp.get('/unread/count', async (c) => {
 });
 
 
+// GET INDIVIDUAL CONVERSATION DETAILS (Secured with strict IDOR verification)
+conversationsApp.get('/:id', async (c) => {
+  const conversationId = c.req.param('id');
+  const currentUserId = c.get('userId');
+
+  try {
+    // 1. Fetch conversation record
+    const convo = await c.env.DB.prepare(`
+      SELECT id, is_group, group_name, creator_id, created_at, is_deleted
+      FROM conversations
+      WHERE id = ?
+    `)
+      .bind(conversationId)
+      .first<any>();
+
+    // Public room fallback: auto-create room if it's room_*
+    if (!convo && conversationId.startsWith('room_')) {
+      const roomName = conversationId.replace('room_', '').replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase());
+      await c.env.DB.prepare(
+        'INSERT OR IGNORE INTO conversations (id, is_group, group_name, created_at) VALUES (?, 1, ?, ?)'
+      )
+        .bind(conversationId, roomName, Date.now())
+        .run();
+
+      return c.json({
+        conversation: {
+          id: conversationId,
+          is_group: true,
+          group_name: roomName,
+          creator_id: null,
+          created_at: Date.now(),
+          unread_count: 0,
+          last_message: null,
+          members: []
+        }
+      });
+    }
+
+    if (!convo || convo.is_deleted === 1) {
+      return c.json({ error: 'Conversation not found' }, 404);
+    }
+
+    // 2. Authorization check: verify caller is an authorized participant
+    const caller = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+      .bind(currentUserId)
+      .first<any>();
+    const isTopAdmin = caller && caller.is_top_admin === 1;
+
+    let isMember = false;
+    if (isTopAdmin) {
+      isMember = true;
+    } else {
+      const check = await c.env.DB.prepare(`
+        SELECT 1 FROM conversation_members
+        WHERE conversation_id = ? AND user_id = ?
+      `)
+        .bind(conversationId, currentUserId)
+        .first();
+      isMember = !!check;
+    }
+
+    if (!isMember) {
+      return c.json({ error: 'Access denied: You are not a participant in this conversation' }, 403);
+    }
+
+    // 3. Fetch conversation members
+    const { results: members } = await c.env.DB.prepare(`
+      SELECT cm.conversation_id, cm.nickname, u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified
+      FROM conversation_members cm
+      JOIN users u ON cm.user_id = u.id
+      WHERE cm.conversation_id = ?
+    `)
+      .bind(conversationId)
+      .all<any>();
+
+    const convoMembers = (members || []).map(m => ({
+      id: m.user_id,
+      username: m.username,
+      display_name: m.display_name,
+      avatar_url: m.avatar_url,
+      is_verified: !!m.is_verified,
+      nickname: m.nickname || null
+    }));
+
+    // 4. Fetch last message
+    const lastMsg = await c.env.DB.prepare(`
+      SELECT body, created_at, sender_id
+      FROM messages
+      WHERE conversation_id = ?
+        AND (is_deleted IS NULL OR is_deleted = 0)
+        AND created_at > COALESCE(
+          (SELECT deleted_at FROM user_chat_deletions WHERE user_id = ? AND conversation_id = ?),
+          0
+        )
+      ORDER BY created_at DESC
+      LIMIT 1
+    `)
+      .bind(conversationId, currentUserId, conversationId)
+      .first<any>();
+
+    return c.json({
+      conversation: {
+        id: convo.id,
+        is_group: convo.is_group > 0,
+        group_name: convo.group_name || null,
+        creator_id: convo.creator_id || null,
+        created_at: convo.created_at,
+        unread_count: 0,
+        last_message: lastMsg ? {
+          body: lastMsg.body,
+          created_at: lastMsg.created_at,
+          sender_id: lastMsg.sender_id
+        } : null,
+        members: convoMembers
+      }
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // GET MESSAGES HISTORY FOR A CONVERSATION
 conversationsApp.get('/:id/messages', async (c) => {
   const conversationId = c.req.param('id');
@@ -235,6 +356,16 @@ conversationsApp.get('/:id/messages', async (c) => {
       .bind(currentUserId)
       .first<any>();
     const isTopAdmin = caller && caller.is_top_admin === 1;
+
+    // Check conversation existence
+    if (!conversationId.startsWith('room_')) {
+      const convo = await c.env.DB.prepare('SELECT id, is_deleted FROM conversations WHERE id = ?')
+        .bind(conversationId)
+        .first<any>();
+      if (!convo || convo.is_deleted === 1) {
+        return c.json({ error: 'Conversation not found' }, 404);
+      }
+    }
 
     // Verify membership first (bypass for public room IDs starting with room_)
     let isMember = false;
@@ -266,7 +397,7 @@ conversationsApp.get('/:id/messages', async (c) => {
     }
 
     if (!isMember) {
-      return c.json({ error: 'Unauthorized conversation member access' }, 403);
+      return c.json({ error: 'Access denied: You are not a participant in this conversation' }, 403);
     }
 
     // Retrieve all messages (use LEFT JOIN and COALESCE to allow system messages)
@@ -314,6 +445,17 @@ conversationsApp.post('/:id/read', async (c) => {
 
   if (!conversationId.startsWith('room_')) {
     try {
+      // Verify caller is a member
+      const member = await c.env.DB.prepare(`
+        SELECT 1 FROM conversation_members cm
+        JOIN conversations c ON cm.conversation_id = c.id
+        WHERE cm.conversation_id = ? AND cm.user_id = ? AND (c.is_deleted IS NULL OR c.is_deleted = 0)
+      `).bind(conversationId, currentUserId).first();
+
+      if (!member) {
+        return c.json({ error: 'Access denied: You are not a participant in this conversation' }, 403);
+      }
+
       await c.env.DB.prepare(
         'UPDATE conversation_members SET last_read_at = ? WHERE conversation_id = ? AND user_id = ?'
       )
@@ -528,7 +670,7 @@ conversationsApp.delete('/:id/members/:targetUserId', async (c) => {
   const currentUserId = c.get('userId');
   try {
     // 1. Verify it's a group
-    const convo = await c.env.DB.prepare('SELECT is_group, creator_id, group_name FROM conversations WHERE id = ?')
+    const convo = await c.env.DB.prepare('SELECT is_group, creator_id, group_name FROM conversations WHERE id = ? AND (is_deleted IS NULL OR is_deleted = 0)')
       .bind(conversationId).first<any>();
     if (!convo) return c.json({ error: 'Conversation not found' }, 404);
     if (!convo.is_group) return c.json({ error: 'Cannot leave/kick from a 1:1 DM' }, 400);
@@ -539,6 +681,13 @@ conversationsApp.delete('/:id/members/:targetUserId', async (c) => {
     const callerUser = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
       .bind(currentUserId).first<any>();
     const isTopAdmin = callerUser && callerUser.is_top_admin === 1;
+
+    // Verify caller is a member
+    const callerMember = await c.env.DB.prepare('SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?')
+      .bind(conversationId, currentUserId).first();
+    if (!callerMember && !isTopAdmin) {
+      return c.json({ error: 'Access denied: You are not a member of this conversation' }, 403);
+    }
 
     const isAdmin = convo.creator_id === currentUserId || isTopAdmin;
 
@@ -598,6 +747,44 @@ conversationsApp.delete('/:id/members/:targetUserId', async (c) => {
   }
 });
 
+// ADD MEMBER(S) TO GROUP CONVERSATION
+conversationsApp.post('/:id/members', async (c) => {
+  const conversationId = c.req.param('id');
+  const currentUserId = c.get('userId');
+  try {
+    const { user_ids } = await c.req.json();
+    if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
+      return c.json({ error: 'user_ids array is required' }, 400);
+    }
+
+    const convo = await c.env.DB.prepare('SELECT is_group, creator_id, group_name FROM conversations WHERE id = ? AND (is_deleted IS NULL OR is_deleted = 0)')
+      .bind(conversationId).first<any>();
+    if (!convo) return c.json({ error: 'Conversation not found' }, 404);
+    if (!convo.is_group) return c.json({ error: 'Cannot add members to a 1:1 DM' }, 400);
+
+    const callerUser = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+      .bind(currentUserId).first<any>();
+    const isTopAdmin = callerUser && callerUser.is_top_admin === 1;
+
+    // Verify caller is active member
+    const callerMember = await c.env.DB.prepare('SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?')
+      .bind(conversationId, currentUserId).first();
+    if (!callerMember && !isTopAdmin) {
+      return c.json({ error: 'Access denied: You are not a member of this conversation' }, 403);
+    }
+
+    // Insert new members
+    for (const newUserId of user_ids) {
+      await c.env.DB.prepare('INSERT OR IGNORE INTO conversation_members (conversation_id, user_id) VALUES (?, ?)')
+        .bind(conversationId, newUserId).run();
+    }
+
+    return c.json({ success: true });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // SET OR UPDATE MEMBER NICKNAME IN CONVERSATION
 conversationsApp.put('/:id/members/:targetUserId/nickname', async (c) => {
   const conversationId = c.req.param('id');
@@ -607,7 +794,7 @@ conversationsApp.put('/:id/members/:targetUserId/nickname', async (c) => {
     const { nickname } = await c.req.json();
 
     // Verify membership and access
-    const convo = await c.env.DB.prepare('SELECT is_group, creator_id FROM conversations WHERE id = ?')
+    const convo = await c.env.DB.prepare('SELECT is_group, creator_id FROM conversations WHERE id = ? AND (is_deleted IS NULL OR is_deleted = 0)')
       .bind(conversationId).first<any>();
     if (!convo) return c.json({ error: 'Conversation not found' }, 404);
 
@@ -618,6 +805,13 @@ conversationsApp.put('/:id/members/:targetUserId/nickname', async (c) => {
     const callerUser = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
       .bind(currentUserId).first<any>();
     const isTopAdmin = callerUser && callerUser.is_top_admin === 1;
+
+    // Verify caller is a member
+    const callerMember = await c.env.DB.prepare('SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?')
+      .bind(conversationId, currentUserId).first();
+    if (!callerMember && !isTopAdmin) {
+      return c.json({ error: 'Access denied: You are not a member of this conversation' }, 403);
+    }
 
     const isAdmin = convo.creator_id === currentUserId || isTopAdmin;
 
@@ -805,6 +999,13 @@ conversationsApp.delete('/:id', authMiddleware, async (c) => {
   const currentUserId = c.get('userId');
 
   try {
+    // Verify conversation exists
+    const convo = await c.env.DB.prepare('SELECT id, is_deleted FROM conversations WHERE id = ?')
+      .bind(conversationId).first<any>();
+    if (!convo || convo.is_deleted === 1) {
+      return c.json({ error: 'Conversation not found' }, 404);
+    }
+
     // Verify caller is a member
     const isMember = await c.env.DB.prepare(
       'SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?'
@@ -813,7 +1014,7 @@ conversationsApp.delete('/:id', authMiddleware, async (c) => {
       .first();
 
     if (!isMember) {
-      return c.json({ error: 'Unauthorized: You are not a member of this conversation' }, 403);
+      return c.json({ error: 'Access denied: You are not a member of this conversation' }, 403);
     }
 
     // Record deletion timestamp scoped ONLY to this user — other participants are not affected

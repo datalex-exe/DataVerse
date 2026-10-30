@@ -13,7 +13,8 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, className = '' }) =>
     if (onNavigate) {
       onNavigate(route);
     } else {
-      window.location.hash = `#/${route}`;
+      window.history.pushState(null, '', `/${route}/`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 
@@ -26,7 +27,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, className = '' }) =>
         {/* Navigation links */}
         <nav aria-label="Legal and About Links" className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-[11px] font-semibold text-[var(--muted)]">
           <a
-            href="#/terms"
+            href="/terms/"
             onClick={(e) => handleLinkClick(e, 'terms')}
             className="hover:text-[var(--accent-2)] transition-colors cursor-pointer py-1"
           >
@@ -34,7 +35,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, className = '' }) =>
           </a>
           <span aria-hidden="true" className="text-[var(--line)]">·</span>
           <a
-            href="#/privacy"
+            href="/privacy/"
             onClick={(e) => handleLinkClick(e, 'privacy')}
             className="hover:text-[var(--accent-2)] transition-colors cursor-pointer py-1"
           >
@@ -42,7 +43,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, className = '' }) =>
           </a>
           <span aria-hidden="true" className="text-[var(--line)]">·</span>
           <a
-            href="#/cookies"
+            href="/cookies/"
             onClick={(e) => handleLinkClick(e, 'cookies')}
             className="hover:text-[var(--accent-2)] transition-colors cursor-pointer py-1"
           >
@@ -50,7 +51,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, className = '' }) =>
           </a>
           <span aria-hidden="true" className="text-[var(--line)]">·</span>
           <a
-            href="#/refund"
+            href="/refund/"
             onClick={(e) => handleLinkClick(e, 'refund')}
             className="hover:text-[var(--accent-2)] transition-colors cursor-pointer py-1"
           >
@@ -58,7 +59,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, className = '' }) =>
           </a>
           <span aria-hidden="true" className="text-[var(--line)]">·</span>
           <a
-            href="#/contact"
+            href="/contact/"
             onClick={(e) => handleLinkClick(e, 'contact')}
             className="hover:text-[var(--accent-2)] transition-colors cursor-pointer py-1"
           >

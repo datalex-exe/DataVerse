@@ -10,7 +10,8 @@ export const NotFound: React.FC<NotFoundProps> = ({ onNavigate }) => {
     if (onNavigate) {
       onNavigate(route);
     } else {
-      window.location.hash = `#/${route}`;
+      window.history.pushState(null, '', route === 'feed' ? '/' : `/${route}/`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 

@@ -101,8 +101,16 @@ app.get('/api/chat/ws/:id', async (c) => {
     return c.text('Unauthorized: Account is blocked', 403);
   }
 
-  // Verify membership for private chats
+  // Verify membership and existence for private chats
   if (!conversationId.startsWith('room_')) {
+    const convo = await c.env.DB.prepare('SELECT is_deleted FROM conversations WHERE id = ?')
+      .bind(conversationId)
+      .first<any>();
+
+    if (!convo || convo.is_deleted === 1) {
+      return c.text('Not Found: Conversation does not exist or has been deleted', 404);
+    }
+
     const membership = await c.env.DB.prepare(
       'SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?'
     )

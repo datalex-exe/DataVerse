@@ -57,9 +57,10 @@ interface Comment {
 interface FeedProps {
   onNavigate: (view: string, targetUsername?: string) => void;
   onToggleBottomNav?: (hide: boolean) => void;
+  targetPostId?: string;
 }
 
-export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => {
+export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targetPostId }) => {
   const { user, token } = useAuth();
   const { toast } = useToast();
   
@@ -286,10 +287,10 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const targetPostId = urlParams.get('post');
-    if (targetPostId && token) {
+    const resolvedPostId = targetPostId || urlParams.get('post');
+    if (resolvedPostId && token) {
       setLoading(true);
-      fetch(`/api/posts/${targetPostId}`, {
+      fetch(`/api/posts/${resolvedPostId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => {
@@ -310,9 +311,10 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav }) => 
           fetchFeed();
         });
     } else {
+      setIsSinglePostFiltered(false);
       fetchFeed();
     }
-  }, [token]);
+  }, [token, targetPostId]);
 
   // Clean captions
   const getCleanCaptionAndRoom = (rawCaption: string | null) => {

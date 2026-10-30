@@ -189,11 +189,124 @@ export default {
     let semanticBody = '';
 
     const path = url.pathname;
+    const cleanPath = path.replace(/^\/+|\/+$/g, '');
 
-    // A. CREATOR PROFILE (/@username or /profile/:username or /u/:username)
-    const profileMatch = path.match(/^\/(?:@|profile\/|u\/)([a-zA-Z0-9_.\-@]{2,64})\/?$/i);
-    if (profileMatch) {
-      const username = profileMatch[1].toLowerCase();
+    const RESERVED_PATHS = new Set([
+      'direct',
+      'explore',
+      'search',
+      'notifications',
+      'settings',
+      'create',
+      'admin',
+      'p',
+      'post',
+      'reel',
+      'reels',
+      'terms',
+      'privacy',
+      'cookies',
+      'refund',
+      'contact',
+      'api',
+      'login',
+      'logout',
+      'signup',
+      'auth',
+      'feed',
+      'messages',
+      'chat',
+      '404',
+    ]);
+
+    // A. DIRECT MESSAGES (/direct/ or /direct/t/:id/ or /messages/* or /chat/*)
+    if (path.startsWith('/direct') || path.startsWith('/messages') || path.startsWith('/chat')) {
+      robotsDirective = 'noindex, nofollow';
+      pageTitle = 'Direct Messages — DataVerse';
+      pageDescription = 'Private direct messaging on DataVerse.';
+      canonicalUrl = `${BASE_URL}/direct/`;
+    }
+
+    // B. PUBLIC POST OR REEL (/p/:id, /post/:id, /reel/:id, /reels/:id)
+    else if (path.match(/^\/(?:post|p|reel|reels)\/([a-zA-Z0-9_-]+)\/?$/i)) {
+      const match = path.match(/^\/(?:post|p|reel|reels)\/([a-zA-Z0-9_-]+)\/?$/i);
+      const postId = match[1];
+      const isReel = path.startsWith('/reel');
+      try {
+        const postRes = await fetch(`${WORKER_URL}/api/posts/public/${postId}`);
+        if (postRes.ok) {
+          const data = await postRes.json();
+          const post = data.post;
+          const author = post.display_name || post.username;
+          const captionSnippet = post.caption ? post.caption.substring(0, 120).trim() : (isReel ? 'Video reel' : 'Media post');
+
+          pageTitle = `${isReel ? 'Reel' : 'Post'} by ${author} (@${post.username}): "${captionSnippet}" — DataVerse`;
+          pageDescription = post.caption 
+            ? `${post.caption.substring(0, 160)} — Published by @${post.username} on DataVerse.`
+            : `Shared by @${post.username} on DataVerse. Discover photos, video reels, and creator updates.`;
+          canonicalUrl = `${BASE_URL}/${isReel ? 'reel' : 'p'}/${post.id}/`;
+          ogType = isReel ? 'video.other' : 'article';
+
+          if (post.media && post.media.length > 0) {
+            const firstKey = post.media[0].r2_key;
+            ogImage = `${WORKER_URL}/api/media/file/${encodeURIComponent(firstKey)}`;
+          }
+
+          const dateIso = post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString();
+
+          jsonLd = {
+            '@context': 'https://schema.org',
+            '@type': isReel ? 'VideoObject' : 'SocialMediaPosting',
+            'headline': captionSnippet,
+            'name': captionSnippet,
+            'description': pageDescription,
+            'articleBody': post.caption || '',
+            'datePublished': dateIso,
+            'url': canonicalUrl,
+            'author': {
+              '@type': 'Person',
+              'name': author,
+              'alternateName': `@${post.username}`,
+              'url': `${BASE_URL}/${post.username}/`,
+            },
+            'image': ogImage,
+            'interactionStatistic': [
+              {
+                '@type': 'InteractionCounter',
+                'interactionType': 'https://schema.org/LikeAction',
+                'userInteractionCount': post.likes_count || 0,
+              },
+              {
+                '@type': 'InteractionCounter',
+                'interactionType': 'https://schema.org/CommentAction',
+                'userInteractionCount': post.comments_count || 0,
+              },
+            ],
+          };
+
+          semanticBody = `
+            <article class="sr-only">
+              <h1>${isReel ? 'Reel' : 'Post'} by ${escapeHtml(author)} (@${escapeHtml(post.username)})</h1>
+              <p>${escapeHtml(post.caption || '')}</p>
+              <time datetime="${dateIso}">${new Date(post.created_at).toLocaleDateString()}</time>
+            </article>
+          `;
+        } else if (postRes.status === 404 || postRes.status === 403) {
+          status = postRes.status === 403 ? 403 : 404;
+          robotsDirective = 'noindex, nofollow';
+          pageTitle = postRes.status === 403 ? 'Private Post — DataVerse' : 'Post Not Found — DataVerse';
+          pageDescription = 'This post is private or unavailable.';
+        }
+      } catch (_) {}
+    }
+
+    // C. CREATOR PROFILE (/:username, /@username, /profile/:username)
+    else if (
+      (path.match(/^\/(?:@|profile\/|u\/)([a-zA-Z0-9_.\-@]{2,64})\/?$/i) ||
+       (!RESERVED_PATHS.has(cleanPath.toLowerCase()) && /^[a-zA-Z0-9_.\-@]{2,64}$/.test(cleanPath)))
+    ) {
+      const match = path.match(/^\/(?:@|profile\/|u\/)([a-zA-Z0-9_.\-@]{2,64})\/?$/i);
+      const username = (match ? match[1] : cleanPath).toLowerCase();
       try {
         const userRes = await fetch(`${WORKER_URL}/api/users/${username}`);
         if (userRes.ok) {
@@ -205,7 +318,7 @@ export default {
             robotsDirective = 'noindex, nofollow';
             pageTitle = `@${user.username} (Private Account) — DataVerse`;
             pageDescription = `This account is private. Log in to DataVerse and follow @${user.username} to view their posts.`;
-            canonicalUrl = `${BASE_URL}/@${user.username}`;
+            canonicalUrl = `${BASE_URL}/${user.username}/`;
           } else {
             // Public Profile: Rich indexing & GEO
             const displayName = user.display_name || user.username;
@@ -213,7 +326,7 @@ export default {
             pageDescription = user.bio 
               ? `${displayName} (@${user.username}): ${user.bio.substring(0, 150)}`
               : `Explore ${displayName}'s (@${user.username}) public profile, photos, video reels, and updates on DataVerse.`;
-            canonicalUrl = `${BASE_URL}/@${user.username}`;
+            canonicalUrl = `${BASE_URL}/${user.username}/`;
             ogType = 'profile';
             if (user.avatar_url) {
               ogImage = user.avatar_url.startsWith('http') ? user.avatar_url : `${WORKER_URL}/api/media/file/${encodeURIComponent(user.avatar_url)}`;
@@ -261,80 +374,11 @@ export default {
       } catch (_) {}
     }
 
-    // B. PUBLIC POST OR REEL (/post/:id or /p/:id)
-    else if (path.match(/^\/(?:post|p)\/([a-zA-Z0-9_-]+)\/?$/i)) {
-      const postId = path.match(/^\/(?:post|p)\/([a-zA-Z0-9_-]+)\/?$/i)[1];
-      try {
-        const postRes = await fetch(`${WORKER_URL}/api/posts/public/${postId}`);
-        if (postRes.ok) {
-          const data = await postRes.json();
-          const post = data.post;
-          const author = post.display_name || post.username;
-          const captionSnippet = post.caption ? post.caption.substring(0, 120).trim() : 'Media post';
-
-          pageTitle = `Post by ${author} (@${post.username}): "${captionSnippet}" — DataVerse`;
-          pageDescription = post.caption 
-            ? `${post.caption.substring(0, 160)} — Published by @${post.username} on DataVerse.`
-            : `Shared by @${post.username} on DataVerse. Discover photos, videos, and creator updates.`;
-          canonicalUrl = `${BASE_URL}/post/${post.id}`;
-          ogType = 'article';
-
-          if (post.media && post.media.length > 0) {
-            const firstKey = post.media[0].r2_key;
-            ogImage = `${WORKER_URL}/api/media/file/${encodeURIComponent(firstKey)}`;
-          }
-
-          const dateIso = post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString();
-
-          jsonLd = {
-            '@context': 'https://schema.org',
-            '@type': 'SocialMediaPosting',
-            'headline': captionSnippet,
-            'articleBody': post.caption || '',
-            'datePublished': dateIso,
-            'url': canonicalUrl,
-            'author': {
-              '@type': 'Person',
-              'name': author,
-              'alternateName': `@${post.username}`,
-              'url': `${BASE_URL}/@${post.username}`,
-            },
-            'image': ogImage,
-            'interactionStatistic': [
-              {
-                '@type': 'InteractionCounter',
-                'interactionType': 'https://schema.org/LikeAction',
-                'userInteractionCount': post.likes_count || 0,
-              },
-              {
-                '@type': 'InteractionCounter',
-                'interactionType': 'https://schema.org/CommentAction',
-                'userInteractionCount': post.comments_count || 0,
-              },
-            ],
-          };
-
-          semanticBody = `
-            <article class="sr-only">
-              <h1>Post by ${escapeHtml(author)} (@${escapeHtml(post.username)})</h1>
-              <p>${escapeHtml(post.caption || '')}</p>
-              <time datetime="${dateIso}">${new Date(post.created_at).toLocaleDateString()}</time>
-            </article>
-          `;
-        } else if (postRes.status === 404 || postRes.status === 403) {
-          status = postRes.status === 403 ? 403 : 404;
-          robotsDirective = 'noindex, nofollow';
-          pageTitle = postRes.status === 403 ? 'Private Post — DataVerse' : 'Post Not Found — DataVerse';
-          pageDescription = 'This post is private or unavailable.';
-        }
-      } catch (_) {}
-    }
-
-    // C. EXPLORE & TOPIC DISCOVERY (/explore or /search)
-    else if (path === '/explore' || path === '/search') {
+    // D. EXPLORE & TOPIC DISCOVERY (/explore or /search)
+    else if (path === '/explore' || path === '/explore/' || path === '/search' || path === '/search/') {
       pageTitle = 'Explore Creators, Photos & Trending Posts — DataVerse';
       pageDescription = 'Discover public creators, trending photos, video reels, and conversations on DataVerse. Explore community content and connect with creators.';
-      canonicalUrl = `${BASE_URL}/explore`;
+      canonicalUrl = `${BASE_URL}/explore/`;
       jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'CollectionPage',
@@ -350,27 +394,27 @@ export default {
       `;
     }
 
-    // D. LEGAL & POLICY PAGES (/terms, /privacy, /cookies, /refund)
-    else if (path === '/terms') {
+    // E. LEGAL & POLICY PAGES (/terms, /privacy, /cookies, /refund, /contact)
+    else if (path === '/terms' || path === '/terms/') {
       pageTitle = 'Terms and Conditions — DataVerse';
       pageDescription = 'Review the official terms of service, platform conduct policies, and user agreements for the DataVerse social network.';
-      canonicalUrl = `${BASE_URL}/terms`;
-    } else if (path === '/privacy') {
+      canonicalUrl = `${BASE_URL}/terms/`;
+    } else if (path === '/privacy' || path === '/privacy/') {
       pageTitle = 'Privacy Policy — DataVerse';
       pageDescription = 'Learn how DataVerse protects your personal data, enforces account privacy, and adheres to GDPR and data protection standards.';
-      canonicalUrl = `${BASE_URL}/privacy`;
-    } else if (path === '/cookies') {
+      canonicalUrl = `${BASE_URL}/privacy/`;
+    } else if (path === '/cookies' || path === '/cookies/') {
       pageTitle = 'Cookies & Storage Policy — DataVerse';
       pageDescription = 'Details on how DataVerse utilizes essential cookies and browser storage for authentication and platform security.';
-      canonicalUrl = `${BASE_URL}/cookies`;
-    } else if (path === '/refund') {
+      canonicalUrl = `${BASE_URL}/cookies/`;
+    } else if (path === '/refund' || path === '/refund/') {
       pageTitle = 'Refund & Cancellation Policy — DataVerse';
       pageDescription = 'Information regarding creator subscriptions, verification badge fees, and refund processing on DataVerse.';
-      canonicalUrl = `${BASE_URL}/refund`;
-    } else if (path === '/contact') {
+      canonicalUrl = `${BASE_URL}/refund/`;
+    } else if (path === '/contact' || path === '/contact/') {
       pageTitle = 'Contact Support & Safety Team — DataVerse';
       pageDescription = 'Reach out to the DataVerse safety and platform support team for inquiries, account assistance, or security reports.';
-      canonicalUrl = `${BASE_URL}/contact`;
+      canonicalUrl = `${BASE_URL}/contact/`;
       jsonLd = {
         '@context': 'https://schema.org',
         '@type': 'ContactPage',
@@ -380,18 +424,18 @@ export default {
       };
     }
 
-    // E. HOMEPAGE (/)
+    // F. HOMEPAGE (/)
     else if (path === '/' || path === '') {
       pageTitle = 'DataVerse — Social Network & Creator Community by Datalex';
       pageDescription = 'Discover public posts, creators, and conversations on DataVerse. Connect with friends, share high-resolution photos and video reels, and chat in real time.';
-      canonicalUrl = `${BASE_URL}`;
+      canonicalUrl = `${BASE_URL}/`;
       jsonLd = {
         '@context': 'https://schema.org',
         '@graph': [
           {
             '@type': 'WebSite',
             '@id': `${BASE_URL}/#website`,
-            'url': `${BASE_URL}`,
+            'url': `${BASE_URL}/`,
             'name': 'DataVerse',
             'description': pageDescription,
             'publisher': {
@@ -402,7 +446,7 @@ export default {
             },
             'potentialAction': {
               '@type': 'SearchAction',
-              'target': `${BASE_URL}/explore?q={search_term_string}`,
+              'target': `${BASE_URL}/explore/?q={search_term_string}`,
               'query-input': 'required name=search_term_string',
             },
           },
@@ -410,7 +454,7 @@ export default {
             '@type': 'Organization',
             '@id': `${BASE_URL}/#organization`,
             'name': 'DataVerse',
-            'url': `${BASE_URL}`,
+            'url': `${BASE_URL}/`,
             'logo': `${BASE_URL}/logo.png`,
             'sameAs': [
               'https://github.com/datalex-exe/DataVerse',
@@ -433,10 +477,8 @@ export default {
       `;
     }
 
-    // F. PRIVATE APPLICATION ROUTES (Protect with noindex)
+    // G. PRIVATE APPLICATION ROUTES (Protect with noindex)
     else if (
-      path.startsWith('/chat') ||
-      path.startsWith('/messages') ||
       path.startsWith('/admin') ||
       path.startsWith('/activity') ||
       path.startsWith('/notifications') ||

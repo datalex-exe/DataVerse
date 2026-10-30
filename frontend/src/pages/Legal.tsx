@@ -19,14 +19,20 @@ export const Legal: React.FC<LegalProps> = ({ type = 'terms', onNavigate }) => {
 
   const handleTabChange = (newTab: LegalDocType) => {
     setActiveTab(newTab);
-    window.location.hash = `#/${newTab}`;
+    if (onNavigate) {
+      onNavigate(newTab);
+    } else {
+      window.history.pushState(null, '', `/${newTab}/`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
   };
 
   const handleBack = () => {
     if (onNavigate) {
       onNavigate('feed');
     } else {
-      window.location.hash = '#/feed';
+      window.history.pushState(null, '', '/');
+      window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
 

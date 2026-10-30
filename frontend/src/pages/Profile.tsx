@@ -88,10 +88,11 @@ interface ProfileUser {
 
 interface ProfileProps {
   targetUsername?: string;
+  initialShowSettings?: boolean;
   onNavigate: (view: string, targetUsername?: string) => void;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) => {
+export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSettings, onNavigate }) => {
   const { user: currentUser, token, updateUser, logout } = useAuth();
   const { toast } = useToast();
   
@@ -192,10 +193,16 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, onNavigate }) 
   }, [pendingCoverPreview]);
 
   /* THEME START */
-  const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [showSettings, setShowSettings] = useState<boolean>(Boolean(initialShowSettings));
   const [settingsTab, setSettingsTab] = useState<'edit_profile' | 'security' | 'verification' | 'privacy' | 'password' | 'report' | 'blocked_users' | 'theme'>('edit_profile');
   const [phoneDetailOpen, setPhoneDetailOpen] = useState<boolean>(false);
   const navContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialShowSettings) {
+      setShowSettings(true);
+    }
+  }, [initialShowSettings]);
 
   useEffect(() => {
     if (!showSettings) return;
@@ -1596,6 +1603,9 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
     setPhoneDetailOpen(false);
     setShowSettings(false);
     fetchProfileData();
+    if (initialShowSettings) {
+      onNavigate('profile');
+    }
   };
 
   const handleNavKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 /* UI UPDATE END */
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
@@ -459,6 +460,7 @@ interface ChatProps {
 
 export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targetConvoId }) => {
   const { user, token } = useAuth();
+  const { toast } = useToast();
   
   // Conversations list states with instant sessionStorage caching
   const [conversations, setConversations] = useState<Conversation[]>(() => {
@@ -839,7 +841,33 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       } else {
         if (!fetchedIdsRef.current.has(targetConvoId)) {
           fetchedIdsRef.current.add(targetConvoId);
-          fetchConversations(false);
+          // Directly fetch single conversation with strict authorization verification
+          fetch(`/api/conversations/${targetConvoId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+            .then(async (res) => {
+              if (res.ok) {
+                const data = await res.json();
+                if (data.conversation) {
+                  setConversations(prev => {
+                    const exists = prev.some(c => c.id === data.conversation.id);
+                    return exists ? prev : [data.conversation, ...prev];
+                  });
+                  setActiveConvo(data.conversation);
+                  return;
+                }
+              } else if (res.status === 403 || res.status === 404) {
+                setActiveConvo(null);
+                setMessages([]);
+                toast.error(res.status === 403 ? 'Access Denied: You are not an authorized participant in this conversation.' : 'The requested conversation does not exist.');
+                onNavigate?.('messages');
+                return;
+              }
+              fetchConversations(false);
+            })
+            .catch(() => {
+              fetchConversations(false);
+            });
         }
       }
     } else {
@@ -1151,6 +1179,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             messagesCacheRef.current[currentConvoId] = fetched;
             setMessages(fetched);
           }
+        } else if ((res.status === 403 || res.status === 404) && !isCleanup) {
+          if (wsRef.current) {
+            try { wsRef.current.close(); } catch {}
+          }
+          delete messagesCacheRef.current[currentConvoId];
+          setActiveConvo(null);
+          setMessages([]);
+          toast.error(res.status === 403 ? 'Access Denied: You do not have permission to view this conversation.' : 'The requested conversation does not exist.');
+          onNavigate?.('messages');
         }
       } catch (err) {
         if (!isCleanup) console.error(err);

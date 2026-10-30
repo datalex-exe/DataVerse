@@ -79,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.removeItem('dataverse_user');
             setToken(null);
             setUser(null);
-            window.location.hash = '';
+            window.history.replaceState(null, '', '/');
           }
         } catch (e) {
           // ignore
