@@ -289,13 +289,48 @@ usersApp.post('/profile/avatar-upload-url', authMiddleware, async (c) => {
 usersApp.put('/profile/verify/pay', authMiddleware, async (c) => {
   const userId = c.get('userId');
   try {
+    const body = await c.req.json().catch(() => ({}));
+    const paymentMethod = typeof body.payment_method === 'string' && body.payment_method.trim() ? body.payment_method.trim() : 'card';
+    const amount = typeof body.amount === 'number' && body.amount > 0 ? body.amount : 199;
+    const transactionId = typeof body.transaction_id === 'string' && body.transaction_id.trim()
+      ? body.transaction_id.trim()
+      : `DV-PAY-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    // Ensure verification_payments table exists
+    await c.env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS verification_payments (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        currency TEXT DEFAULT 'INR',
+        payment_method TEXT NOT NULL,
+        transaction_id TEXT NOT NULL,
+        status TEXT DEFAULT 'completed',
+        created_at INTEGER NOT NULL
+      )
+    `).run().catch(() => {});
+
+    const payId = `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = Date.now();
+
+    await c.env.DB.prepare(
+      'INSERT INTO verification_payments (id, user_id, amount, currency, payment_method, transaction_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(payId, userId, amount, 'INR', paymentMethod, transactionId, 'completed', now).run().catch(() => {});
+
     await c.env.DB.prepare(
       'UPDATE users SET is_verification_paid = 1, verification_paid_at = ?, verification_status = "none", is_verified = 0 WHERE id = ?'
     )
-      .bind(Date.now(), userId)
+      .bind(now, userId)
       .run();
 
-    return c.json({ success: true, message: 'Verification payment processed. You have 3 days to submit your documents.' });
+    return c.json({ 
+      success: true, 
+      message: 'Verification payment confirmed. You have 3 days to submit your documents.',
+      transaction_id: transactionId,
+      paid_at: now,
+      amount,
+      payment_method: paymentMethod
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

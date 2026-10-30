@@ -384,3 +384,4 @@ async function notify(url, type) {
 
 fs.writeFileSync(arcadeSwPath, arcadeSwContent, 'utf8');
 console.log('✓ Wrote frontend/public/arcade-sw.js with embedded offline arcade and v4 cache');
+
