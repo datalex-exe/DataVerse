@@ -40,8 +40,6 @@ import {
   Move,
   CreditCard,
   QrCode,
-  Building2,
-  Wallet,
   CheckCircle2
 } from 'lucide-react';
 /* THEME START */
@@ -286,19 +284,10 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
   const [uploadingVerificationDoc, setUploadingVerificationDoc] = useState<boolean>(false);
   const [timeRemainingText, setTimeRemainingText] = useState<string>('');
 
-  // Verification Payment Modal State
-  const [showVerificationPayModal, setShowVerificationPayModal] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'netbanking' | 'wallet'>('upi');
-  const [upiSubMethod, setUpiSubMethod] = useState<'vpa' | 'qr'>('vpa');
+  // Verification Checkout State (Two options: UPI Payment & QR Code Scanning)
+  const [paymentOption, setPaymentOption] = useState<'upi' | 'qr'>('upi');
   const [upiVpa, setUpiVpa] = useState<string>('');
-  const [cardNumber, setCardNumber] = useState<string>('');
-  const [cardHolder, setCardHolder] = useState<string>('');
-  const [cardExpiry, setCardExpiry] = useState<string>('');
-  const [cardCvv, setCardCvv] = useState<string>('');
-  const [selectedBank, setSelectedBank] = useState<string>('HDFC Bank');
-  const [selectedWallet, setSelectedWallet] = useState<string>('Paytm Wallet');
-  const [walletPhone, setWalletPhone] = useState<string>('');
-  const [payModalError, setPayModalError] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
   const [paymentStatusStep, setPaymentStatusStep] = useState<'idle' | 'processing' | 'success'>('idle');
   const [paymentStepText, setPaymentStepText] = useState<string>('');
   const [confirmedTxnId, setConfirmedTxnId] = useState<string>('');
@@ -1131,95 +1120,34 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
     }
   };
 
-  // Verification Payment Helpers & Handlers
-  const formatCardNumber = (value: string) => {
-    const raw = value.replace(/\D/g, '').slice(0, 16);
-    const groups = raw.match(/.{1,4}/g);
-    return groups ? groups.join(' ') : raw;
-  };
-
-  const formatCardExpiry = (value: string) => {
-    const raw = value.replace(/\D/g, '').slice(0, 4);
-    if (raw.length >= 3) {
-      return `${raw.slice(0, 2)}/${raw.slice(2, 4)}`;
-    }
-    return raw;
-  };
-
-  const handleOpenVerificationPayModal = () => {
-    setPayModalError(null);
-    setPaymentStatusStep('idle');
-    setPaymentStepText('');
-    setConfirmedTxnId('');
-    if (!cardHolder && profile) {
-      setCardHolder(profile.display_name || profile.username || '');
-    }
-    setShowVerificationPayModal(true);
-  };
-
-  const handleCloseVerificationPayModal = () => {
-    if (paymentStatusStep === 'processing') return; // Do not close during active payment processing
-    setShowVerificationPayModal(false);
-    setPayModalError(null);
-    setPaymentStatusStep('idle');
-  };
+  // Verification Payment Handlers
 
   const handleConfirmVerificationPayment = async () => {
     if (!token || !profile) return;
-    setPayModalError(null);
+    setPayError(null);
 
-    // Validate inputs depending on chosen payment method
-    if (paymentMethod === 'upi') {
-      if (upiSubMethod === 'vpa') {
-        const cleaned = upiVpa.trim();
-        if (!cleaned || !cleaned.includes('@') || cleaned.length < 5) {
-          setPayModalError('Please enter a valid UPI ID (e.g. yourname@okhdfcbank or 9876543210@paytm).');
-          return;
-        }
-      }
-    } else if (paymentMethod === 'card') {
-      const rawCard = cardNumber.replace(/\s+/g, '');
-      if (rawCard.length < 15) {
-        setPayModalError('Please enter a valid 16-digit debit or credit card number.');
-        return;
-      }
-      if (!cardHolder.trim()) {
-        setPayModalError('Please enter the name appearing on your card.');
-        return;
-      }
-      if (!cardExpiry || !/^\d{2}\/\d{2}$/.test(cardExpiry)) {
-        setPayModalError('Please enter a valid expiration date in MM/YY format.');
-        return;
-      }
-      const [m, y] = cardExpiry.split('/').map(Number);
-      if (m < 1 || m > 12 || isNaN(y) || y < 24) {
-        setPayModalError('Please enter a valid card expiration date (MM/YY).');
-        return;
-      }
-      if (cardCvv.trim().length < 3) {
-        setPayModalError('Please enter a valid 3 or 4-digit CVV / security code.');
-        return;
-      }
-    } else if (paymentMethod === 'netbanking') {
-      if (!selectedBank) {
-        setPayModalError('Please select your bank for Net Banking.');
-        return;
-      }
-    } else if (paymentMethod === 'wallet') {
-      if (walletPhone.replace(/\D/g, '').length < 10) {
-        setPayModalError('Please enter a valid 10-digit mobile number linked to your wallet.');
+    // Validate inputs depending on chosen payment method (UPI or QR)
+    if (paymentOption === 'upi') {
+      const cleaned = upiVpa.trim();
+      if (!cleaned || !cleaned.includes('@') || cleaned.length < 5) {
+        setPayError('Please enter a valid UPI ID (e.g. username@okhdfcbank or 9876543210@paytm).');
         return;
       }
     }
 
     setPaymentStatusStep('processing');
-    setPaymentStepText('Connecting to secure payment gateway...');
+    setPaymentStepText(
+      paymentOption === 'upi' 
+        ? `Requesting ₹199 authorization from ${upiVpa.trim()}...` 
+        : 'Verifying QR code payment with UPI gateway...'
+    );
+
     const generatedTxn = `DV-PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     try {
       // Step 1: Gateway connection simulation
       await new Promise(r => setTimeout(r, 650));
-      setPaymentStepText(`Authorizing ₹199 via ${paymentMethod.toUpperCase()}...`);
+      setPaymentStepText('Authorizing transaction with banking network...');
       // Step 2: Bank authorization simulation
       await new Promise(r => setTimeout(r, 700));
 
@@ -1230,15 +1158,12 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          payment_method: paymentMethod,
+          payment_method: paymentOption === 'upi' ? 'UPI_PAYMENT' : 'UPI_QR_SCAN',
           transaction_id: generatedTxn,
           amount: 199,
           payment_details: {
-            method: paymentMethod,
-            upi_vpa: paymentMethod === 'upi' ? (upiSubMethod === 'vpa' ? upiVpa : 'QR_CODE_SCAN') : undefined,
-            card_last4: paymentMethod === 'card' ? cardNumber.replace(/\s+/g, '').slice(-4) : undefined,
-            bank: paymentMethod === 'netbanking' ? selectedBank : undefined,
-            wallet: paymentMethod === 'wallet' ? selectedWallet : undefined
+            method: paymentOption,
+            upi_vpa: paymentOption === 'upi' ? upiVpa.trim() : 'DYNAMIC_QR_CODE'
           }
         })
       });
@@ -1254,15 +1179,14 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
       setPaymentStatusStep('success');
       setPaymentStepText('Payment verified & subscription activated!');
 
-      // Keep success message visible briefly before closing
-      await new Promise(r => setTimeout(r, 1200));
+      // Keep success message visible briefly before switching state
+      await new Promise(r => setTimeout(r, 1000));
 
-      setShowVerificationPayModal(false);
       setSettingsSuccessMsg(`Payment of ₹199 confirmed! Transaction ID: ${finalTxn}. Your 3-day verification window is now active.`);
       await refreshVerificationState();
     } catch (err: any) {
       setPaymentStatusStep('idle');
-      setPayModalError(err.message || 'Payment processing failed. Please try again.');
+      setPayError(err.message || 'Payment processing failed. Please try again.');
     }
   };
 
@@ -1807,480 +1731,6 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
     buttons[nextIndex]?.focus();
   };
 
-  const renderVerificationPaymentModal = () => {
-    if (!showVerificationPayModal) return null;
-    return (
-      <div 
-        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fade-in"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pay-modal-title"
-      >
-        <div className="relative w-full max-w-lg bg-[var(--card)] border border-[var(--line)] rounded-[24px] shadow-[var(--shadow-card)] overflow-hidden flex flex-col my-auto animate-scale-up">
-          {/* Top Gradient Aurora Bar */}
-          <div className="h-1.5 w-full bg-gradient-to-r from-[var(--accent)] via-[var(--accent-2)] to-[var(--gold)]" />
-
-          {/* Modal Header */}
-          <div className="p-5 sm:p-6 border-b border-[var(--line)] flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-[14px] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent-2)] flex items-center justify-center shrink-0">
-                <BadgeCheck className="w-6 h-6 stroke-[2]" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 id="pay-modal-title" className="text-[18px] font-bold text-[var(--text)]">Subscribe to Verification</h3>
-                  <span className="text-[11px] font-semibold text-[var(--accent-2)] uppercase tracking-wider bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] px-2 py-0.5 rounded-full">
-                    ₹199 / mo
-                  </span>
-                </div>
-                <p className="text-[13px] text-[var(--muted)] mt-0.5">
-                  DataVerse Verified Blue Badge for <span className="font-semibold text-[var(--text)]">@{profile?.username}</span>
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleCloseVerificationPayModal}
-              disabled={paymentStatusStep === 'processing'}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition-colors disabled:opacity-40"
-              aria-label="Close payment modal"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="p-5 sm:p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-            {/* Order Summary Pill */}
-            <div className="p-4 rounded-[16px] bg-[var(--input)] border border-[var(--line)] space-y-2.5">
-              <div className="flex items-center justify-between text-xs sm:text-[13px] text-[var(--muted)] font-medium">
-                <span>Verified Badge Subscription (30 days)</span>
-                <span>₹199.00</span>
-              </div>
-              <div className="flex items-center justify-between text-xs sm:text-[13px] text-[var(--muted)] font-medium">
-                <span>Taxes & GST (18% inclusive)</span>
-                <span className="text-emerald-400 font-semibold">Included</span>
-              </div>
-              <div className="border-t border-[var(--line)] pt-2 flex items-center justify-between">
-                <span className="text-[14px] font-bold text-[var(--text)]">Total Payable Now</span>
-                <span className="text-[18px] font-extrabold text-[var(--accent-2)]">₹199.00</span>
-              </div>
-            </div>
-
-            {/* Payment Methods Selector Tabs */}
-            <div className="space-y-2">
-              <label className="block text-[13px] font-semibold text-[var(--muted)] uppercase tracking-wider">
-                Select Payment Method
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { id: 'upi', label: 'UPI / QR', icon: QrCode },
-                  { id: 'card', label: 'Cards', icon: CreditCard },
-                  { id: 'netbanking', label: 'Net Banking', icon: Building2 },
-                  { id: 'wallet', label: 'Wallets', icon: Wallet },
-                ].map((tab) => {
-                  const TabIcon = tab.icon;
-                  const isSelected = paymentMethod === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => {
-                        setPaymentMethod(tab.id as any);
-                        setPayModalError(null);
-                      }}
-                      className={`h-12 px-3 rounded-[12px] border text-xs sm:text-[13px] font-semibold flex items-center justify-center gap-2 transition-all ${
-                        isSelected
-                          ? 'border-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--card))] text-[var(--text)] shadow-sm'
-                          : 'border-[var(--line)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--muted)]'
-                      }`}
-                    >
-                      <TabIcon className={`w-4 h-4 ${isSelected ? 'text-[var(--accent-2)]' : 'text-[var(--muted)]'}`} />
-                      <span>{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Tab 1: UPI Form */}
-            {paymentMethod === 'upi' && (
-              <div className="space-y-4 pt-1">
-                <div className="flex rounded-[12px] bg-[var(--input)] border border-[var(--line)] p-1 gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setUpiSubMethod('vpa')}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-[9px] transition-all ${
-                      upiSubMethod === 'vpa'
-                        ? 'bg-[var(--card)] text-[var(--text)] shadow-sm'
-                        : 'text-[var(--muted)] hover:text-[var(--text)]'
-                    }`}
-                  >
-                    Enter UPI ID / VPA
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUpiSubMethod('qr')}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-[9px] transition-all ${
-                      upiSubMethod === 'qr'
-                        ? 'bg-[var(--card)] text-[var(--text)] shadow-sm'
-                        : 'text-[var(--muted)] hover:text-[var(--text)]'
-                    }`}
-                  >
-                    Scan UPI QR Code
-                  </button>
-                </div>
-
-                {upiSubMethod === 'vpa' ? (
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <label htmlFor="upi-vpa-input" className="block text-[13px] font-semibold text-[var(--muted)]">
-                        Virtual Payment Address (VPA)
-                      </label>
-                      <input
-                        id="upi-vpa-input"
-                        type="text"
-                        value={upiVpa}
-                        onChange={(e) => setUpiVpa(e.target.value)}
-                        placeholder="e.g. mobile@paytm or username@okhdfcbank"
-                        className="w-full h-[48px] px-4 rounded-[12px] bg-[var(--input)] border border-[var(--line)] text-[15px] font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:border-[var(--accent-2)]"
-                      />
-                    </div>
-                    {/* Popular Handles */}
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <span className="text-[var(--muted)]">Popular:</span>
-                      {['@okhdfcbank', '@okaxis', '@paytm', '@ybl', '@upi'].map((suf) => (
-                        <button
-                          key={suf}
-                          type="button"
-                          onClick={() => {
-                            const base = upiVpa.includes('@') ? upiVpa.split('@')[0] : upiVpa;
-                            setUpiVpa(`${base || 'username'}${suf}`);
-                          }}
-                          className="px-2 py-0.5 rounded-[6px] bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--accent-2)] hover:border-[var(--accent-2)] transition-colors"
-                        >
-                          {suf}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[12px] text-[var(--muted)]">
-                      ⚡ Supported Apps: Google Pay, PhonePe, Paytm, BHIM, Cred, Amazon Pay
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center p-4 bg-[var(--input)] border border-[var(--line)] rounded-[16px] space-y-3">
-                    <div className="w-48 h-48 mx-auto bg-white p-3 rounded-[12px] shadow-md flex flex-col items-center justify-center relative">
-                      <svg viewBox="0 0 100 100" className="w-full h-full">
-                        <rect x="5" y="5" width="26" height="26" fill="#040b0d" rx="4" />
-                        <rect x="9" y="9" width="18" height="18" fill="white" rx="2" />
-                        <rect x="13" y="13" width="10" height="10" fill="#040b0d" rx="1" />
-
-                        <rect x="69" y="5" width="26" height="26" fill="#040b0d" rx="4" />
-                        <rect x="73" y="9" width="18" height="18" fill="white" rx="2" />
-                        <rect x="77" y="13" width="10" height="10" fill="#040b0d" rx="1" />
-
-                        <rect x="5" y="69" width="26" height="26" fill="#040b0d" rx="4" />
-                        <rect x="9" y="73" width="18" height="18" fill="white" rx="2" />
-                        <rect x="13" y="77" width="10" height="10" fill="#040b0d" rx="1" />
-
-                        <rect x="36" y="8" width="5" height="5" fill="#040b0d" />
-                        <rect x="46" y="8" width="5" height="5" fill="#040b0d" />
-                        <rect x="56" y="8" width="5" height="5" fill="#040b0d" />
-                        <rect x="36" y="18" width="5" height="5" fill="#040b0d" />
-                        <rect x="46" y="18" width="5" height="5" fill="#040b0d" />
-                        <rect x="56" y="18" width="5" height="5" fill="#040b0d" />
-                        <rect x="8" y="36" width="5" height="5" fill="#040b0d" />
-                        <rect x="18" y="36" width="5" height="5" fill="#040b0d" />
-                        <rect x="28" y="36" width="5" height="5" fill="#040b0d" />
-                        <rect x="38" y="36" width="6" height="6" fill="#0d9488" />
-                        <rect x="48" y="36" width="6" height="6" fill="#0d9488" />
-                        <rect x="58" y="36" width="6" height="6" fill="#040b0d" />
-                        <rect x="68" y="36" width="5" height="5" fill="#040b0d" />
-                        <rect x="78" y="36" width="5" height="5" fill="#040b0d" />
-                        <rect x="88" y="36" width="5" height="5" fill="#040b0d" />
-                        <rect x="8" y="46" width="5" height="5" fill="#040b0d" />
-                        <rect x="18" y="46" width="5" height="5" fill="#040b0d" />
-                        <rect x="28" y="46" width="5" height="5" fill="#040b0d" />
-                        <rect x="38" y="46" width="6" height="6" fill="#0d9488" />
-                        <rect x="48" y="46" width="6" height="6" fill="#0d9488" />
-                        <rect x="58" y="46" width="6" height="6" fill="#040b0d" />
-                        <rect x="68" y="46" width="5" height="5" fill="#040b0d" />
-                        <rect x="78" y="46" width="5" height="5" fill="#040b0d" />
-                        <rect x="88" y="46" width="5" height="5" fill="#040b0d" />
-                        <rect x="8" y="56" width="5" height="5" fill="#040b0d" />
-                        <rect x="18" y="56" width="5" height="5" fill="#040b0d" />
-                        <rect x="28" y="56" width="5" height="5" fill="#040b0d" />
-                        <rect x="38" y="56" width="6" height="6" fill="#040b0d" />
-                        <rect x="48" y="56" width="6" height="6" fill="#040b0d" />
-                        <rect x="58" y="56" width="6" height="6" fill="#040b0d" />
-                        <rect x="68" y="56" width="5" height="5" fill="#040b0d" />
-                        <rect x="78" y="56" width="5" height="5" fill="#040b0d" />
-                        <rect x="88" y="56" width="5" height="5" fill="#040b0d" />
-                        <rect x="36" y="68" width="5" height="5" fill="#040b0d" />
-                        <rect x="46" y="68" width="5" height="5" fill="#040b0d" />
-                        <rect x="56" y="68" width="5" height="5" fill="#040b0d" />
-                        <rect x="68" y="68" width="5" height="5" fill="#040b0d" />
-                        <rect x="78" y="68" width="5" height="5" fill="#040b0d" />
-                        <rect x="88" y="68" width="5" height="5" fill="#040b0d" />
-                        <rect x="36" y="78" width="5" height="5" fill="#040b0d" />
-                        <rect x="46" y="78" width="5" height="5" fill="#040b0d" />
-                        <rect x="56" y="78" width="5" height="5" fill="#040b0d" />
-                        <rect x="68" y="78" width="5" height="5" fill="#040b0d" />
-                        <rect x="78" y="78" width="5" height="5" fill="#040b0d" />
-                        <rect x="88" y="78" width="5" height="5" fill="#040b0d" />
-                        <rect x="36" y="88" width="5" height="5" fill="#040b0d" />
-                        <rect x="46" y="88" width="5" height="5" fill="#040b0d" />
-                        <rect x="56" y="88" width="5" height="5" fill="#040b0d" />
-                        <rect x="68" y="88" width="5" height="5" fill="#040b0d" />
-                        <rect x="78" y="88" width="5" height="5" fill="#040b0d" />
-                        <rect x="88" y="88" width="5" height="5" fill="#040b0d" />
-
-                        <circle cx="50" cy="50" r="10" fill="#0d9488" />
-                        <path d="M47 50 L49 52 L54 47" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-semibold">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                        Scan & Pay ₹199.00
-                      </div>
-                      <p className="text-[12px] text-[var(--muted)]">Scan with GPay, PhonePe, Paytm or any UPI app</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab 2: Credit / Debit Cards Form */}
-            {paymentMethod === 'card' && (
-              <div className="space-y-3.5 pt-1">
-                <div className="space-y-1.5">
-                  <label htmlFor="card-number-input" className="block text-[13px] font-semibold text-[var(--muted)]">
-                    Card Number
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="card-number-input"
-                      type="text"
-                      maxLength={19}
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-                      placeholder="4532 8923 1109 2384"
-                      className="w-full h-[48px] px-4 rounded-[12px] bg-[var(--input)] border border-[var(--line)] text-[15px] font-mono font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:border-[var(--accent-2)]"
-                    />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[11px] font-bold text-[var(--muted)] uppercase bg-[var(--card)] px-2 py-0.5 rounded border border-[var(--line)]">
-                      {cardNumber.startsWith('4') ? 'Visa' : cardNumber.startsWith('5') ? 'Mastercard' : cardNumber.startsWith('6') ? 'RuPay' : 'Card'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label htmlFor="card-holder-input" className="block text-[13px] font-semibold text-[var(--muted)]">
-                    Cardholder Name
-                  </label>
-                  <input
-                    id="card-holder-input"
-                    type="text"
-                    value={cardHolder}
-                    onChange={(e) => setCardHolder(e.target.value)}
-                    placeholder="Name on card"
-                    className="w-full h-[48px] px-4 rounded-[12px] bg-[var(--input)] border border-[var(--line)] text-[15px] font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:border-[var(--accent-2)]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label htmlFor="card-expiry-input" className="block text-[13px] font-semibold text-[var(--muted)]">
-                      Expiry (MM/YY)
-                    </label>
-                    <input
-                      id="card-expiry-input"
-                      type="text"
-                      maxLength={5}
-                      value={cardExpiry}
-                      onChange={(e) => setCardExpiry(formatCardExpiry(e.target.value))}
-                      placeholder="MM/YY"
-                      className="w-full h-[48px] px-4 rounded-[12px] bg-[var(--input)] border border-[var(--line)] text-[15px] font-mono font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:border-[var(--accent-2)] text-center"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label htmlFor="card-cvv-input" className="block text-[13px] font-semibold text-[var(--muted)]">
-                      CVV / CVC
-                    </label>
-                    <input
-                      id="card-cvv-input"
-                      type="password"
-                      maxLength={4}
-                      value={cardCvv}
-                      onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
-                      placeholder="•••"
-                      className="w-full h-[48px] px-4 rounded-[12px] bg-[var(--input)] border border-[var(--line)] text-[15px] font-mono font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:border-[var(--accent-2)] text-center"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 3: Net Banking Form */}
-            {paymentMethod === 'netbanking' && (
-              <div className="space-y-3.5 pt-1">
-                <label className="block text-[13px] font-semibold text-[var(--muted)]">
-                  Popular Banks
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {['HDFC Bank', 'ICICI Bank', 'State Bank of India', 'Axis Bank'].map((bank) => (
-                    <button
-                      key={bank}
-                      type="button"
-                      onClick={() => setSelectedBank(bank)}
-                      className={`p-3 rounded-[12px] border text-left text-[13px] font-semibold transition-all flex items-center justify-between ${
-                        selectedBank === bank
-                          ? 'border-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--card))] text-[var(--text)]'
-                          : 'border-[var(--line)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)]'
-                      }`}
-                    >
-                      <span>{bank}</span>
-                      {selectedBank === bank && <Check className="w-4 h-4 text-[var(--accent-2)]" />}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-1.5 pt-1">
-                  <label htmlFor="other-banks-select" className="block text-[13px] font-semibold text-[var(--muted)]">
-                    Other Supported Banks
-                  </label>
-                  <select
-                    id="other-banks-select"
-                    value={selectedBank}
-                    onChange={(e) => setSelectedBank(e.target.value)}
-                    className="w-full h-[48px] px-4 rounded-[12px] bg-[var(--input)] border border-[var(--line)] text-[14px] font-medium text-[var(--text)] outline-none focus:border-[var(--accent-2)]"
-                  >
-                    <option value="HDFC Bank">HDFC Bank</option>
-                    <option value="ICICI Bank">ICICI Bank</option>
-                    <option value="State Bank of India">State Bank of India</option>
-                    <option value="Axis Bank">Axis Bank</option>
-                    <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
-                    <option value="Punjab National Bank">Punjab National Bank</option>
-                    <option value="Bank of Baroda">Bank of Baroda</option>
-                    <option value="IndusInd Bank">IndusInd Bank</option>
-                    <option value="Yes Bank">Yes Bank</option>
-                    <option value="Union Bank of India">Union Bank of India</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 4: Wallets Form */}
-            {paymentMethod === 'wallet' && (
-              <div className="space-y-3.5 pt-1">
-                <label className="block text-[13px] font-semibold text-[var(--muted)]">
-                  Choose Wallet
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['Paytm Wallet', 'PhonePe Wallet', 'Amazon Pay'].map((w) => (
-                    <button
-                      key={w}
-                      type="button"
-                      onClick={() => setSelectedWallet(w)}
-                      className={`p-2.5 rounded-[12px] border text-center text-xs font-semibold transition-all ${
-                        selectedWallet === w
-                          ? 'border-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_16%,var(--card))] text-[var(--text)]'
-                          : 'border-[var(--line)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)]'
-                      }`}
-                    >
-                      {w}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label htmlFor="wallet-phone-input" className="block text-[13px] font-semibold text-[var(--muted)]">
-                    Registered Mobile Number
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-xs font-semibold text-[var(--muted)]">
-                      +91
-                    </div>
-                    <input
-                      id="wallet-phone-input"
-                      type="tel"
-                      maxLength={10}
-                      value={walletPhone}
-                      onChange={(e) => setWalletPhone(e.target.value.replace(/\D/g, ''))}
-                      placeholder="9876543210"
-                      className="w-full h-[48px] pl-12 pr-4 rounded-[12px] bg-[var(--input)] border border-[var(--line)] text-[15px] font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:border-[var(--accent-2)]"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Error Alert */}
-            {payModalError && (
-              <div className="p-3.5 bg-[color-mix(in_srgb,var(--danger)_15%,var(--card))] border border-[var(--danger)] text-[var(--text)] text-xs font-semibold rounded-[12px] flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-[var(--danger)] shrink-0" />
-                <span>{payModalError}</span>
-              </div>
-            )}
-
-            {/* Status Processing Feedback */}
-            {paymentStatusStep === 'processing' && (
-              <div className="p-4 bg-[color-mix(in_srgb,var(--accent)_12%,var(--card))] border border-[var(--accent-2)] rounded-[14px] flex items-center gap-3 animate-pulse">
-                <Loader2 className="w-5 h-5 text-[var(--accent-2)] animate-spin shrink-0" />
-                <div className="text-xs font-semibold text-[var(--text)]">{paymentStepText}</div>
-              </div>
-            )}
-
-            {paymentStatusStep === 'success' && (
-              <div className="p-4 bg-emerald-500/15 border border-emerald-500/40 rounded-[14px] flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                <div className="text-xs font-semibold text-emerald-300">
-                  {paymentStepText} (Txn: {confirmedTxnId})
-                </div>
-              </div>
-            )}
-
-            {/* Security Assurance */}
-            <div className="pt-2 flex items-center justify-center gap-2 text-[11px] text-[var(--muted)] font-medium">
-              <ShieldCheck className="w-4 h-4 text-[var(--accent-2)]" />
-              <span>256-bit SSL Encryption · PCI-DSS Compliant · Bank-Grade Security</span>
-            </div>
-          </div>
-
-          {/* Modal Actions Footer */}
-          <div className="p-4 sm:p-5 border-t border-[var(--line)] bg-[color-mix(in_srgb,var(--card)_95%,transparent)] flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={handleCloseVerificationPayModal}
-              disabled={paymentStatusStep === 'processing'}
-              className="btn-secondary h-[44px] px-5 rounded-[12px] text-xs sm:text-[14px] font-semibold text-[var(--text)]"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmVerificationPayment}
-              disabled={paymentStatusStep === 'processing'}
-              className="btn-primary h-[44px] px-6 rounded-[12px] text-xs sm:text-[14px] font-semibold text-[var(--on-accent)] flex items-center gap-2"
-            >
-              {paymentStatusStep === 'processing' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying...</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4 stroke-[2.5]" />
-                  <span>Confirm & Pay ₹199</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   // INSTAGRAM SETTINGS WORKSPACE VIEW
   if (showSettings) {
     const meta = getTabMeta(settingsTab);
@@ -2786,49 +2236,294 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                           </div>
                         )}
 
-                        {/* Subscription Billing Plan Details */}
-                        <div className="bg-[var(--card)] border border-[var(--line)] rounded-[20px] p-6 shadow-[var(--shadow-card)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="space-y-1">
-                            <span className="text-[11px] font-semibold text-[var(--accent-2)] uppercase tracking-wider bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-2.5 py-1 rounded-full inline-block">
-                              Premium badge
-                            </span>
-                            <h4 className="text-[18px] font-semibold text-[var(--text)]">Verification subscription</h4>
-                            <p className="text-[14px] text-[var(--muted)]">Includes verified badge + priority platform support.</p>
-                          </div>
-                          <div className="sm:text-right">
-                            <span className="text-[26px] font-bold text-[var(--text)]">₹199</span>
-                            <span className="text-[13px] text-[var(--muted)] block font-medium">/ month</span>
-                          </div>
-                        </div>
-
-                        {/* Username Confirmation Card */}
-                        <div className="bg-[var(--card)] border border-[var(--line)] rounded-[20px] p-6 shadow-[var(--shadow-card)] space-y-5">
-                          <div className="space-y-2">
-                            <label htmlFor="verified-username-display" className="block text-[14px] font-semibold text-[var(--muted)]">
-                              Username
-                            </label>
-                            <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[var(--muted)]">
-                                <User className="w-5 h-5 stroke-[1.8]" />
+                        {/* Verification Subscription Checkout Summary Card */}
+                        <div className="bg-[var(--card)] border border-[var(--line)] rounded-[20px] p-6 shadow-[var(--shadow-card)] space-y-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--line)] pb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-[14px] bg-[color-mix(in_srgb,var(--accent)_16%,transparent)] text-[var(--accent-2)] flex items-center justify-center shrink-0">
+                                <BadgeCheck className="w-7 h-7 stroke-[2]" />
                               </div>
-                              <input
-                                id="verified-username-display"
-                                type="text"
-                                value={`@${profile?.username}`}
-                                disabled
-                                className="w-full h-[52px] pl-11 pr-4 rounded-[14px] bg-[var(--input)] border border-[var(--line)] text-[16px] sm:text-[15px] font-medium text-[var(--muted)] cursor-not-allowed opacity-80"
-                              />
+                              <div>
+                                <span className="text-[11px] font-semibold text-[var(--accent-2)] uppercase tracking-wider bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] px-2.5 py-0.5 rounded-full inline-block">
+                                  Verification Checkout
+                                </span>
+                                <h3 className="text-[18px] font-bold text-[var(--text)] mt-1">Creator Verification Subscription</h3>
+                                <p className="text-[13px] text-[var(--muted)]">
+                                  Official blue verified checkmark for <span className="text-[var(--text)] font-semibold">@{profile?.username}</span>
+                                </p>
+                              </div>
+                            </div>
+                            <div className="sm:text-right">
+                              <span className="text-[28px] font-extrabold text-[var(--accent-2)]">₹199</span>
+                              <span className="text-[12px] text-[var(--muted)] block font-medium">/ month (GST Included)</span>
                             </div>
                           </div>
 
-                          <div className="pt-4 border-t border-[var(--line)] flex items-center justify-end">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-[var(--muted)] font-medium pt-1">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                              <span>Official Verified Blue Badge</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-[var(--accent-2)] shrink-0" />
+                              <span>Instant 3-Day Submission Window</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <ShieldCheck className="w-4 h-4 text-[var(--gold)] shrink-0" />
+                              <span>Priority Safety Review</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Checkout Payment Methods Container (Two Options: UPI Payment & QR Code Scanning) */}
+                        <div className="bg-[var(--card)] border border-[var(--line)] rounded-[20px] p-6 shadow-[var(--shadow-card)] space-y-5">
+                          <div>
+                            <h4 className="text-[16px] font-bold text-[var(--text)]">Choose Payment Method</h4>
+                            <p className="text-[13px] text-[var(--muted)] mt-0.5">Select how you want to complete your ₹199 verification fee</p>
+                          </div>
+
+                          {/* Two Options Selector */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <button
                               type="button"
-                              onClick={handleOpenVerificationPayModal}
-                              className="btn-primary w-full sm:w-auto h-[46px] px-7 rounded-[14px] text-[var(--on-accent)] font-semibold text-[15px] flex items-center justify-center gap-2"
+                              onClick={() => {
+                                setPaymentOption('upi');
+                                setPayError(null);
+                              }}
+                              className={`p-4 rounded-[16px] border text-left transition-all flex items-start gap-3.5 cursor-pointer ${
+                                paymentOption === 'upi'
+                                  ? 'border-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_14%,var(--card))] shadow-sm ring-1 ring-[var(--accent-2)]'
+                                  : 'border-[var(--line)] bg-[var(--input)] hover:border-[var(--muted)]'
+                              }`}
                             >
-                              <BadgeCheck className="w-5 h-5 text-[var(--on-accent)]" />
-                              <span>Subscribe & start verification (₹199/mo)</span>
+                              <div className={`w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 ${
+                                paymentOption === 'upi'
+                                  ? 'bg-[var(--accent-2)] text-[var(--on-accent)]'
+                                  : 'bg-[var(--card)] text-[var(--muted)]'
+                              }`}>
+                                <CreditCard className="w-5 h-5 stroke-[2]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between">
+                                  <h5 className="text-[15px] font-bold text-[var(--text)]">1. UPI Payment</h5>
+                                  {paymentOption === 'upi' && <Check className="w-4 h-4 text-[var(--accent-2)]" />}
+                                </div>
+                                <p className="text-[12px] text-[var(--muted)] mt-0.5">Pay via UPI ID (GPay, PhonePe, Paytm, BHIM)</p>
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPaymentOption('qr');
+                                setPayError(null);
+                              }}
+                              className={`p-4 rounded-[16px] border text-left transition-all flex items-start gap-3.5 cursor-pointer ${
+                                paymentOption === 'qr'
+                                  ? 'border-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_14%,var(--card))] shadow-sm ring-1 ring-[var(--accent-2)]'
+                                  : 'border-[var(--line)] bg-[var(--input)] hover:border-[var(--muted)]'
+                              }`}
+                            >
+                              <div className={`w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 ${
+                                paymentOption === 'qr'
+                                  ? 'bg-[var(--accent-2)] text-[var(--on-accent)]'
+                                  : 'bg-[var(--card)] text-[var(--muted)]'
+                              }`}>
+                                <QrCode className="w-5 h-5 stroke-[2]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between">
+                                  <h5 className="text-[15px] font-bold text-[var(--text)]">2. QR Code Scanning</h5>
+                                  {paymentOption === 'qr' && <Check className="w-4 h-4 text-[var(--accent-2)]" />}
+                                </div>
+                                <p className="text-[12px] text-[var(--muted)] mt-0.5">Scan dynamic QR with phone camera or UPI app</p>
+                              </div>
+                            </button>
+                          </div>
+
+                          {/* OPTION 1 CONTENT: UPI PAYMENT */}
+                          {paymentOption === 'upi' && (
+                            <div className="p-5 rounded-[16px] bg-[var(--input)] border border-[var(--line)] space-y-4 animate-fade-in">
+                              <div className="space-y-2">
+                                <label htmlFor="checkout-upi-vpa" className="block text-[14px] font-semibold text-[var(--text)]">
+                                  Enter UPI ID / VPA
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    id="checkout-upi-vpa"
+                                    type="text"
+                                    value={upiVpa}
+                                    onChange={(e) => setUpiVpa(e.target.value)}
+                                    placeholder="e.g. yourname@okhdfcbank or 9876543210@paytm"
+                                    className="w-full h-[52px] px-4 rounded-[14px] bg-[var(--card)] border border-[var(--line)] text-[15px] font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:border-[var(--accent-2)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--accent-2)_22%,transparent)] transition-all"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Popular handle chips */}
+                              <div className="space-y-1.5">
+                                <p className="text-[12px] text-[var(--muted)] font-medium">Quick select handle:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {['@okhdfcbank', '@okaxis', '@paytm', '@ybl', '@upi', '@ibl'].map((handle) => (
+                                    <button
+                                      key={handle}
+                                      type="button"
+                                      onClick={() => {
+                                        const prefix = upiVpa.includes('@') ? upiVpa.split('@')[0] : upiVpa;
+                                        setUpiVpa(`${prefix || profile?.username || 'user'}${handle}`);
+                                      }}
+                                      className="px-3 py-1 rounded-[8px] bg-[var(--card)] border border-[var(--line)] text-xs font-semibold text-[var(--muted)] hover:text-[var(--accent-2)] hover:border-[var(--accent-2)] transition-colors cursor-pointer"
+                                    >
+                                      {handle}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="pt-2 flex items-center gap-2 text-[12px] text-[var(--muted)]">
+                                <span className="font-semibold text-[var(--text)]">Supported Apps:</span>
+                                <span>Google Pay, PhonePe, Paytm, BHIM, Cred, Amazon Pay</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* OPTION 2 CONTENT: QR CODE SCANNING */}
+                          {paymentOption === 'qr' && (
+                            <div className="p-6 rounded-[16px] bg-[var(--input)] border border-[var(--line)] space-y-4 text-center animate-fade-in">
+                              <div className="w-56 h-56 mx-auto bg-white p-3.5 rounded-[16px] shadow-lg flex flex-col items-center justify-center relative">
+                                <svg viewBox="0 0 100 100" className="w-full h-full">
+                                  <rect x="5" y="5" width="26" height="26" fill="#040b0d" rx="4" />
+                                  <rect x="9" y="9" width="18" height="18" fill="white" rx="2" />
+                                  <rect x="13" y="13" width="10" height="10" fill="#040b0d" rx="1" />
+
+                                  <rect x="69" y="5" width="26" height="26" fill="#040b0d" rx="4" />
+                                  <rect x="73" y="9" width="18" height="18" fill="white" rx="2" />
+                                  <rect x="77" y="13" width="10" height="10" fill="#040b0d" rx="1" />
+
+                                  <rect x="5" y="69" width="26" height="26" fill="#040b0d" rx="4" />
+                                  <rect x="9" y="73" width="18" height="18" fill="white" rx="2" />
+                                  <rect x="13" y="77" width="10" height="10" fill="#040b0d" rx="1" />
+
+                                  <rect x="36" y="8" width="5" height="5" fill="#040b0d" />
+                                  <rect x="46" y="8" width="5" height="5" fill="#040b0d" />
+                                  <rect x="56" y="8" width="5" height="5" fill="#040b0d" />
+                                  <rect x="36" y="18" width="5" height="5" fill="#040b0d" />
+                                  <rect x="46" y="18" width="5" height="5" fill="#040b0d" />
+                                  <rect x="56" y="18" width="5" height="5" fill="#040b0d" />
+                                  <rect x="8" y="36" width="5" height="5" fill="#040b0d" />
+                                  <rect x="18" y="36" width="5" height="5" fill="#040b0d" />
+                                  <rect x="28" y="36" width="5" height="5" fill="#040b0d" />
+                                  <rect x="38" y="36" width="6" height="6" fill="#0d9488" />
+                                  <rect x="48" y="36" width="6" height="6" fill="#0d9488" />
+                                  <rect x="58" y="36" width="6" height="6" fill="#040b0d" />
+                                  <rect x="68" y="36" width="5" height="5" fill="#040b0d" />
+                                  <rect x="78" y="36" width="5" height="5" fill="#040b0d" />
+                                  <rect x="88" y="36" width="5" height="5" fill="#040b0d" />
+                                  <rect x="8" y="46" width="5" height="5" fill="#040b0d" />
+                                  <rect x="18" y="46" width="5" height="5" fill="#040b0d" />
+                                  <rect x="28" y="46" width="5" height="5" fill="#040b0d" />
+                                  <rect x="38" y="46" width="6" height="6" fill="#0d9488" />
+                                  <rect x="48" y="46" width="6" height="6" fill="#0d9488" />
+                                  <rect x="58" y="46" width="6" height="6" fill="#040b0d" />
+                                  <rect x="68" y="46" width="5" height="5" fill="#040b0d" />
+                                  <rect x="78" y="46" width="5" height="5" fill="#040b0d" />
+                                  <rect x="88" y="46" width="5" height="5" fill="#040b0d" />
+                                  <rect x="8" y="56" width="5" height="5" fill="#040b0d" />
+                                  <rect x="18" y="56" width="5" height="5" fill="#040b0d" />
+                                  <rect x="28" y="56" width="5" height="5" fill="#040b0d" />
+                                  <rect x="38" y="56" width="6" height="6" fill="#040b0d" />
+                                  <rect x="48" y="56" width="6" height="6" fill="#040b0d" />
+                                  <rect x="58" y="56" width="6" height="6" fill="#040b0d" />
+                                  <rect x="68" y="56" width="5" height="5" fill="#040b0d" />
+                                  <rect x="78" y="56" width="5" height="5" fill="#040b0d" />
+                                  <rect x="88" y="56" width="5" height="5" fill="#040b0d" />
+                                  <rect x="36" y="68" width="5" height="5" fill="#040b0d" />
+                                  <rect x="46" y="68" width="5" height="5" fill="#040b0d" />
+                                  <rect x="56" y="68" width="5" height="5" fill="#040b0d" />
+                                  <rect x="68" y="68" width="5" height="5" fill="#040b0d" />
+                                  <rect x="78" y="68" width="5" height="5" fill="#040b0d" />
+                                  <rect x="88" y="68" width="5" height="5" fill="#040b0d" />
+                                  <rect x="36" y="78" width="5" height="5" fill="#040b0d" />
+                                  <rect x="46" y="78" width="5" height="5" fill="#040b0d" />
+                                  <rect x="56" y="78" width="5" height="5" fill="#040b0d" />
+                                  <rect x="68" y="78" width="5" height="5" fill="#040b0d" />
+                                  <rect x="78" y="78" width="5" height="5" fill="#040b0d" />
+                                  <rect x="88" y="78" width="5" height="5" fill="#040b0d" />
+                                  <rect x="36" y="88" width="5" height="5" fill="#040b0d" />
+                                  <rect x="46" y="88" width="5" height="5" fill="#040b0d" />
+                                  <rect x="56" y="88" width="5" height="5" fill="#040b0d" />
+                                  <rect x="68" y="88" width="5" height="5" fill="#040b0d" />
+                                  <rect x="78" y="88" width="5" height="5" fill="#040b0d" />
+                                  <rect x="88" y="88" width="5" height="5" fill="#040b0d" />
+
+                                  <circle cx="50" cy="50" r="10" fill="#0d9488" />
+                                  <path d="M47 50 L49 52 L54 47" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                                  Scan to Pay ₹199.00
+                                </span>
+                                <p className="text-[13px] text-[var(--muted)]">Open any UPI app (GPay, PhonePe, Paytm, BHIM) and scan this QR code</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Error Banner */}
+                          {payError && (
+                            <div className="p-4 bg-[color-mix(in_srgb,var(--danger)_15%,var(--card))] border border-[var(--danger)] text-[var(--text)] text-xs font-semibold rounded-[14px] flex items-center gap-2.5">
+                              <AlertTriangle className="w-5 h-5 text-[var(--danger)] shrink-0" />
+                              <span>{payError}</span>
+                            </div>
+                          )}
+
+                          {/* Processing state indicator */}
+                          {paymentStatusStep === 'processing' && (
+                            <div className="p-4 bg-[color-mix(in_srgb,var(--accent)_14%,var(--card))] border border-[var(--accent-2)] rounded-[14px] flex items-center gap-3 animate-pulse">
+                              <Loader2 className="w-5 h-5 text-[var(--accent-2)] animate-spin shrink-0" />
+                              <span className="text-xs sm:text-[13px] font-semibold text-[var(--text)]">{paymentStepText}</span>
+                            </div>
+                          )}
+
+                          {paymentStatusStep === 'success' && (
+                            <div className="p-4 bg-emerald-500/15 border border-emerald-500/40 rounded-[14px] flex items-center gap-3">
+                              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                              <span className="text-xs sm:text-[13px] font-semibold text-emerald-300">
+                                {paymentStepText} (Txn: {confirmedTxnId})
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Action Button */}
+                          <div className="pt-2 border-t border-[var(--line)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 text-[12px] text-[var(--muted)]">
+                              <ShieldCheck className="w-4 h-4 text-[var(--accent-2)]" />
+                              <span>256-bit Encrypted Checkout · 3-Day Timer starts only after payment</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleConfirmVerificationPayment}
+                              disabled={paymentStatusStep === 'processing'}
+                              className="btn-primary w-full sm:w-auto h-[48px] px-8 rounded-[14px] text-[var(--on-accent)] font-bold text-[15px] flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              {paymentStatusStep === 'processing' ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <span>Verifying Payment...</span>
+                                </>
+                              ) : paymentOption === 'upi' ? (
+                                <>
+                                  <BadgeCheck className="w-5 h-5 text-[var(--on-accent)]" />
+                                  <span>Confirm & Pay ₹199 via UPI</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-5 h-5 stroke-[2.5]" />
+                                  <span>I Have Scanned & Completed Payment</span>
+                                </>
+                              )}
                             </button>
                           </div>
                         </div>
@@ -3756,8 +3451,7 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
           </div>
         </div>
 
-        {/* Verification Payment Modal inside Settings */}
-        {renderVerificationPaymentModal()}
+        {/* Settings view end */}
       </div>
     );
   }
@@ -4484,9 +4178,6 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
           </div>
         </div>
       )}
-
-      {/* Verification Payment Modal */}
-      {renderVerificationPaymentModal()}
 
       {avatarToCrop && (
         <ImageCropper
