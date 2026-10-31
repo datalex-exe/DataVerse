@@ -1,4 +1,5 @@
 import React from 'react';
+import dataverseLogoSrc from '../assets/logo.png';
 
 interface DataVerseLogoProps {
   size?: number;
@@ -21,7 +22,7 @@ export const DataVerseLogo: React.FC<DataVerseLogoProps> = ({
 
   return (
     <img 
-      src="/logo.png?v=10" 
+      src={dataverseLogoSrc} 
       alt="DataVerse Logo" 
       width={size} 
       height={size} 

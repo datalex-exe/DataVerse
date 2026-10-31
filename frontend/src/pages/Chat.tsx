@@ -43,7 +43,9 @@ import {
   Maximize2,
   MoreVertical,
   Clock,
-  RefreshCw
+  RefreshCw,
+  WifiOff,
+  Sparkles
 } from 'lucide-react';
 
 interface Member {
@@ -4338,16 +4340,44 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         {/* UI UPDATE START - Chat rows 72px height, 48px avatar, semibold title, muted regular timestamp, hover & active states with 3px indigo bar */}
         <div className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1 scrollbar-thin select-none overscroll-contain pb-20 md:pb-2">
           {loadingConvos ? (
-            <div className="flex flex-col items-center py-10 text-slate-600 gap-2">
-              <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
-              <span className="text-xs font-semibold text-slate-400">Loading chats...</span>
+            /* State 2: Conversations Skeleton (4 chat rows) */
+            <div role="status" aria-label="Loading conversations" className="space-y-1.5 py-1 animate-pulse select-none">
+              {[1, 2, 3, 4].map(key => (
+                <div key={key} className="h-[72px] px-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-[var(--input)] flex-shrink-0" />
+                  <div className="flex-1 space-y-2 py-1">
+                    <div className="w-1/3 h-3.5 bg-[var(--input)] rounded-md" />
+                    <div className="w-3/5 h-2.5 bg-[var(--input)] rounded-md opacity-70" />
+                  </div>
+                  <div className="w-8 h-2.5 bg-[var(--input)] rounded-md opacity-50" />
+                </div>
+              ))}
             </div>
           ) : filteredConversations.length === 0 ? (
-            <div className="text-center py-16 text-slate-500 text-xs px-4 space-y-2">
-              <MessageSquare className="w-8 h-8 mx-auto text-slate-700" />
-              <p className="font-normal text-slate-400">
-                {chatFilterQuery ? `No chats match "${chatFilterQuery}"` : 'No active DMs. Click "+" to search users!'}
-              </p>
+            /* State 1: Empty Inbox OR State 6: No Search Results */
+            <div className="text-center py-12 px-4 space-y-4 select-none animate-fade-in">
+              <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mx-auto text-[var(--muted)]">
+                <MessageSquare className="w-6 h-6 stroke-[1.8]" />
+              </div>
+              <div className="space-y-1 max-w-xs mx-auto">
+                <h4 className="text-sm font-semibold text-[var(--text)]">
+                  {chatFilterQuery ? `No chats match "${chatFilterQuery}"` : 'No conversations yet'}
+                </h4>
+                <p className="text-xs text-[var(--muted)] leading-relaxed">
+                  {chatFilterQuery 
+                    ? `No existing conversation matches "${chatFilterQuery}". Search all creators to start a new chat.` 
+                    : 'Send private messages, share reels, and connect with other creators across DataVerse.'}
+                </p>
+              </div>
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsSearchMode(true)}
+                  className="btn-primary min-h-[38px] px-5 rounded-full text-xs font-semibold cursor-pointer"
+                >
+                  Start New Chat
+                </button>
+              </div>
             </div>
           ) : (
             filteredConversations.map((convo, index) => {
@@ -4667,6 +4697,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               </div>
             </div>
 
+            {/* State 4: Offline Connection Banner */}
+            {!navigator.onLine && (
+              <div role="status" aria-live="polite" className="px-4 py-2 bg-[color-mix(in_srgb,var(--gold)_14%,var(--card))] border-b border-[var(--gold)]/30 flex items-center justify-between text-xs select-none animate-fade-in flex-shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <WifiOff className="w-4 h-4 text-[var(--gold)] shrink-0" />
+                  <span className="text-[var(--text)] truncate">
+                    <strong className="text-[var(--gold)] font-semibold mr-1">Offline:</strong>
+                    Showing cached messages. Messages you send will queue and dispatch automatically when reconnected.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Unified Game Dashboard Layout */}
             {gameState && gameState.status !== 'idle' && showGameBoard ? (
               <div className="flex-1 w-full flex flex-col bg-[#07070c]/40 overflow-hidden relative select-none">
@@ -4749,12 +4792,51 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               }}
             >
               {loadingMessages && activeMessages.length === 0 ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
+                /* State 2: Message Bubbles Skeleton */
+                <div role="status" aria-label="Loading message history" className="space-y-4 py-4 px-2 animate-pulse select-none">
+                  <div className="flex items-start gap-2 max-w-[65%]">
+                    <div className="w-8 h-8 rounded-full bg-[var(--input)] shrink-0" />
+                    <div className="w-48 h-12 rounded-2xl rounded-tl-sm bg-[var(--input)]" />
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="w-56 h-14 rounded-2xl rounded-tr-sm bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]" />
+                  </div>
+                  <div className="flex items-start gap-2 max-w-[55%]">
+                    <div className="w-8 h-8 rounded-full bg-[var(--input)] shrink-0" />
+                    <div className="w-36 h-10 rounded-2xl rounded-tl-sm bg-[var(--input)]" />
+                  </div>
+                  <div className="flex justify-end">
+                    <div className="w-44 h-10 rounded-2xl rounded-tr-sm bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]" />
+                  </div>
                 </div>
               ) : activeMessages.length === 0 ? (
-                <div className="text-center py-10 text-slate-700 text-[10px] font-bold uppercase select-none">
-                  This is the start of your secure conversation history.
+                /* State 1: Active Thread Empty State / Icebreaker */
+                <div className="my-auto py-12 px-4 text-center space-y-4 select-none animate-fade-in">
+                  <div className="w-16 h-16 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mx-auto text-base font-bold text-[var(--accent-2)] uppercase shadow-inner overflow-hidden">
+                    {getChatPartner(activeConvo)?.avatar_url ? (
+                      <img src={`/api/media/file/${getChatPartner(activeConvo).avatar_url}`} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      (getChatPartner(activeConvo)?.display_name || getChatPartner(activeConvo)?.username || 'DV').substring(0, 2).toUpperCase()
+                    )}
+                  </div>
+                  <div className="space-y-1.5 max-w-sm mx-auto">
+                    <h3 className="text-base font-bold text-[var(--text)]">
+                      Say hello to {getChatPartner(activeConvo)?.display_name || `@${getChatPartner(activeConvo)?.username || 'friend'}`}!
+                    </h3>
+                    <p className="text-xs text-[var(--muted)] leading-relaxed">
+                      This is the beginning of your encrypted conversation. Send a message, share photos, or tap wave below to break the ice.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSendMessage('Hello! 👋')}
+                      className="min-h-[40px] px-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] border border-[var(--accent-2)] text-[var(--accent-2)] hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)] text-xs font-semibold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Send a Wave 👋</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 activeMessages.map((msg) => {

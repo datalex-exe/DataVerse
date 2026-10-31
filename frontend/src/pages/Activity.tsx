@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { DataVerseLogo } from '../components/DataVerseLogo';
 import { 
   Heart, 
   MessageCircle, 
@@ -502,12 +503,10 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
           <div className="relative flex-shrink-0">
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm p-0.5">
               {!item.notifier_id || isWelcome ? (
-                <img 
-                  src="/logo.png?v=10" 
-                  alt="DataVerse" 
+                <DataVerseLogo 
+                  size={44} 
+                  rounded="full" 
                   className="w-full h-full object-contain select-none" 
-                  loading="eager"
-                  decoding="sync"
                 />
               ) : item.avatar_url ? (
                 <img src={`/api/media/file/${item.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
