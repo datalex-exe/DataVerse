@@ -740,13 +740,13 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
         </div>
 
         {/* Tab Selector */}
-        <div role="tablist" aria-label="Admin Console Sections" className="flex flex-wrap gap-1.5 w-full sm:w-auto pb-1">
+        <div role="tablist" aria-label="Admin Console Sections" className="flex items-center gap-1.5 sm:gap-2 w-full overflow-x-auto scrollbar-none pb-2 pt-0.5 -mx-4 px-4 sm:mx-0 sm:px-0">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'users'}
             onClick={() => setActiveTab('users')}
-            className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
+            className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'users'
                 ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
                 : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
@@ -761,7 +761,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               role="tab"
               aria-selected={activeTab === 'chats'}
               onClick={() => setActiveTab('chats')}
-              className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
                 activeTab === 'chats'
                   ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
                   : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
@@ -776,7 +776,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             role="tab"
             aria-selected={activeTab === 'restrictions'}
             onClick={() => setActiveTab('restrictions')}
-            className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
+            className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
               activeTab === 'restrictions'
                 ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
                 : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
@@ -792,7 +792,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 role="tab"
                 aria-selected={activeTab === 'verifications'}
                 onClick={() => setActiveTab('verifications')}
-                className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
+                className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
                   activeTab === 'verifications'
                     ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
                     : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
@@ -806,7 +806,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 role="tab"
                 aria-selected={activeTab === 'reports'}
                 onClick={() => setActiveTab('reports')}
-                className={`flex-1 sm:flex-none py-1.5 px-3 sm:py-2 sm:px-4 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black transition-all flex items-center justify-center gap-1 sm:gap-1.5 ${
+                className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
                   activeTab === 'reports'
                     ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
                     : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
@@ -1306,8 +1306,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       onChange={(e) => setSenderType(e.target.value as 'admin' | 'system')}
                       className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
                     >
-                      <option value="admin">👤 From Admin Identity (Show Username & Avatar)</option>
-                      <option value="system">🤖 From System Identity (Anonymous, Show Site Logo)</option>
+                      <option value="admin">👤 Admin (My Username & Avatar)</option>
+                      <option value="system">🤖 System Identity (DataVerse Logo)</option>
                     </select>
                   </div>
                   

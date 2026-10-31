@@ -9,7 +9,8 @@ import {
   PlusSquare, 
   Heart, 
   Send, 
-  Shield 
+  Shield,
+  User 
 } from 'lucide-react';
 /* THEME START */
 import { SidebarThemeSwitch } from './utils/theme';
@@ -957,7 +958,7 @@ const AppContent: React.FC = () => {
         {/* Search */}
         <button
           onClick={() => navigate('search')}
-          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all ${
+          className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all ${
             activeView === 'search'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
               : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
@@ -968,40 +969,10 @@ const AppContent: React.FC = () => {
           <span className="text-[11px] tracking-tight mt-0.5">Explore</span>
         </button>
 
-        {/* Raised Create Button in Center */}
-        <div className="relative -top-4 flex flex-col items-center">
-          <button
-            onClick={() => navigate('create')}
-            aria-label="Create Post"
-            className="w-14 h-14 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center shadow-lg shadow-[var(--shadow-accent)] border-4 border-[var(--bg)] active:scale-95 hover:scale-105 transition-all flex-shrink-0 cursor-pointer"
-          >
-            <Plus className="w-6 h-6 stroke-[2.2]" />
-          </button>
-        </div>
-
-        {/* Notifications */}
-        <button
-          onClick={() => navigate('notifications')}
-          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all relative ${
-            activeView === 'notifications'
-              ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
-              : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
-          }`}
-          aria-label="Notifications"
-        >
-          <div className="relative">
-            <Heart className="w-5 h-5 stroke-[1.8]" />
-            {unreadCount > 0 && activeView !== 'notifications' && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[var(--accent-2)] rounded-full border border-[var(--side)]" />
-            )}
-          </div>
-          <span className="text-[11px] tracking-tight mt-0.5">Alerts</span>
-        </button>
-
         {/* Messages */}
         <button
           onClick={() => navigate('messages')}
-          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all relative ${
+          className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all relative ${
             activeView === 'messages'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
               : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
@@ -1019,25 +990,57 @@ const AppContent: React.FC = () => {
           <span className="text-[11px] tracking-tight mt-0.5">Chats</span>
         </button>
 
+        {/* Raised Create Button in Center */}
+        <div className="relative -top-4 flex flex-col items-center">
+          <button
+            onClick={() => navigate('create')}
+            aria-label="Create Post"
+            className="w-14 h-14 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center shadow-lg shadow-[var(--shadow-accent)] border-4 border-[var(--bg)] active:scale-95 hover:scale-105 transition-all flex-shrink-0 cursor-pointer"
+          >
+            <Plus className="w-6 h-6 stroke-[2.2]" />
+          </button>
+        </div>
+
+        {/* Notifications */}
+        <button
+          onClick={() => navigate('notifications')}
+          className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all relative ${
+            activeView === 'notifications'
+              ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
+              : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
+          }`}
+          aria-label="Notifications"
+        >
+          <div className="relative">
+            <Heart className="w-5 h-5 stroke-[1.8]" />
+            {unreadCount > 0 && activeView !== 'notifications' && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[var(--accent-2)] rounded-full border border-[var(--side)]" />
+            )}
+          </div>
+          <span className="text-[11px] tracking-tight mt-0.5">Alerts</span>
+        </button>
+
         {/* Profile */}
         <button
           onClick={() => navigate('profile')}
-          className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all ${
+          className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all ${
             activeView === 'profile'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
               : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
           }`}
           aria-label="Profile"
         >
-          <div className={`w-5.5 h-5.5 rounded-full overflow-hidden border transition-all ${
+          <div className={`w-5 h-5 rounded-full overflow-hidden border flex-shrink-0 flex items-center justify-center transition-all ${
             activeView === 'profile' ? 'border-[var(--accent-2)] ring-2 ring-[var(--accent-2)]/30 scale-105' : 'border-[var(--line)]'
           }`}>
             {user.avatar_url ? (
               <img src={`/api/media/file/${user.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
-            ) : (
+            ) : user.username ? (
               <div className="w-full h-full bg-[var(--input)] flex items-center justify-center text-[8px] font-bold text-[var(--accent-2)] uppercase">
                 {user.username.substring(0, 2)}
               </div>
+            ) : (
+              <User className="w-3.5 h-3.5 stroke-[1.8]" />
             )}
           </div>
           <span className="text-[11px] tracking-tight mt-0.5">Profile</span>
@@ -1047,7 +1050,7 @@ const AppContent: React.FC = () => {
         {(user.is_admin || user.is_top_admin) && (
           <button
             onClick={() => navigate('admin')}
-            className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all ${
+            className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all ${
               activeView === 'admin'
                 ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
                 : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'

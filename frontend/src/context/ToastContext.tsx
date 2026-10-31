@@ -52,7 +52,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         aria-live="polite" 
         aria-atomic="true" 
         role="status"
-        className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none select-none"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:w-auto max-w-sm z-50 flex flex-col gap-2.5 pointer-events-none select-none"
       >
         {toasts.map((item) => (
           <div
