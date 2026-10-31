@@ -501,10 +501,14 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
         <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
           {/* Avatar (40px mobile, 44px desktop) with 20px badge on bottom-right */}
           <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-xs sm:text-sm font-bold text-[var(--accent-2)] overflow-hidden shadow-sm p-0.5">
+            <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full border border-[var(--card-border)] flex items-center justify-center text-xs sm:text-sm font-bold overflow-hidden shadow-sm ${
+              !item.notifier_id || isWelcome
+                ? 'bg-[var(--card)] p-2'
+                : 'bg-[var(--input)] text-[var(--accent-2)] p-0.5'
+            }`}>
               {!item.notifier_id || isWelcome ? (
                 <DataVerseLogo 
-                  size={44} 
+                  size={28} 
                   rounded="full" 
                   className="w-full h-full object-contain select-none" 
                 />
