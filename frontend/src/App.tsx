@@ -925,7 +925,7 @@ const AppContent: React.FC = () => {
             {/* Dynamic / Parameter-based Views */}
             {activeView === 'settings' && <Profile initialShowSettings={true} onNavigate={navigate} />}
             {activeView === 'profile' && !!profileParam && <Profile targetUsername={profileParam} onNavigate={navigate} />}
-            {activeView === 'admin' && <Admin />}
+            {activeView === 'admin' && <Admin onNavigate={navigate} />}
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (
               <Legal type={activeView as any} onNavigate={navigate} />
             )}

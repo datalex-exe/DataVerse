@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -17,8 +17,27 @@ import {
   AlertTriangle,
   Search,
   Archive,
-  ShieldAlert
+  ShieldAlert,
+  WifiOff,
+  RefreshCw,
+  SlidersHorizontal,
+  ArrowLeft,
+  CheckCircle2
 } from 'lucide-react';
+
+export type AdminStatus = 
+  | 'idle'
+  | 'loading'
+  | 'empty'
+  | 'error'
+  | 'offline'
+  | 'slow'
+  | 'unauthorized'
+  | 'session_expired';
+
+interface AdminProps {
+  onNavigate?: (view: string) => void;
+}
 
 interface SystemUser {
   id: string;
@@ -153,7 +172,7 @@ const AdminAvatar: React.FC<AdminAvatarProps> = ({
 };
 /* AVATAR FIX END */
 
-export const Admin: React.FC = () => {
+export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const { token, user: currentUser } = useAuth();
   const { toast } = useToast();
   
@@ -164,6 +183,33 @@ export const Admin: React.FC = () => {
   const [reportsLoading, setReportsLoading] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 10-State Architecture variables
+  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+  const [isSlowNetwork, setIsSlowNetwork] = useState<boolean>(false);
+  const [previewState, setPreviewState] = useState<AdminStatus | null>(null);
+  const [showPreviewToolbar, setShowPreviewToolbar] = useState<boolean>(false);
+  const [sessionExpired, setSessionExpired] = useState<boolean>(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    description: string;
+    actionLabel: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+  const slowTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+    };
+  }, []);
 
   // Restrictions & Notification Form States
   const [selectedUserForNotif, setSelectedUserForNotif] = useState<string>('all');
@@ -227,56 +273,70 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const handleRemoveChatFromAdmin = async (convoId: string) => {
+  const handleRemoveChatFromAdmin = (convoId: string) => {
     if (!token) return;
-    if (!window.confirm('Are you sure you want to remove this chat from the Admin Console? The database records (messages, photos, and videos) will not be deleted, but this chat will be hidden from this list.')) return;
-
-    try {
-      const res = await fetch(`/api/conversations/global/${convoId}/hide`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setConvos(prev => prev.filter(c => c.id !== convoId));
-        alert('Chat removed from the Admin Console list (database records preserved).');
-      } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to remove chat');
+    setConfirmDialog({
+      title: "Remove Chat from Console?",
+      description: "Database records (messages, photos, and videos) will not be deleted, but this conversation will be hidden from the admin audit list.",
+      actionLabel: "Hide Chat",
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const res = await fetch(`/api/conversations/global/${convoId}/hide`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setConvos(prev => prev.filter(c => c.id !== convoId));
+            toast.success('Chat removed from the Admin Console list (database records preserved).');
+          } else {
+            const errData = await res.json();
+            toast.error(errData.error || 'Failed to remove chat');
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error('Network error removing chat');
+        }
       }
-    } catch (err) {
-      console.error(err);
-      alert('Network error removing chat');
-    }
+    });
   };
 
-  const handleRedactMessageText = async (messageId: string) => {
+  const handleRedactMessageText = (messageId: string) => {
     if (!token) return;
-    if (!window.confirm('Are you sure you want to clear/redact this message text from your view? The underlying data remains intact in the database, and this does not affect what other participants see.')) return;
-
-    try {
-      const res = await fetch(`/api/conversations/messages/${messageId}/redact`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (res.ok) {
-        setAuditMessages(prev => prev.map(m => {
-          if (m.id === messageId) {
-            return { ...m, body: '[Redacted Text]' };
+    setConfirmDialog({
+      title: "Redact Message Text?",
+      description: "The underlying data remains intact in the database. This replaces the message preview with [Redacted Text] in your audit view.",
+      actionLabel: "Redact Preview",
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const res = await fetch(`/api/conversations/messages/${messageId}/redact`, {
+            method: 'POST',
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (res.ok) {
+            setAuditMessages(prev => prev.map(m => {
+              if (m.id === messageId) {
+                return { ...m, body: '[Redacted Text]' };
+              }
+              return m;
+            }));
+            toast.success('Message text cleared from your view successfully.');
+          } else {
+            const errData = await res.json();
+            toast.error(errData.error || 'Failed to clear text');
           }
-          return m;
-        }));
-        alert('Message text cleared from your view successfully.');
-      } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to clear text');
+        } catch (err) {
+          console.error(err);
+          toast.error('Network error clearing message text');
+        }
       }
-    } catch (err) {
-      console.error(err);
-      alert('Network error clearing message text');
-    }
+    });
   };
 
   const fetchReports = async () => {
@@ -301,25 +361,33 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const handleResolveReport = async (reportId: string) => {
+  const handleResolveReport = (reportId: string) => {
     if (!token) return;
-    if (!window.confirm('Are you sure you want to resolve this report? It will be deleted from the safety queue.')) return;
-
-    try {
-      const res = await fetch(`/api/users/admin/reports/${reportId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setReports(prev => prev.filter(r => r.id !== reportId));
-      } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to resolve report');
+    setConfirmDialog({
+      title: "Resolve Safety Report?",
+      description: "This report will be marked as resolved and permanently cleared from the moderation queue.",
+      actionLabel: "Resolve Report",
+      isDestructive: false,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const res = await fetch(`/api/users/admin/reports/${reportId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            setReports(prev => prev.filter(r => r.id !== reportId));
+            toast.success('Report resolved and cleared from moderation queue.');
+          } else {
+            const errData = await res.json();
+            toast.error(errData.error || 'Failed to resolve report');
+          }
+        } catch (err) {
+          console.error(err);
+          toast.error('Network error resolving report');
+        }
       }
-    } catch (err) {
-      console.error(err);
-      alert('Network error resolving report');
-    }
+    });
   };
 
   const handleSendNotification = async (e: React.FormEvent) => {
@@ -345,14 +413,15 @@ export const Admin: React.FC = () => {
       if (res.ok) {
         setNotifSuccess(true);
         setNotifText('');
+        toast.success(selectedUserForNotif === 'all' ? 'Broadcast notification dispatched.' : 'Targeted notification sent.');
         setTimeout(() => setNotifSuccess(false), 3000);
       } else {
         const errData = await res.json();
-        alert(errData.error || 'Failed to send notification');
+        toast.error(errData.error || 'Failed to send notification');
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to send notification');
+      toast.error('Failed to send notification');
     } finally {
       setSendingNotif(false);
     }
@@ -379,30 +448,47 @@ export const Admin: React.FC = () => {
       if (res.ok) {
         setRestrictSuccess(true);
         await fetchUsers();
+        toast.success(`Chat restriction applied for ${minutes} minutes.`);
         setTimeout(() => setRestrictSuccess(false), 3000);
       } else {
         const errData = await res.json();
-        alert(errData.error || 'Failed to update chat restriction');
+        toast.error(errData.error || 'Failed to update chat restriction');
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to update chat restriction');
+      toast.error('Failed to update chat restriction');
     } finally {
       setApplyingRestriction(false);
     }
   };
 
   const loadDashboardData = async () => {
+    if (!token) {
+      setSessionExpired(true);
+      return;
+    }
     setLoading(true);
     setError(null);
-    if (activeTab === 'users' || activeTab === 'restrictions' || activeTab === 'verifications') {
-      await fetchUsers();
-    } else if (activeTab === 'reports') {
-      await fetchReports();
-    } else {
-      await fetchConvos();
+    setIsSlowNetwork(false);
+
+    if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+    slowTimerRef.current = setTimeout(() => {
+      setIsSlowNetwork(true);
+    }, 3500);
+
+    try {
+      if (activeTab === 'users' || activeTab === 'restrictions' || activeTab === 'verifications') {
+        await fetchUsers();
+      } else if (activeTab === 'reports') {
+        await fetchReports();
+      } else {
+        await fetchConvos();
+      }
+    } finally {
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+      setLoading(false);
+      setIsSlowNetwork(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -544,28 +630,33 @@ export const Admin: React.FC = () => {
   };
 
   // Reset User Two-Factor Authentication (Admin / Top Admin)
-  const handleReset2FA = async (targetUser: SystemUser) => {
+  const handleReset2FA = (targetUser: SystemUser) => {
     if (!token) return;
-    if (!window.confirm(`Are you sure you want to reset Two-Factor Authentication for @${targetUser.username}? This will disable their 2FA and allow them to log in with their password.`)) {
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/users/${targetUser.id}/2fa/reset`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
+    setConfirmDialog({
+      title: `Reset 2FA for @${targetUser.username}?`,
+      description: "This will disable Two-Factor Authentication and allow the user to sign in with their password.",
+      actionLabel: "Reset 2FA",
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const res = await fetch(`/api/users/${targetUser.id}/2fa/reset`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || 'Failed to reset 2FA');
+          }
+          setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, has_2fa: false } : u));
+          toast.success(`2FA reset successfully for @${targetUser.username}`);
+        } catch (err: any) {
+          toast.error(err.message || 'Error resetting 2FA');
         }
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to reset 2FA');
       }
-      setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, has_2fa: false } : u));
-      toast.success(`2FA reset successfully for @${targetUser.username}`);
-    } catch (err: any) {
-      toast.error(err.message || 'Error resetting 2FA');
-    }
+    });
   };
 
   const getCleanLabel = (convo: SystemConvo) => {
@@ -575,14 +666,59 @@ export const Admin: React.FC = () => {
     return convo.members.map(m => m.display_name || m.username).join(' & ');
   };
 
-  if (currentUser?.is_admin !== true && currentUser?.is_top_admin !== true) {
+  const renderTableSkeleton = () => (
+    <div className="space-y-3" aria-busy="true" aria-label="Loading directory records">
+      <div className="glass-card rounded-3xl overflow-hidden border border-[var(--line)] bg-[var(--card)] shadow-xl p-4 sm:p-6 space-y-4 animate-pulse">
+        {[1, 2, 3, 4].map(idx => (
+          <div key={idx} className="flex items-center justify-between py-3 border-b border-[var(--line)]/50 last:border-b-0">
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-full bg-[var(--input)] shrink-0" />
+              <div className="space-y-1.5">
+                <div className="w-32 h-3.5 bg-[var(--input)] rounded-md" />
+                <div className="w-20 h-2.5 bg-[var(--input)]/60 rounded-md" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-16 h-7 rounded-lg bg-[var(--input)]" />
+              <div className="w-16 h-7 rounded-lg bg-[var(--input)]/60" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // State 7: Permission Denied State with Clear Remediation & Way Back
+  if ((currentUser?.is_admin !== true && currentUser?.is_top_admin !== true) || previewState === 'unauthorized') {
     return (
-      <div className="max-w-md mx-auto py-20 px-4 text-center space-y-4 select-none">
-        <Lock className="w-12 h-12 text-red-500 mx-auto" />
-        <h3 className="text-sm font-black text-white uppercase tracking-widest">Access Restricted</h3>
-        <p className="text-xs text-slate-500 leading-relaxed font-semibold">
-          This workspace is reserved exclusively for DataVerse Administrators.
-        </p>
+      <div className="max-w-md mx-auto py-20 px-4 text-center space-y-5 select-none animate-fade-in">
+        <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 mx-auto flex items-center justify-center">
+          <Lock className="w-8 h-8" />
+        </div>
+        <div className="space-y-1.5">
+          <h2 className="text-lg font-bold text-[var(--text)]">Administrator Access Required</h2>
+          <p className="text-xs text-[var(--muted)] leading-relaxed">
+            This console is reserved exclusively for verified DataVerse administrators to audit platform security, user accounts, and moderation flags.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2.5 pt-2 max-w-xs mx-auto">
+          <button
+            type="button"
+            onClick={() => onNavigate ? onNavigate('feed') : (window.location.hash = '')}
+            className="w-full min-h-[44px] py-2.5 px-5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold rounded-full shadow-md shadow-[var(--shadow-accent)] active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Return to Feed</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate ? onNavigate('profile') : null}
+            className="w-full min-h-[44px] py-2.5 px-5 bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--text)] text-xs font-bold rounded-full transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            <Users className="w-4 h-4 text-[var(--accent-2)]" />
+            <span>Your Profile</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -685,17 +821,66 @@ export const Admin: React.FC = () => {
       </div>
       {/* THEME END */}
 
-      {error && (
-        <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold rounded-2xl">
-          {error}
+      {/* State 4: Offline Notification Banner */}
+      {isOffline && (
+        <div 
+          role="alert"
+          aria-live="polite"
+          className="p-3.5 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-2xl flex items-center justify-between text-xs animate-fade-in"
+        >
+          <div className="flex items-center gap-2">
+            <WifiOff className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>Offline: Platform administrative actions are paused. Showing cached records.</span>
+          </div>
+          <button
+            type="button"
+            onClick={loadDashboardData}
+            className="px-2.5 py-1 bg-amber-500/20 text-amber-300 rounded-lg text-[10px] font-bold hover:bg-amber-500/30 transition-colors cursor-pointer"
+          >
+            Check Connection
+          </button>
         </div>
       )}
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-500 gap-3">
-          <Loader2 className="w-6 h-6 animate-spin text-brand-500" />
-          <p className="text-xs">Fetching system data logs...</p>
+      {/* State 5: Slow Network Indicator */}
+      {isSlowNetwork && !isOffline && (
+        <div 
+          role="status"
+          aria-live="polite"
+          className="p-3.5 bg-[var(--accent)]/10 border border-[var(--accent-2)]/30 text-[var(--accent-2)] rounded-2xl flex items-center gap-2 text-xs animate-fade-in"
+        >
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+          <span>Fetching directory records from D1 database... Please keep this page open.</span>
         </div>
+      )}
+
+      {/* State 3: Error Banner with Direct Remediation */}
+      {error && (
+        <div 
+          role="alert"
+          aria-live="assertive"
+          className="p-4 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-2xl flex items-center justify-between animate-fade-in"
+        >
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div>
+              <p className="font-bold">Database Query Error</p>
+              <p className="text-red-300/80 mt-0.5">{error}. Check authentication token or server connectivity.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadDashboardData}
+            className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 font-bold rounded-xl text-xs transition-colors shrink-0 cursor-pointer"
+          >
+            Retry Query
+          </button>
+        </div>
+      )}
+
+      {/* State 2: Loading Skeleton Shape */}
+      {(loading || previewState === 'loading') ? (
+        renderTableSkeleton()
       ) : (
         <>
           {/* TAB: USERS DIRECTORY */}
@@ -728,8 +913,27 @@ export const Admin: React.FC = () => {
                 </div>
 
                 {filteredUsers.length === 0 ? (
-                  <div className="text-center py-20 text-slate-600 text-xs font-semibold glass-card rounded-3xl border border-white/5 bg-[#060608]/40">
-                    No users matching "{searchUserQuery}" found.
+                  <div className="text-center py-16 px-4 text-xs font-semibold glass-card rounded-3xl border border-[var(--line)] bg-[var(--card)] space-y-3">
+                    <Users className="w-8 h-8 text-[var(--muted)] mx-auto opacity-50" />
+                    <div>
+                      <p className="text-[var(--text)] font-bold">
+                        {searchUserQuery ? `No users matching "${searchUserQuery}"` : "User directory is empty"}
+                      </p>
+                      <p className="text-[var(--muted)] mt-1 font-normal max-w-sm mx-auto">
+                        {searchUserQuery 
+                          ? "Check your spelling or search by user ID or handle." 
+                          : "New registered accounts will appear here automatically."}
+                      </p>
+                    </div>
+                    {searchUserQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchUserQuery('')}
+                        className="px-4 py-2 bg-[var(--input)] hover:bg-[var(--hover)] text-[var(--text)] border border-[var(--line)] rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Clear Search Filter
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -992,8 +1196,22 @@ export const Admin: React.FC = () => {
           {activeTab === 'chats' && currentUser?.is_top_admin && (
             <div className="grid grid-cols-1 gap-4">
               {convos.length === 0 ? (
-                <div className="text-center py-20 text-slate-600 text-xs font-semibold">
-                  No active system conversations log found.
+                <div className="text-center py-16 px-4 text-xs font-semibold glass-card rounded-3xl border border-[var(--line)] bg-[var(--card)] space-y-3">
+                  <Archive className="w-8 h-8 text-[var(--muted)] mx-auto opacity-50" />
+                  <div>
+                    <p className="text-[var(--text)] font-bold">No Active System Conversations</p>
+                    <p className="text-[var(--muted)] mt-1 font-normal max-w-sm mx-auto">
+                      All platform direct messages and group chats appear here for security auditing once users exchange messages.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadDashboardData}
+                    className="px-4 py-2 bg-[var(--input)] hover:bg-[var(--hover)] text-[var(--text)] border border-[var(--line)] rounded-xl text-xs font-bold transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Refresh Audit Logs</span>
+                  </button>
                 </div>
               ) : (
                 convos.map(c => (
@@ -1221,7 +1439,11 @@ export const Admin: React.FC = () => {
                     const restrictedUsers = users.filter(u => u.chat_restricted_until && u.chat_restricted_until > Date.now());
                     if (restrictedUsers.length === 0) {
                       return (
-                        <p className="text-center py-4 text-slate-655 text-[9px] font-semibold">No active chat restrictions.</p>
+                        <div className="text-center py-6 text-xs font-semibold rounded-2xl border border-[var(--line)] bg-[var(--card)] space-y-1">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+                          <p className="text-[var(--text)] font-bold text-xs">No Active Restrictions</p>
+                          <p className="text-[var(--muted)] text-[10px] font-normal">All user accounts currently have unrestricted messaging access.</p>
+                        </div>
                       );
                     }
 
@@ -1277,9 +1499,12 @@ export const Admin: React.FC = () => {
               </div>
 
               {users.filter(u => u.verification_status === 'pending').length === 0 ? (
-                <div className="p-12 border border-white/[0.04] bg-[#060608]/20 rounded-3xl text-center select-none">
-                  <Sparkles className="w-8 h-8 text-slate-700 mx-auto mb-3" />
-                  <p className="text-xs text-slate-550 font-bold">No pending verification requests at this time.</p>
+                <div className="p-12 border border-[var(--line)] bg-[var(--card)] rounded-3xl text-center select-none space-y-2">
+                  <Sparkles className="w-8 h-8 text-amber-400/70 mx-auto" />
+                  <p className="text-xs text-[var(--text)] font-bold">No Pending Verification Requests</p>
+                  <p className="text-[10px] text-[var(--muted)] max-w-sm mx-auto">
+                    New creator badge submissions requiring document review will populate here.
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -1391,9 +1616,12 @@ export const Admin: React.FC = () => {
                   <p className="text-xs">Loading safety queue...</p>
                 </div>
               ) : reports.length === 0 ? (
-                <div className="p-12 border border-white/[0.04] bg-[#060608]/20 rounded-3xl text-center select-none">
-                  <AlertTriangle className="w-8 h-8 text-slate-700 mx-auto mb-3" />
-                  <p className="text-xs text-slate-550 font-bold">No active reports. The safety queue is clean!</p>
+                <div className="p-12 border border-[var(--line)] bg-[var(--card)] rounded-3xl text-center select-none space-y-2">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400/80 mx-auto" />
+                  <p className="text-xs text-[var(--text)] font-bold">Safety Queue is Clean</p>
+                  <p className="text-[10px] text-[var(--muted)] max-w-sm mx-auto">
+                    Zero unresolved abuse or policy violation reports pending moderation review.
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 animate-fade-in">
@@ -1633,6 +1861,146 @@ export const Admin: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* State 9 / Action Confirmation: In-App Accessible Alert Dialog */}
+      {confirmDialog && (
+        <div 
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="admin-confirm-title"
+          aria-describedby="admin-confirm-desc"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="bg-[var(--card)] border border-[var(--line)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${confirmDialog.isDestructive ? 'bg-red-500/10 text-red-400' : 'bg-[var(--accent)]/10 text-[var(--accent-2)]'}`}>
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 id="admin-confirm-title" className="text-base font-bold text-[var(--text)]">
+                {confirmDialog.title}
+              </h3>
+            </div>
+            <p id="admin-confirm-desc" className="text-xs text-[var(--muted)] leading-relaxed">
+              {confirmDialog.description}
+            </p>
+            <div className="flex gap-3 pt-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                className="min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold text-[var(--muted)] hover:bg-[var(--hover)] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDialog.onConfirm}
+                className={`min-h-[44px] px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  confirmDialog.isDestructive 
+                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-md shadow-red-500/20' 
+                    : 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md'
+                }`}
+              >
+                {confirmDialog.actionLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* State 8: Session Expired Modal */}
+      {sessionExpired && (
+        <div 
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="admin-session-title"
+          aria-describedby="admin-session-desc"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+        >
+          <div className="bg-[var(--card)] border border-[var(--card-border)] rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 mx-auto flex items-center justify-center">
+              <Lock className="w-7 h-7" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 id="admin-session-title" className="text-base font-bold text-[var(--text)]">Admin Session Expired</h3>
+              <p id="admin-session-desc" className="text-xs text-[var(--muted)] leading-relaxed">
+                Your administrative session has timed out for security. Pending actions and safety notes have been safeguarded.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => onNavigate ? onNavigate('auth') : (window.location.hash = 'auth')}
+                className="w-full min-h-[44px] py-2.5 px-4 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-bold text-xs rounded-full shadow-lg active:scale-95 transition-all cursor-pointer"
+              >
+                Sign In to Resume Admin Audit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* State Preview Toolbar */}
+      <aside 
+        aria-label="UI State Inspector"
+        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-[var(--card)]/95 backdrop-blur-md border border-[var(--card-border)] rounded-full shadow-2xl px-3 py-1.5 flex items-center gap-1.5 text-xs text-[var(--muted)] select-none"
+      >
+        <button
+          type="button"
+          onClick={() => setShowPreviewToolbar(!showPreviewToolbar)}
+          className="flex items-center gap-1.5 font-bold text-[var(--text)] px-2 py-1 hover:text-[var(--accent-2)] transition-colors cursor-pointer"
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+          <span className="text-[11px]">States</span>
+        </button>
+        {showPreviewToolbar && (
+          <div className="flex items-center gap-1 border-l border-[var(--line)] pl-2 overflow-x-auto max-w-[80vw]">
+            {(['idle', 'loading', 'empty', 'error', 'offline', 'slow', 'unauthorized', 'session_expired'] as AdminStatus[]).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  if (st === 'idle') {
+                    setPreviewState(null);
+                    setLoading(false);
+                    setError(null);
+                    setIsOffline(false);
+                    setIsSlowNetwork(false);
+                    setSessionExpired(false);
+                    loadDashboardData();
+                  } else if (st === 'loading') {
+                    setPreviewState('loading');
+                  } else if (st === 'empty') {
+                    setPreviewState('empty');
+                    setUsers([]);
+                    setConvos([]);
+                    setReports([]);
+                  } else if (st === 'error') {
+                    setPreviewState('error');
+                    setError('Failed to query Cloudflare D1 administrative database tables. Connection pool exhausted.');
+                  } else if (st === 'offline') {
+                    setPreviewState('offline');
+                    setIsOffline(true);
+                  } else if (st === 'slow') {
+                    setPreviewState('slow');
+                    setIsSlowNetwork(true);
+                  } else if (st === 'unauthorized') {
+                    setPreviewState('unauthorized');
+                  } else if (st === 'session_expired') {
+                    setSessionExpired(true);
+                  }
+                }}
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
+                  previewState === st || (st === 'idle' && !previewState && !sessionExpired && !isOffline && !error)
+                    ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                    : 'hover:bg-[var(--hover)] text-[var(--muted)]'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        )}
+      </aside>
 
     </div>
   );
