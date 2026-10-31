@@ -1,12 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, User, AtSign, Eye, EyeOff, Shield, ArrowLeft, HelpCircle } from 'lucide-react';
+import { 
+  Mail, 
+  Lock, 
+  User, 
+  AtSign, 
+  Eye, 
+  EyeOff, 
+  Shield, 
+  ArrowLeft, 
+  HelpCircle,
+  WifiOff,
+  AlertTriangle,
+  CheckCircle2,
+  SlidersHorizontal,
+  Loader2
+} from 'lucide-react';
 /* THEME START */
 import { ThemeIconButton } from '../utils/theme';
 /* THEME END */
 import { Footer } from '../components/Footer';
 import { CookieBanner } from '../components/CookieBanner';
 import { DataVerseLogo } from '../components/DataVerseLogo';
+
+export type AuthState = 
+  | 'idle'
+  | 'loading'
+  | 'error'
+  | 'offline'
+  | 'slow'
+  | 'success';
 
 export const Auth: React.FC = () => {
   const { login } = useAuth();
@@ -18,11 +41,31 @@ export const Auth: React.FC = () => {
   const [password, setPassword] = useState<string>('');
   const [displayName, setDisplayName] = useState<string>('');
   
-  // UI states
+  // UI states & 10-state architecture
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    username?: string;
+    email?: string;
+    password?: string;
+    displayName?: string;
+    terms?: string;
+  }>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [acceptedTerms, setAcceptedTerms] = useState<boolean>(false);
+  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+  const [isSlowNetwork, setIsSlowNetwork] = useState<boolean>(false);
+  const [authSuccessUser, setAuthSuccessUser] = useState<string | null>(null);
+  const [hasSavedDraft] = useState<boolean>(() => {
+    try {
+      return Boolean(sessionStorage.getItem('dv_create_draft_caption') || sessionStorage.getItem('dv_pending_comment'));
+    } catch {
+      return false;
+    }
+  });
+  const [previewState, setPreviewState] = useState<AuthState | null>(null);
+  const [showPreviewToolbar, setShowPreviewToolbar] = useState<boolean>(false);
+  const slowTimerRef = useRef<any>(null);
 
   // 2FA Challenge State
   const [show2faChallenge, setShow2faChallenge] = useState<boolean>(false);
@@ -31,6 +74,19 @@ export const Auth: React.FC = () => {
   const [isBackupCodeMode, setIsBackupCodeMode] = useState<boolean>(false);
   const [trustDevice, setTrustDevice] = useState<boolean>(false);
   const [failed2faAttempts, setFailed2faAttempts] = useState<number>(0);
+
+  // Online / offline tracking
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+    };
+  }, []);
 
   /* ANIMATION START */
   const [animationKey, setAnimationKey] = useState<number>(0);
@@ -104,21 +160,66 @@ export const Auth: React.FC = () => {
   }, []);
   /* ANIMATION END */
 
+  const validateForm = (): boolean => {
+    const errors: { username?: string; email?: string; password?: string; displayName?: string; terms?: string } = {};
+
+    if (!username.trim()) {
+      errors.username = isLogin ? 'Please enter your username or email' : 'Please choose a username';
+    } else if (!isLogin) {
+      if (!/^[a-zA-Z0-9_]{3,30}$/.test(username.trim())) {
+        errors.username = 'Username must be 3-30 characters (letters, numbers, underscores only)';
+      }
+    }
+
+    if (!isLogin) {
+      if (!displayName.trim()) {
+        errors.displayName = 'Please enter your display name';
+      }
+      if (!email.trim()) {
+        errors.email = 'Please enter your email address';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        errors.email = 'Please enter a valid email format (e.g. name@domain.com)';
+      }
+      if (!acceptedTerms) {
+        errors.terms = 'You must agree to the Terms of Service and Privacy Policy to register';
+      }
+    }
+
+    if (!password) {
+      errors.password = 'Please enter your password';
+    } else if (!isLogin && password.length < 8) {
+      errors.password = 'Password must be at least 8 characters long';
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!isLogin && !acceptedTerms) {
-      setError('You must accept the Terms of Service and Privacy Policy to create an account.');
+    if (!navigator.onLine) {
+      setError("You're offline. Reconnect to the internet to sign in or create an account.");
+      return;
+    }
+
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
+    setIsSlowNetwork(false);
+
+    if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+    slowTimerRef.current = setTimeout(() => {
+      setIsSlowNetwork(true);
+    }, 3500);
 
     const url = isLogin ? '/api/auth/login' : '/api/auth/signup';
     const payload = isLogin 
-      ? { login_id: username || email, password } 
-      : { username, email, password, display_name: displayName };
+      ? { login_id: username.trim() || email.trim(), password } 
+      : { username: username.trim(), email: email.trim(), password, display_name: displayName.trim() };
 
     try {
       const res = await fetch(url, {
@@ -127,9 +228,17 @@ export const Auth: React.FC = () => {
         body: JSON.stringify(payload)
       });
 
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Authentication failed');
+        let msg = data.error || 'Authentication failed';
+        if (res.status === 401 || res.status === 403) {
+          msg = 'Incorrect username or password. Please verify your credentials and try again.';
+        } else if (res.status === 429) {
+          msg = 'Too many attempts. For your security, please wait 30 seconds before trying again.';
+        }
+        throw new Error(msg);
       }
 
       if (data.requires_2fa) {
@@ -141,9 +250,17 @@ export const Auth: React.FC = () => {
         return;
       }
 
-      login(data.token, data.user);
+      setAuthSuccessUser(data.user?.display_name || data.user?.username || 'User');
+      setTimeout(() => {
+        login(data.token, data.user);
+      }, 700);
     } catch (err: any) {
-      setError(err.message || 'An error occurred. Please try again.');
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+      if (!navigator.onLine) {
+        setError("Network connection lost. Please verify your connection.");
+      } else {
+        setError(err.message || 'An error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -738,7 +855,56 @@ export const Auth: React.FC = () => {
               </button>
             </div>
 
-            {/* Error Alert */}
+            {/* State 8: Draft Preservation Notice */}
+            {hasSavedDraft && isLogin && (
+              <div 
+                role="status"
+                aria-live="polite"
+                className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2 animate-fade-in"
+              >
+                <Shield className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Your unsaved post draft has been preserved. Sign in to resume and publish.</span>
+              </div>
+            )}
+
+            {/* State 4: Offline Notification Banner */}
+            {isOffline && (
+              <div 
+                role="alert"
+                aria-live="polite"
+                className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2 animate-fade-in"
+              >
+                <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>You're offline. Reconnect to the internet to sign in or create an account.</span>
+              </div>
+            )}
+
+            {/* State 5: Slow Network Indicator */}
+            {isSlowNetwork && loading && (
+              <div 
+                role="status"
+                aria-live="polite"
+                className="mb-4 p-3 rounded-xl bg-[var(--accent)]/10 border border-[var(--accent-2)]/30 text-[var(--accent-2)] text-xs flex items-center gap-2 animate-fade-in"
+              >
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                <span>Connecting to authentication servers... Please keep this page open.</span>
+              </div>
+            )}
+
+            {/* State 10: Rich Success Card */}
+            {authSuccessUser && (
+              <div 
+                role="status"
+                aria-live="polite"
+                className="mb-4 p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs text-center font-semibold animate-fade-in flex flex-col items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                <span className="text-sm font-bold">Welcome back, {authSuccessUser}!</span>
+                <span className="text-emerald-300/80 font-normal">Setting up your secure session...</span>
+              </div>
+            )}
+
+            {/* State 3: Error Alert with Actionable Remediation */}
             {error && (
               <div 
                 id="auth-error"
@@ -777,12 +943,24 @@ export const Auth: React.FC = () => {
                       autoComplete="name"
                       placeholder="e.g. John Doe"
                       value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      aria-invalid={!!error}
-                      aria-describedby={error ? "auth-error" : undefined}
-                      className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                      onChange={(e) => {
+                        setDisplayName(e.target.value);
+                        if (fieldErrors.displayName) setFieldErrors(prev => ({ ...prev, displayName: undefined }));
+                      }}
+                      aria-invalid={!!fieldErrors.displayName || !!error}
+                      className={`w-full bg-[var(--input)] border rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all ${
+                        fieldErrors.displayName 
+                          ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-2 focus:ring-[var(--danger)]/20' 
+                          : 'border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20'
+                      }`}
                     />
                   </div>
+                  {fieldErrors.displayName && (
+                    <p className="text-[11px] text-[var(--danger)] font-medium mt-1 pl-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.displayName}</span>
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -808,13 +986,23 @@ export const Auth: React.FC = () => {
                     onChange={(e) => { 
                       isInputInteractingRef.current = true;
                       setUsername(e.target.value); 
+                      if (fieldErrors.username) setFieldErrors(prev => ({ ...prev, username: undefined }));
                     }}
-                    aria-invalid={!!error}
-                    aria-describedby={error ? "auth-error" : undefined}
-                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                    aria-invalid={!!fieldErrors.username || !!error}
+                    className={`w-full bg-[var(--input)] border rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all ${
+                      fieldErrors.username 
+                        ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-2 focus:ring-[var(--danger)]/20' 
+                        : 'border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20'
+                    }`}
                   />
                   <span className="intro-field-glow" aria-hidden="true" />
                 </div>
+                {fieldErrors.username && (
+                  <p className="text-[11px] text-[var(--danger)] font-medium mt-1 pl-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>{fieldErrors.username}</span>
+                  </p>
+                )}
               </div>
 
               {/* Email field (Signup only) */}
@@ -836,12 +1024,24 @@ export const Auth: React.FC = () => {
                       autoComplete="email"
                       placeholder="name@domain.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      aria-invalid={!!error}
-                      aria-describedby={error ? "auth-error" : undefined}
-                      className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (fieldErrors.email) setFieldErrors(prev => ({ ...prev, email: undefined }));
+                      }}
+                      aria-invalid={!!fieldErrors.email || !!error}
+                      className={`w-full bg-[var(--input)] border rounded-xl py-3 pl-11 pr-4 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all ${
+                        fieldErrors.email 
+                          ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-2 focus:ring-[var(--danger)]/20' 
+                          : 'border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20'
+                      }`}
                     />
                   </div>
+                  {fieldErrors.email && (
+                    <p className="text-[11px] text-[var(--danger)] font-medium mt-1 pl-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.email}</span>
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -865,51 +1065,77 @@ export const Auth: React.FC = () => {
                     autoComplete={isLogin ? "current-password" : "new-password"}
                     placeholder="••••••••"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    aria-invalid={!!error}
-                    aria-describedby={error ? "auth-error" : undefined}
-                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] rounded-xl py-3 pl-11 pr-11 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all focus:ring-2 focus:ring-[var(--accent-2)]/20"
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (fieldErrors.password) setFieldErrors(prev => ({ ...prev, password: undefined }));
+                    }}
+                    aria-invalid={!!fieldErrors.password || !!error}
+                    className={`w-full bg-[var(--input)] border rounded-xl py-3 pl-11 pr-11 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all ${
+                      fieldErrors.password 
+                        ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-2 focus:ring-[var(--danger)]/20' 
+                        : 'border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20'
+                    }`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     aria-pressed={showPassword}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] focus-visible:text-[var(--text)] focus-visible:outline-none transition-colors p-1 rounded-md"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] focus-visible:text-[var(--text)] focus-visible:outline-none transition-colors p-1 rounded-md cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
                   </button>
                   <span className="intro-field-glow" aria-hidden="true" />
                 </div>
+                {fieldErrors.password && (
+                  <p className="text-[11px] text-[var(--danger)] font-medium mt-1 pl-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    <span>{fieldErrors.password}</span>
+                  </p>
+                )}
               </div>
 
               {/* Consent Checkbox for Sign Up */}
               {!isLogin && (
-                <div className="flex items-start gap-2.5 pt-1 text-left">
-                  <input
-                    id="auth-terms-consent"
-                    type="checkbox"
-                    required
-                    checked={acceptedTerms}
-                    onChange={(e) => setAcceptedTerms(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-[var(--line)] bg-[var(--input)] text-[var(--accent)] accent-[var(--accent)] cursor-pointer focus:ring-2 focus:ring-[var(--accent-2)]/30 flex-shrink-0"
-                  />
-                  <label htmlFor="auth-terms-consent" className="text-[11px] text-[var(--muted)] leading-snug cursor-pointer select-none">
-                    I have read and agree to the{' '}
-                    <a href="#/terms" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
-                    {' '}and{' '}
-                    <a href="#/privacy" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
-                  </label>
+                <div>
+                  <div className="flex items-start gap-2.5 pt-1 text-left">
+                    <input
+                      id="auth-terms-consent"
+                      type="checkbox"
+                      required
+                      checked={acceptedTerms}
+                      onChange={(e) => {
+                        setAcceptedTerms(e.target.checked);
+                        if (fieldErrors.terms) setFieldErrors(prev => ({ ...prev, terms: undefined }));
+                      }}
+                      className="mt-0.5 w-4 h-4 rounded border-[var(--line)] bg-[var(--input)] text-[var(--accent)] accent-[var(--accent)] cursor-pointer focus:ring-2 focus:ring-[var(--accent-2)]/30 flex-shrink-0"
+                    />
+                    <label htmlFor="auth-terms-consent" className="text-[11px] text-[var(--muted)] leading-snug cursor-pointer select-none">
+                      I have read and agree to the{' '}
+                      <a href="#/terms" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Terms of Service</a>
+                      {' '}and{' '}
+                      <a href="#/privacy" target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">Privacy Policy</a>.
+                    </label>
+                  </div>
+                  {fieldErrors.terms && (
+                    <p className="text-[11px] text-[var(--danger)] font-medium mt-1 pl-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      <span>{fieldErrors.terms}</span>
+                    </p>
+                  )}
                 </div>
               )}
 
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || (!isLogin && !acceptedTerms)}
-                className="btn-primary w-full py-3 mt-2 font-bold tracking-wide outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs relative overflow-hidden cursor-pointer disabled:cursor-not-allowed"
+                disabled={loading || (!isLogin && !acceptedTerms) || isOffline}
+                className="btn-primary w-full py-3 mt-2 font-bold tracking-wide outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] disabled:opacity-50 disabled:scale-100 transition-all text-xs relative overflow-hidden cursor-pointer disabled:cursor-not-allowed shadow-md shadow-[var(--shadow-accent)]"
               >
-                <span className="relative z-10">{loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{loading ? 'Authenticating...' : (isLogin ? 'Sign In' : 'Create Account')}</span>
+                </span>
                 <span className="intro-btn-shimmer" aria-hidden="true" />
               </button>
 
@@ -931,6 +1157,133 @@ export const Auth: React.FC = () => {
 
       <Footer className="max-w-md mx-auto relative z-10 border-t-0 mt-6" />
       <CookieBanner />
+
+      {/* State Preview Toolbar */}
+      <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end">
+        {showPreviewToolbar && (
+          <div className="mb-2 p-3 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl space-y-2 text-xs w-60 animate-fade-in backdrop-blur-md">
+            <div className="flex items-center justify-between pb-1 border-b border-[var(--card-border)]">
+              <span className="font-bold text-[var(--accent-2)]">Auth 10-State Preview</span>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setPreviewState(null);
+                  setError(null);
+                  setFieldErrors({});
+                  setAuthSuccessUser(null);
+                  setLoading(false);
+                  setIsOffline(!navigator.onLine);
+                  setIsSlowNetwork(false);
+                }} 
+                className="text-[10px] text-[var(--muted)] hover:text-[var(--text)] cursor-pointer"
+              >
+                Reset Live
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewState('loading');
+                  setLoading(true);
+                  setError(null);
+                }}
+                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                  previewState === 'loading'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+              >
+                loading
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewState('error');
+                  setLoading(false);
+                  setError('Incorrect username or password. Please verify your credentials and try again.');
+                }}
+                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                  previewState === 'error'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+              >
+                error
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewState('offline');
+                  setIsOffline(true);
+                }}
+                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                  previewState === 'offline'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+              >
+                offline
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewState('slow');
+                  setIsSlowNetwork(true);
+                  setLoading(true);
+                }}
+                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                  previewState === 'slow'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+              >
+                slow
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewState('error');
+                  setIsLogin(false);
+                  setFieldErrors({
+                    username: 'Username must be 3-30 characters (letters, numbers, _)',
+                    email: 'Please enter a valid email format',
+                    password: 'Password must be at least 8 characters long',
+                    terms: 'You must agree to the Terms of Service to register'
+                  });
+                }}
+                className="py-1 px-2 rounded-lg text-[10px] font-semibold text-left bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
+              >
+                validation
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreviewState('success');
+                  setAuthSuccessUser('Alex Morgan');
+                  setError(null);
+                }}
+                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                  previewState === 'success'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+              >
+                success
+              </button>
+            </div>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowPreviewToolbar(prev => !prev)}
+          aria-label="Toggle Auth State Preview Toolbar"
+          className="h-9 px-3 rounded-full bg-[var(--card)] border border-[var(--card-border)] text-[var(--accent-2)] shadow-xl hover:bg-[var(--hover)] transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span>States</span>
+        </button>
+      </div>
     </main>
   );
 };
