@@ -1,8 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
-import { Image as ImageIcon, X, Loader2, Check, Video, Plus, Camera } from 'lucide-react';
+import { 
+  Image as ImageIcon, 
+  X, 
+  Loader2, 
+  Check, 
+  Video, 
+  Plus, 
+  Camera,
+  WifiOff,
+  AlertTriangle,
+  Lock,
+  ArrowLeft
+} from 'lucide-react';
 import { ImageCropper } from '../components/ImageCropper';
 
 const SocialCameraModal = React.lazy(() => import('../camera/SocialCameraModal'));
@@ -14,20 +26,53 @@ interface CreateProps {
 export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
   const { user, token } = useAuth();
   
-  const [caption, setCaption] = useState<string>('');
+  const [caption, setCaption] = useState<string>(() => {
+    try {
+      return sessionStorage.getItem('dv_create_draft_caption') || '';
+    } catch {
+      return '';
+    }
+  });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<{ url: string; type: string; file: File }[]>([]);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [showCameraModal, setShowCameraModal] = useState<boolean>(false);
   
-  // UI states
+  // UI states & 10-state architecture
   const [uploading, setUploading] = useState<boolean>(false);
   const [uploadProgressText, setUploadProgressText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
-  /* UI UPDATE START - Drag & Drop State */
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  /* UI UPDATE END */
+  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+  const [isSlowUpload, setIsSlowUpload] = useState<boolean>(false);
+  const [isSessionExpired, setIsSessionExpired] = useState<boolean>(false);
+  const slowUploadTimerRef = useRef<any>(null);
+
+  // Auto-save draft caption on change
+  useEffect(() => {
+    try {
+      if (caption) {
+        sessionStorage.setItem('dv_create_draft_caption', caption);
+      } else {
+        sessionStorage.removeItem('dv_create_draft_caption');
+      }
+    } catch {}
+  }, [caption]);
+
+  // Online / offline event tracking
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if (slowUploadTimerRef.current) clearTimeout(slowUploadTimerRef.current);
+    };
+  }, []);
 
   // Preload SocialCameraModal chunk so opening camera is instantaneous
   useEffect(() => {
@@ -132,11 +177,36 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedFiles.length === 0 || !token || !user) return;
+    if (!navigator.onLine) {
+      setError("You are currently offline. Your selected media and caption are preserved. Please reconnect to publish.");
+      return;
+    }
+
+    if (selectedFiles.length === 0) {
+      setValidationError("Please select or capture at least one image or video to publish.");
+      return;
+    }
+
+    if (caption.length > 2200) {
+      setValidationError("Caption exceeds the 2,200 character limit.");
+      return;
+    }
+
+    if (!token || !user) {
+      setIsSessionExpired(true);
+      return;
+    }
 
     setUploading(true);
     setError(null);
+    setValidationError(null);
     setSuccess(false);
+    setIsSlowUpload(false);
+
+    if (slowUploadTimerRef.current) clearTimeout(slowUploadTimerRef.current);
+    slowUploadTimerRef.current = setTimeout(() => {
+      setIsSlowUpload(true);
+    }, 7000);
 
     try {
       const uploadedMediaItems: { r2_key: string; media_type: string }[] = [];
@@ -180,6 +250,16 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
         })
       });
 
+      if (slowUploadTimerRef.current) clearTimeout(slowUploadTimerRef.current);
+
+      if (postMetadataRes.status === 401) {
+        try {
+          sessionStorage.setItem('dv_create_draft_caption', caption);
+        } catch {}
+        setIsSessionExpired(true);
+        return;
+      }
+
       if (!postMetadataRes.ok) {
         const metadataErrData = await postMetadataRes.json();
         throw new Error(metadataErrData.error || 'Failed to save post metadata');
@@ -189,14 +269,18 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
       setCaption('');
       setSelectedFiles([]);
       setFilePreviews([]);
+      try {
+        sessionStorage.removeItem('dv_create_draft_caption');
+      } catch {}
       setSuccess(true);
       
       // Navigate to Feed after short delay
       setTimeout(() => {
         onNavigate('feed_redirect');
-      }, 1000);
+      }, 1500);
 
     } catch (err: any) {
+      if (slowUploadTimerRef.current) clearTimeout(slowUploadTimerRef.current);
       setError(err.message || 'Failed to publish post');
     } finally {
       setUploading(false);
@@ -346,44 +430,115 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
           {/* Right Column: Post info */}
           <div className="p-5 sm:p-7 md:p-8 flex flex-col justify-between h-full">
             <form onSubmit={handleSubmit} className="space-y-6 flex-1 flex flex-col justify-between">
-              <div className="space-y-5">
-                <div>
-                  <h1 className="text-xl font-bold text-[var(--text)] tracking-wide">New Post</h1>
-                  <p className="text-xs text-[var(--muted)] mt-1">Compose and publish updates directly to your feed.</p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-xl font-bold text-[var(--text)] tracking-wide">New Post</h1>
+                    <p className="text-xs text-[var(--muted)] mt-0.5">Compose and publish updates directly to your feed.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('feed')}
+                    className="p-2 text-[var(--muted)] hover:text-[var(--text)] rounded-full hover:bg-[var(--hover)] transition-colors cursor-pointer"
+                    aria-label="Back to feed"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
                 </div>
 
+                {/* State 4: Offline Notification Banner */}
+                {isOffline && (
+                  <div 
+                    role="alert"
+                    aria-live="polite"
+                    className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs rounded-xl flex items-center gap-2 animate-fade-in"
+                  >
+                    <WifiOff className="w-4 h-4 shrink-0" />
+                    <span>You're offline. Draft caption and chosen files are saved. Reconnect to publish.</span>
+                  </div>
+                )}
+
+                {/* State 5: Slow Upload Progress Reassurance */}
+                {isSlowUpload && uploading && (
+                  <div 
+                    role="status"
+                    aria-live="polite"
+                    className="p-3 bg-[var(--accent)]/10 border border-[var(--accent-2)]/30 text-[var(--accent-2)] text-xs rounded-xl flex items-center gap-2 animate-fade-in"
+                  >
+                    <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                    <span>Uploading high-resolution media. Please keep this tab open — your progress is safe.</span>
+                  </div>
+                )}
+
+                {/* State 9: Inline Form Validation Error */}
+                {validationError && (
+                  <div 
+                    role="alert"
+                    aria-live="assertive"
+                    className="p-3 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-xl font-medium flex items-center gap-2 animate-fade-in"
+                  >
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{validationError}</span>
+                  </div>
+                )}
+
+                {/* State 3: Generic / Server Error */}
                 {error && (
                   <div 
                     role="alert"
                     aria-live="assertive"
-                    className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl font-medium animate-fade-in"
+                    className="p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl font-medium animate-fade-in flex items-center gap-2"
                   >
-                    {error}
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
                   </div>
                 )}
 
+                {/* State 10: Rich Success Card */}
                 {success && (
                   <div 
                     role="status"
                     aria-live="polite"
-                    className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-xl font-medium flex items-center gap-2 animate-fade-in"
+                    className="p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-2xl space-y-2 animate-fade-in"
                   >
-                    <Check className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-                    Post published successfully! Redirecting...
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                      <Check className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+                      <span>Post Published Successfully!</span>
+                    </div>
+                    <p className="text-emerald-300/80 leading-relaxed">
+                      Your post is now live and visible to your community in the feed.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('feed')}
+                      className="py-1.5 px-4 bg-emerald-500 text-black font-bold text-[11px] rounded-lg uppercase tracking-wider transition-transform active:scale-95 cursor-pointer"
+                    >
+                      View in Feed
+                    </button>
                   </div>
                 )}
 
-                {/* Caption Textarea */}
-                <div className="space-y-2">
-                  <label htmlFor="create-post-caption" className="block text-sm font-semibold text-[var(--text)]">
-                    Caption
-                  </label>
+                {/* Caption Textarea with Live Counter */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="create-post-caption" className="block text-sm font-semibold text-[var(--text)]">
+                      Caption
+                    </label>
+                    <span className={`text-[11px] font-medium ${
+                      caption.length > 2200 ? 'text-[var(--danger)] font-bold' : caption.length > 2000 ? 'text-amber-400' : 'text-[var(--muted)]'
+                    }`}>
+                      {caption.length} / 2,200
+                    </span>
+                  </div>
                   <textarea
                     id="create-post-caption"
                     rows={7}
-                    placeholder="Say something about this photo..."
+                    placeholder="Say something about this photo or video..."
                     value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
+                    onChange={(e) => {
+                      setCaption(e.target.value);
+                      if (validationError) setValidationError(null);
+                    }}
                     className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)]/40 rounded-2xl p-4 text-base md:text-sm text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all resize-none min-h-[140px] md:min-h-[180px]"
                   />
                 </div>
@@ -395,7 +550,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                 <button
                   type="submit"
                   disabled={uploading || selectedFiles.length === 0 || success}
-                  className="btn-primary w-full min-h-[48px] py-3.5 px-6 font-bold flex items-center justify-center gap-2 text-sm tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="btn-primary w-full min-h-[48px] py-3.5 px-6 font-bold flex items-center justify-center gap-2 text-sm tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-[var(--shadow-accent)]"
                 >
                   {uploading ? (
                     <>
@@ -436,6 +591,35 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
             onClose={() => setShowCameraModal(false)}
           />
         </React.Suspense>
+      )}
+
+      {/* State 8: Session Expired Modal */}
+      {isSessionExpired && (
+        <div 
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="session-expired-title"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div className="w-full max-w-sm rounded-[24px] border border-[var(--card-border)] bg-[var(--card)] p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h2 id="session-expired-title" className="text-base font-bold text-[var(--text)]">Session Expired</h2>
+              <p className="text-xs text-[var(--muted)] leading-relaxed">
+                Your login session timed out. Your draft caption and selected media have been preserved so you won't lose your work.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigate('auth')}
+              className="w-full min-h-[44px] rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-semibold text-xs shadow-md shadow-[var(--shadow-accent)] cursor-pointer"
+            >
+              Log In to Publish
+            </button>
+          </div>
+        </div>
       )}
 
     </div>

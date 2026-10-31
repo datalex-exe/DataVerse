@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -15,10 +15,23 @@ import {
   Trash, 
   Check, 
   Search,
-  /* UI UPDATE START - Added MoreHorizontal icon for post options */
-  MoreHorizontal
-  /* UI UPDATE END */
+  MoreHorizontal,
+  WifiOff,
+  AlertTriangle,
+  RefreshCw,
+  Compass,
+  Lock,
+  SlidersHorizontal
 } from 'lucide-react';
+
+export type FeedStatus = 
+  | 'idle'
+  | 'loading'
+  | 'empty'
+  | 'error'
+  | 'offline'
+  | 'slow'
+  | 'session_expired';
 
 interface Media {
   id: string;
@@ -73,13 +86,25 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
       return [];
     }
   });
-  const [loading, setLoading] = useState<boolean>(() => {
+
+  const [status, setStatus] = useState<FeedStatus>(() => {
     try {
-      return !sessionStorage.getItem('dv_cached_feed');
+      return sessionStorage.getItem('dv_cached_feed') ? 'idle' : 'loading';
     } catch {
-      return true;
+      return 'loading';
     }
   });
+  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+  const [isSlowNetwork, setIsSlowNetwork] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [previewState, setPreviewState] = useState<FeedStatus | null>(null);
+  const [showPreviewToolbar, setShowPreviewToolbar] = useState<boolean>(false);
+  const [postToDelete, setPostToDelete] = useState<Post | null>(null);
+  const [commentValidationErrors, setCommentValidationErrors] = useState<Record<string, string>>({});
+  const [drawerCommentError, setDrawerCommentError] = useState<string | null>(null);
+  const [isLiteMode, setIsLiteMode] = useState<boolean>(false);
+  const slowTimerRef = useRef<any>(null);
+
   const [isSinglePostFiltered, setIsSinglePostFiltered] = useState<boolean>(false);
   
   // Comments drawer state
@@ -96,28 +121,92 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      fetchFeed(false);
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+      if (posts.length === 0) setStatus('offline');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+    };
+  }, []);
   /* UI UPDATE END */
 
-  // Fetch feed posts in background
+  // Fetch feed posts with explicit 10-state lifecycle
   const fetchFeed = async (showLoading = false) => {
-    if (!token) return;
-    if (showLoading && posts.length === 0) setLoading(true);
+    if (!token) {
+      setStatus('session_expired');
+      return;
+    }
+
+    if (!navigator.onLine) {
+      setIsOffline(true);
+      setStatus(posts.length === 0 ? 'offline' : 'idle');
+      return;
+    }
+
+    if (showLoading && posts.length === 0) {
+      setStatus('loading');
+    }
+    setIsSlowNetwork(false);
+
+    if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+    slowTimerRef.current = setTimeout(() => {
+      setIsSlowNetwork(true);
+      if (posts.length === 0) setStatus('slow');
+    }, 3500);
+
     try {
       const res = await fetch('/api/posts/feed', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
-        const data = await res.json();
-        const incoming = data.posts || [];
-        setPosts(incoming);
+
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+
+      if (res.status === 401) {
         try {
-          sessionStorage.setItem('dv_cached_feed', JSON.stringify(incoming.slice(0, 25)));
+          if (newCommentText) {
+            sessionStorage.setItem('dv_pending_comment', JSON.stringify({ postId: activePostComments, text: newCommentText }));
+          }
         } catch {}
+        setStatus('session_expired');
+        return;
       }
-    } catch (err) {
+
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const incoming: Post[] = data.posts || [];
+      setPosts(incoming);
+      try {
+        sessionStorage.setItem('dv_cached_feed', JSON.stringify(incoming.slice(0, 25)));
+      } catch {}
+
+      setStatus(incoming.length === 0 ? 'empty' : 'idle');
+      setIsSlowNetwork(false);
+    } catch (err: any) {
+      if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
       console.error('Error fetching feed:', err);
-    } finally {
-      setLoading(false);
+      if (!navigator.onLine) {
+        setIsOffline(true);
+        setStatus(posts.length === 0 ? 'offline' : 'idle');
+      } else {
+        setErrorMessage(err.message || 'Unable to connect to feed stream');
+        setStatus(posts.length === 0 ? 'error' : 'idle');
+      }
     }
   };
 
@@ -289,7 +378,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     const urlParams = new URLSearchParams(window.location.search);
     const resolvedPostId = targetPostId || urlParams.get('post');
     if (resolvedPostId && token) {
-      setLoading(true);
+      setStatus('loading');
       fetch(`/api/posts/${resolvedPostId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -301,7 +390,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           if (data.post) {
             setPosts([data.post]);
             setIsSinglePostFiltered(true);
-            setLoading(false);
+            setStatus('idle');
           } else {
             fetchFeed();
           }
@@ -378,7 +467,16 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
   // Submit comment
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCommentText.trim() || !activePostComments || !token) return;
+    if (!newCommentText.trim()) {
+      setDrawerCommentError('Please enter a comment before submitting.');
+      return;
+    }
+    if (newCommentText.length > 500) {
+      setDrawerCommentError('Comment exceeds 500 characters.');
+      return;
+    }
+    setDrawerCommentError(null);
+    if (!activePostComments || !token) return;
 
     const text = newCommentText.trim();
     setNewCommentText('');
@@ -393,6 +491,11 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
         body: JSON.stringify({ body: text })
       });
 
+      if (res.status === 401) {
+        setStatus('session_expired');
+        return;
+      }
+
       if (res.ok) {
         const data = await res.json();
         setComments(prev => [...prev, data.comment]);
@@ -402,9 +505,11 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           }
           return p;
         }));
+        toast.success('Comment added');
       }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to post comment. Check connection.');
     }
   };
 
@@ -419,10 +524,276 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     return `${days}d`;
   };
 
+  const effectiveStatus: FeedStatus = previewState || status;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 10-STATE RENDERERS (State 1, 2, 3, 4, 5, 8, 10)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // State 2: Loading Skeletons matching exact feed post card layout
+  const renderFeedSkeleton = () => (
+    <div className="space-y-4 px-0 sm:px-3 pt-2" aria-busy="true" aria-label="Loading feed posts">
+      {[1, 2].map((idx) => (
+        <div 
+          key={idx}
+          className="sm:bg-[var(--card)] sm:border sm:border-[var(--card-border)] sm:rounded-[20px] bg-transparent border-b border-[var(--card-border)] p-4 sm:p-5 animate-pulse"
+        >
+          {/* Header skeleton */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[var(--input)]" />
+              <div className="space-y-1.5">
+                <div className="w-28 h-3.5 bg-[var(--input)] rounded-md" />
+                <div className="w-16 h-2.5 bg-[var(--input)]/60 rounded-md" />
+              </div>
+            </div>
+            <div className="w-6 h-6 rounded-md bg-[var(--input)]/40" />
+          </div>
+
+          {/* Media box skeleton (4:3 aspect ratio) */}
+          <div className="w-full aspect-[4/3] rounded-2xl bg-[var(--input)] flex items-center justify-center my-3 relative overflow-hidden">
+            <div className="w-12 h-12 rounded-full bg-white/5" />
+          </div>
+
+          {/* Actions row skeleton */}
+          <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center gap-4">
+              <div className="w-7 h-7 rounded-full bg-[var(--input)]" />
+              <div className="w-7 h-7 rounded-full bg-[var(--input)]" />
+              <div className="w-7 h-7 rounded-full bg-[var(--input)]" />
+            </div>
+            <div className="w-7 h-7 rounded-full bg-[var(--input)]" />
+          </div>
+
+          {/* Caption skeleton */}
+          <div className="space-y-2 mt-3 pt-1">
+            <div className="w-3/4 h-3 bg-[var(--input)] rounded-md" />
+            <div className="w-1/2 h-3 bg-[var(--input)]/70 rounded-md" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // State 1: Empty Feed with Dual Next-Step Actions
+  const renderEmptyState = () => (
+    <div className="sm:bg-[var(--card)] sm:border sm:border-[var(--card-border)] sm:rounded-[20px] bg-transparent border-b border-[var(--card-border)] p-8 sm:p-12 text-center text-[var(--muted)] flex flex-col items-center gap-4 my-2">
+      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[var(--accent)]/15 to-[var(--accent-2)]/15 border border-[var(--accent-2)]/30 flex items-center justify-center text-[var(--accent-2)] shadow-inner">
+        <Smile className="w-7 h-7" aria-hidden="true" />
+      </div>
+      <div className="space-y-1.5 max-w-sm">
+        <h2 className="font-extrabold text-base text-[var(--text)]">Your Feed is Quiet</h2>
+        <p className="text-xs text-[var(--muted)] leading-relaxed">
+          You haven't followed any creators yet, and no one has posted in your network. Explore trending voices or share your own first moment!
+        </p>
+      </div>
+      <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2 w-full max-w-xs">
+        <button 
+          type="button"
+          onClick={() => onNavigate('explore')}
+          aria-label="Discover creators on explore page"
+          className="w-full min-h-[44px] py-2.5 px-5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold rounded-full shadow-md shadow-[var(--shadow-accent)] active:scale-95 transition-all uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2"
+        >
+          <Compass className="w-4 h-4" />
+          <span>Explore Creators</span>
+        </button>
+        <button 
+          type="button"
+          onClick={() => onNavigate('create')}
+          aria-label="Create your first post"
+          className="w-full min-h-[44px] py-2.5 px-5 bg-[var(--input)] border border-[var(--card-border)] hover:bg-[var(--hover)] text-[var(--text)] text-xs font-bold rounded-full transition-all cursor-pointer flex items-center justify-center gap-2"
+        >
+          <PlusSquare className="w-4 h-4 text-[var(--accent-2)]" />
+          <span>Create Post</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // State 3: Error State with Cause & Remediation
+  const renderErrorState = () => (
+    <div className="sm:bg-[var(--card)] sm:border sm:border-[var(--card-border)] sm:rounded-[20px] bg-transparent border-b border-[var(--card-border)] p-8 sm:p-10 text-center flex flex-col items-center gap-4 my-2">
+      <div className="w-14 h-14 rounded-full bg-[var(--danger)]/15 border border-[var(--danger)]/30 flex items-center justify-center text-[var(--danger)] shadow-inner">
+        <AlertTriangle className="w-7 h-7" aria-hidden="true" />
+      </div>
+      <div className="space-y-1.5 max-w-sm">
+        <h2 className="font-extrabold text-base text-[var(--text)]">Feed Stream Unavailable</h2>
+        <p className="text-xs text-[var(--muted)] leading-relaxed">
+          {errorMessage ? `Error: ${errorMessage}. ` : ''}We had trouble connecting to the DataVerse feed servers. This is on our end, not yours.
+        </p>
+      </div>
+      <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2 w-full max-w-xs">
+        <button 
+          type="button"
+          onClick={() => fetchFeed(true)}
+          className="w-full min-h-[44px] py-2.5 px-5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold rounded-full shadow-md shadow-[var(--shadow-accent)] active:scale-95 transition-all uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span>Retry Connection</span>
+        </button>
+        {savedPostIds.length > 0 && (
+          <button 
+            type="button"
+            onClick={() => onNavigate('profile', user?.username)}
+            className="w-full min-h-[44px] py-2.5 px-5 bg-[var(--input)] border border-[var(--card-border)] hover:bg-[var(--hover)] text-[var(--text)] text-xs font-bold rounded-full transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            <Bookmark className="w-4 h-4 text-[var(--accent-2)]" />
+            <span>Saved Posts ({savedPostIds.length})</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  // State 4: Offline State when cache is empty
+  const renderOfflineZeroState = () => (
+    <div className="sm:bg-[var(--card)] sm:border sm:border-[var(--card-border)] sm:rounded-[20px] bg-transparent border-b border-[var(--card-border)] p-8 sm:p-10 text-center flex flex-col items-center gap-4 my-2">
+      <div className="w-14 h-14 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-inner">
+        <WifiOff className="w-7 h-7" aria-hidden="true" />
+      </div>
+      <div className="space-y-1.5 max-w-sm">
+        <h2 className="font-extrabold text-base text-[var(--text)]">You're Currently Offline</h2>
+        <p className="text-xs text-[var(--muted)] leading-relaxed">
+          No cached feed posts are stored on this device yet. Once you reconnect to the internet, your feed will update automatically.
+        </p>
+      </div>
+      <button 
+        type="button"
+        onClick={() => fetchFeed(false)}
+        className="min-h-[44px] py-2.5 px-6 bg-[var(--input)] border border-[var(--card-border)] hover:bg-[var(--hover)] text-[var(--text)] text-xs font-bold rounded-full transition-all cursor-pointer flex items-center justify-center gap-2"
+      >
+        <RefreshCw className="w-4 h-4 text-amber-400" />
+        <span>Check Internet Connection</span>
+      </button>
+    </div>
+  );
+
+  // State 8: Session Expired Modal with Draft Preservation
+  const renderSessionExpiredModal = () => (
+    <div 
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="session-expired-title"
+      aria-describedby="session-expired-desc"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+    >
+      <div className="w-full max-w-sm rounded-[24px] border border-[var(--card-border)] bg-[var(--card)] p-6 shadow-2xl space-y-4">
+        <div className="w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto">
+          <Lock className="w-6 h-6" />
+        </div>
+        <div className="text-center space-y-1.5">
+          <h2 id="session-expired-title" className="text-base font-bold text-[var(--text)]">Session Expired</h2>
+          <p id="session-expired-desc" className="text-xs text-[var(--muted)] leading-relaxed">
+            Your login session timed out. Any comments or drafts you've written have been saved locally so you won't lose your work.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 pt-2">
+          <button
+            type="button"
+            onClick={() => onNavigate('auth')}
+            className="min-h-[44px] w-full rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-semibold text-xs shadow-md shadow-[var(--shadow-accent)] active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+          >
+            Log In Again
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // State 10: In-App Post Deletion Safe Confirmation Dialog
+  const renderDeleteDialog = () => {
+    if (!postToDelete) return null;
+    return (
+      <div 
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
+        aria-describedby="delete-dialog-desc"
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+      >
+        <div className="w-full max-w-sm rounded-[24px] border border-[var(--card-border)] bg-[var(--card)] p-5 sm:p-6 shadow-2xl space-y-4">
+          <div className="w-12 h-12 rounded-full bg-[var(--danger)]/15 border border-[var(--danger)]/30 flex items-center justify-center text-[var(--danger)] mx-auto">
+            <Trash className="w-6 h-6" />
+          </div>
+          <div className="text-center space-y-1.5">
+            <h2 id="delete-dialog-title" className="text-base font-bold text-[var(--text)]">Delete This Post?</h2>
+            <p id="delete-dialog-desc" className="text-xs text-[var(--muted)] leading-relaxed">
+              This will permanently remove the post, images, likes, and comments from DataVerse. This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setPostToDelete(null)}
+              className="min-h-[44px] flex-1 rounded-full bg-[var(--input)] border border-[var(--card-border)] text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const id = postToDelete.id;
+                setPostToDelete(null);
+                handleDeletePost(id);
+              }}
+              className="min-h-[44px] flex-1 rounded-full bg-[var(--danger)] text-white text-xs font-bold hover:brightness-110 shadow-md shadow-[var(--danger)]/20 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Trash className="w-3.5 h-3.5" />
+              <span>Delete Post</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // State Preview Toolbar (For verification and interactive QA)
+  const renderStatePreviewToolbar = () => (
+    <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end">
+      {showPreviewToolbar && (
+        <div className="mb-2 p-3 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl space-y-2 text-xs w-60 animate-fade-in backdrop-blur-md">
+          <div className="flex items-center justify-between pb-1 border-b border-[var(--card-border)]">
+            <span className="font-bold text-[var(--accent-2)]">Feed 10-State Preview</span>
+            <button 
+              type="button" 
+              onClick={() => setPreviewState(null)} 
+              className="text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
+            >
+              Reset Live
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {(['loading', 'empty', 'error', 'offline', 'slow', 'session_expired'] as FeedStatus[]).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setPreviewState(st)}
+                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left transition-colors ${
+                  previewState === st 
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]' 
+                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => setShowPreviewToolbar(prev => !prev)}
+        aria-label="Toggle Feed State Preview Toolbar"
+        className="h-9 px-3 rounded-full bg-[var(--card)] border border-[var(--card-border)] text-[var(--accent-2)] shadow-xl hover:bg-[var(--hover)] transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+      >
+        <SlidersHorizontal className="w-3.5 h-3.5" />
+        <span>States</span>
+      </button>
+    </div>
+  );
+
   return (
     <div className="w-full max-w-[620px] mx-auto min-h-screen py-0 pb-28 sm:pb-16 select-none border-x border-[#1c1c2b]/60 relative">
-      {/* UI UPDATE START - Feed column ~620px wide with subtle borders and spacing */}
-      
       {/* Dynamic Keyframes and Motion Styles */}
       <style>{`
         .post-enter {
@@ -512,6 +883,46 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           </div>
         </div>
 
+        {/* State 4: Pinned Offline Notice Banner */}
+        {isOffline && (
+          <div className="p-3 bg-[var(--card)] border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs max-w-md mx-auto mb-4 mx-4 shadow-md">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <WifiOff className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-[11px] text-[var(--text)] truncate">
+                <span className="font-semibold text-amber-400">Offline: </span>
+                Showing cached feed posts. Likes and comments will sync when reconnected.
+              </p>
+            </div>
+            <button 
+              type="button"
+              onClick={() => fetchFeed(false)}
+              className="px-2.5 py-1 bg-[var(--input)] hover:bg-[var(--hover)] text-[var(--text)] text-[10px] font-bold rounded-lg transition-colors cursor-pointer shrink-0"
+            >
+              Refresh
+            </button>
+          </div>
+        )}
+
+        {/* State 5: Slow Network Notice Banner */}
+        {isSlowNetwork && !isOffline && (
+          <div className="p-3 bg-[var(--card)] border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs max-w-md mx-auto mb-4 mx-4 shadow-md">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <RefreshCw className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
+              <p className="text-[11px] text-[var(--text)]">
+                <span className="font-semibold text-amber-400">Slow Connection: </span>
+                Feed is taking longer to load.
+              </p>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setIsLiteMode(prev => !prev)}
+              className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold rounded-lg transition-colors cursor-pointer shrink-0"
+            >
+              {isLiteMode ? 'Normal View' : 'Lite View'}
+            </button>
+          </div>
+        )}
+
         {/* Shared Post Filter Notice Banner */}
         {isSinglePostFiltered && (
           <div className="p-3 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl flex items-center justify-between text-xs max-w-md mx-auto mb-4 mx-4">
@@ -521,8 +932,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
               onClick={() => {
                 setIsSinglePostFiltered(false);
                 window.history.replaceState({}, document.title, window.location.pathname);
-                setLoading(true);
-                fetchFeed();
+                fetchFeed(true);
               }}
               aria-label="View full feed"
               className="px-3 py-1 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-bold rounded-lg transition-colors uppercase tracking-wider text-[10px] cursor-pointer"
@@ -532,26 +942,19 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           </div>
         )}
 
-        {/* Feed Posts */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-[var(--muted)] gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
-            <p className="text-xs">Loading feed...</p>
-          </div>
+        {/* Main Feed Content Switcher */}
+        {effectiveStatus === 'loading' ? (
+          renderFeedSkeleton()
+        ) : effectiveStatus === 'error' ? (
+          renderErrorState()
+        ) : effectiveStatus === 'empty' ? (
+          renderEmptyState()
+        ) : effectiveStatus === 'offline' && posts.length === 0 ? (
+          renderOfflineZeroState()
+        ) : effectiveStatus === 'slow' && posts.length === 0 ? (
+          renderFeedSkeleton()
         ) : posts.length === 0 ? (
-          <div className="p-12 text-center text-[var(--muted)] flex flex-col items-center gap-4">
-            <Smile className="w-12 h-12 text-[var(--muted)]" aria-hidden="true" />
-            <h2 className="font-extrabold text-sm text-[var(--text)]">Your Feed is Empty</h2>
-            <p className="text-xs text-[var(--muted)] max-w-xs leading-relaxed">Follow creators or upload your first photo to begin!</p>
-            <button 
-              type="button"
-              onClick={() => onNavigate('create')}
-              aria-label="Upload photo to start feed"
-              className="mt-2 py-2.5 px-5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold rounded-full shadow-md transition-all uppercase tracking-wider cursor-pointer"
-            >
-              Upload Photo
-            </button>
-          </div>
+          renderEmptyState()
         ) : (
           posts.map((post, index) => {
             const { caption: cleanCaption, room: postRoom } = getCleanCaptionAndRoom(post.caption);
@@ -641,7 +1044,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                             type="button"
                             onClick={() => {
                               setOpenMenuPostId(null);
-                              handleDeletePost(post.id);
+                              setPostToDelete(post);
                             }}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--danger)] hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] rounded-lg transition-colors min-h-[38px] cursor-pointer"
                           >
@@ -765,60 +1168,95 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                   </div>
                 )}
 
-                {/* Comment Box: Pill input with Post button inside */}
-                {/* THEME START */}
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    const form = e.currentTarget;
-                    const input = form.querySelector('input') as HTMLInputElement;
-                    const text = input.value.trim();
-                    if (!text || !token) return;
-                    input.value = '';
-                    try {
-                      const res = await fetch(`/api/posts/${post.id}/comment`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({ body: text })
-                      });
-                      if (res.ok) {
-                        const data = await res.json();
-                        if (activePostComments === post.id) {
-                          setComments(prev => [...prev, data.comment]);
-                        }
-                        setPosts(prev => prev.map(p => {
-                          if (p.id === post.id) {
-                            return { ...p, comments_count: p.comments_count + 1 };
-                          }
-                          return p;
-                        }));
+                {/* State 9: Inline Comment Box with Field Validation */}
+                <div className="mt-3">
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      const form = e.currentTarget;
+                      const input = form.querySelector('input') as HTMLInputElement;
+                      if (!input || !token) return;
+                      const text = input.value.trim();
+                      if (!text) {
+                        setCommentValidationErrors(prev => ({ ...prev, [post.id]: 'Please enter a comment before posting' }));
+                        return;
                       }
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  }}
-                  className="mt-3 relative flex items-center"
-                >
-                  <label htmlFor={`inline-comment-${post.id}`} className="sr-only">
-                    Add a comment to post by {post.username}
-                  </label>
-                  <input
-                    id={`inline-comment-${post.id}`}
-                    type="text"
-                    placeholder="Add a comment..."
-                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 rounded-full pl-4 pr-16 py-2.5 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all"
-                  />
-                  <button 
-                    type="submit" 
-                    aria-label={`Post comment to ${post.username}'s post`}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 py-1.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center justify-center min-h-[32px] focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+                      if (text.length > 500) {
+                        setCommentValidationErrors(prev => ({ ...prev, [post.id]: 'Comment cannot exceed 500 characters' }));
+                        return;
+                      }
+                      setCommentValidationErrors(prev => {
+                        const next = { ...prev };
+                        delete next[post.id];
+                        return next;
+                      });
+                      input.value = '';
+                      try {
+                        const res = await fetch(`/api/posts/${post.id}/comment`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({ body: text })
+                        });
+                        if (res.status === 401) {
+                          setStatus('session_expired');
+                          return;
+                        }
+                        if (res.ok) {
+                          const data = await res.json();
+                          if (activePostComments === post.id) {
+                            setComments(prev => [...prev, data.comment]);
+                          }
+                          setPosts(prev => prev.map(p => {
+                            if (p.id === post.id) {
+                              return { ...p, comments_count: p.comments_count + 1 };
+                            }
+                            return p;
+                          }));
+                          toast.success('Comment posted');
+                        }
+                      } catch (err) {
+                        console.error(err);
+                        toast.error('Failed to post comment. Check connection.');
+                      }
+                    }}
+                    className="relative flex items-center"
                   >
-                    Post
-                  </button>
-                </form>
+                    <label htmlFor={`inline-comment-${post.id}`} className="sr-only">
+                      Add a comment to post by {post.username}
+                    </label>
+                    <input
+                      id={`inline-comment-${post.id}`}
+                      type="text"
+                      placeholder="Add a comment..."
+                      onChange={() => {
+                        if (commentValidationErrors[post.id]) {
+                          setCommentValidationErrors(prev => {
+                            const next = { ...prev };
+                            delete next[post.id];
+                            return next;
+                          });
+                        }
+                      }}
+                      className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 rounded-full pl-4 pr-16 py-2.5 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all"
+                    />
+                    <button 
+                      type="submit" 
+                      aria-label={`Post comment to ${post.username}'s post`}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 py-1.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center justify-center min-h-[32px] focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
+                    >
+                      Post
+                    </button>
+                  </form>
+                  {commentValidationErrors[post.id] && (
+                    <p className="text-[11px] text-[var(--danger)] font-medium mt-1 pl-4 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      <span>{commentValidationErrors[post.id]}</span>
+                    </p>
+                  )}
+                </div>
 
               </article>
             );
@@ -913,26 +1351,37 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
             </div>
 
             {/* Comment Input */}
-            <form onSubmit={handleAddComment} className="p-4 pb-8 sm:pb-4 border-t border-[var(--line)] flex gap-2 bg-[var(--card)]">
-              <label htmlFor="comments-drawer-input" className="sr-only">
-                Add a comment
-              </label>
-              <input
-                id="comments-drawer-input"
-                type="text"
-                placeholder="Add a comment..."
-                value={newCommentText}
-                onChange={(e) => setNewCommentText(e.target.value)}
-                className="flex-1 bg-[var(--input)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 transition-colors"
-              />
-              <button 
-                type="submit" 
-                disabled={!newCommentText.trim()}
-                aria-label="Send comment"
-                className="p-2.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl transition-all disabled:opacity-50 flex items-center justify-center shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
-              >
-                <Send className="w-4 h-4" aria-hidden="true" />
-              </button>
+            <form onSubmit={handleAddComment} className="p-4 pb-8 sm:pb-4 border-t border-[var(--line)] flex flex-col gap-1.5 bg-[var(--card)]">
+              <div className="flex gap-2">
+                <label htmlFor="comments-drawer-input" className="sr-only">
+                  Add a comment
+                </label>
+                <input
+                  id="comments-drawer-input"
+                  type="text"
+                  placeholder="Add a comment..."
+                  value={newCommentText}
+                  onChange={(e) => {
+                    setNewCommentText(e.target.value);
+                    if (drawerCommentError) setDrawerCommentError(null);
+                  }}
+                  className="flex-1 bg-[var(--input)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 transition-colors"
+                />
+                <button 
+                  type="submit" 
+                  disabled={!newCommentText.trim()}
+                  aria-label="Send comment"
+                  className="p-2.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl transition-all disabled:opacity-50 flex items-center justify-center shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
+                >
+                  <Send className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </div>
+              {drawerCommentError && (
+                <p className="text-[11px] text-[var(--danger)] font-medium pl-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  <span>{drawerCommentError}</span>
+                </p>
+              )}
             </form>
 
           </div>
@@ -1000,8 +1449,16 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
 
                 if (filtered.length === 0) {
                   return (
-                    <div className="text-center py-8 text-[var(--muted)] text-xs font-semibold">
-                      No matching chats.
+                    <div className="text-center py-8 text-[var(--muted)] space-y-2">
+                      <p className="text-xs font-semibold text-[var(--text)]">No chats matching "{searchConvoQuery}"</p>
+                      <p className="text-[11px] text-[var(--muted)]">Check for typos or start a direct conversation in Messages.</p>
+                      <button
+                        type="button"
+                        onClick={() => setSearchConvoQuery('')}
+                        className="px-3 py-1 bg-[var(--input)] text-[var(--accent-2)] rounded-lg text-[10px] font-bold border border-[var(--line)] cursor-pointer"
+                      >
+                        Clear Search
+                      </button>
                     </div>
                   );
                 }
@@ -1078,6 +1535,15 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
         </div>
       )}
       {/* THEME END */}
+
+      {/* State 10: In-App Delete Post Dialog */}
+      {renderDeleteDialog()}
+
+      {/* State 8: Session Expired Modal */}
+      {effectiveStatus === 'session_expired' && renderSessionExpiredModal()}
+
+      {/* State Preview Toolbar */}
+      {renderStatePreviewToolbar()}
 
     </div>
   );
