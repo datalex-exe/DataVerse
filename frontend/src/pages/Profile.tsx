@@ -40,7 +40,8 @@ import {
   Move,
   CreditCard,
   QrCode,
-  CheckCircle2
+  CheckCircle2,
+  WifiOff
 } from 'lucide-react';
 /* THEME START */
 import { SettingsThemeControl } from '../utils/theme';
@@ -286,8 +287,15 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
 
   // Verification Checkout State (Two options: UPI Payment & QR Code Scanning)
   const [paymentOption, setPaymentOption] = useState<'upi' | 'qr'>('upi');
-  const [upiVpa, setUpiVpa] = useState<string>('');
+  const [upiVpa, setUpiVpa] = useState<string>(() => {
+    try { return sessionStorage.getItem('dv_saved_upi_vpa') || ''; } catch { return ''; }
+  });
   const [payError, setPayError] = useState<string | null>(null);
+  const [upiInlineError, setUpiInlineError] = useState<string | null>(null);
+  const [docInlineError, setDocInlineError] = useState<string | null>(null);
+  const [reasonInlineError, setReasonInlineError] = useState<string | null>(null);
+  const [isCheckoutSlow, setIsCheckoutSlow] = useState<boolean>(false);
+  const [verifSessionExpired, setVerifSessionExpired] = useState<boolean>(false);
   const [paymentStatusStep, setPaymentStatusStep] = useState<'idle' | 'processing' | 'success'>('idle');
   const [paymentStepText, setPaymentStepText] = useState<string>('');
   const [confirmedTxnId, setConfirmedTxnId] = useState<string>('');
@@ -1121,34 +1129,45 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
   };
 
   // Verification Payment Handlers
-
   const handleConfirmVerificationPayment = async () => {
     if (!token || !profile) return;
     setPayError(null);
+    setUpiInlineError(null);
 
-    // Validate inputs depending on chosen payment method (UPI or QR)
+    // State 4: Offline check
+    if (!navigator.onLine) {
+      setPayError("You're offline. Live payment authorization is paused until your connection returns. No charges were made.");
+      return;
+    }
+
+    // State 9: Form validation
     if (paymentOption === 'upi') {
       const cleaned = upiVpa.trim();
       if (!cleaned || !cleaned.includes('@') || cleaned.length < 5) {
-        setPayError('Please enter a valid UPI ID (e.g. username@okhdfcbank or 9876543210@paytm).');
+        setUpiInlineError('Please enter a valid UPI ID with @ bank domain (e.g. yourname@okhdfcbank or 9876543210@paytm).');
         return;
       }
+      try { sessionStorage.setItem('dv_saved_upi_vpa', cleaned); } catch {}
     }
 
     setPaymentStatusStep('processing');
     setPaymentStepText(
       paymentOption === 'upi' 
         ? `Requesting ₹199 authorization from ${upiVpa.trim()}...` 
-        : 'Verifying QR code payment with UPI gateway...'
+        : 'Connecting to dynamic UPI payment switch...'
     );
+
+    // State 5: Slow network monitoring
+    setIsCheckoutSlow(false);
+    const slowTimer = setTimeout(() => {
+      setIsCheckoutSlow(true);
+    }, 3500);
 
     const generatedTxn = `DV-PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     try {
-      // Step 1: Gateway connection simulation
       await new Promise(r => setTimeout(r, 650));
       setPaymentStepText('Authorizing transaction with banking network...');
-      // Step 2: Bank authorization simulation
       await new Promise(r => setTimeout(r, 700));
 
       const res = await fetch('/api/users/profile/verify/pay', {
@@ -1168,9 +1187,19 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
         })
       });
 
+      clearTimeout(slowTimer);
+      setIsCheckoutSlow(false);
+
+      // State 8: Session Expired check
+      if (res.status === 401) {
+        setPaymentStatusStep('idle');
+        setVerifSessionExpired(true);
+        return;
+      }
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Payment confirmation failed');
+        throw new Error(data.error || 'Payment authorization was not received from your bank app.');
       }
 
       const resData = await res.json().catch(() => ({}));
@@ -1179,14 +1208,17 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
       setPaymentStatusStep('success');
       setPaymentStepText('Payment verified & subscription activated!');
 
-      // Keep success message visible briefly before switching state
-      await new Promise(r => setTimeout(r, 1000));
+      // State 10: Success confirmation
+      await new Promise(r => setTimeout(r, 900));
 
       setSettingsSuccessMsg(`Payment of ₹199 confirmed! Transaction ID: ${finalTxn}. Your 3-day verification window is now active.`);
       await refreshVerificationState();
     } catch (err: any) {
+      clearTimeout(slowTimer);
+      setIsCheckoutSlow(false);
       setPaymentStatusStep('idle');
-      setPayError(err.message || 'Payment processing failed. Please try again.');
+      // State 3: Error reassurance
+      setPayError(err.message || 'Payment authorization was not received. No money was deducted from your account. Check your UPI app or scan the QR code to retry.');
     }
   };
 
@@ -1196,11 +1228,31 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
     if (!token || !profile || !currentUser) return;
     setSettingsSuccessMsg(null);
     setSettingsErrorMsg(null);
+    setDocInlineError(null);
+    setReasonInlineError(null);
+
+    // State 4: Offline check
+    if (!navigator.onLine) {
+      setSettingsErrorMsg("You're offline. Reconnect to upload and submit your verification details.");
+      return;
+    }
 
     let finalDocUrl = profile.verification_document_url || '';
 
+    // State 9: Inline Document Validation
     if (!finalDocUrl && !verificationDocFile) {
-      setSettingsErrorMsg('Please select a supporting document file to upload.');
+      setDocInlineError('Please select a supporting government ID or business document (JPG, PNG, PDF).');
+      return;
+    }
+
+    if (verificationDocFile && verificationDocFile.size > 10 * 1024 * 1024) {
+      setDocInlineError('File size exceeds 10MB. Please upload an ID photo or PDF under 10MB.');
+      return;
+    }
+
+    // State 9: Inline Reason Validation
+    if (!reasonInput || reasonInput.trim().length < 10) {
+      setReasonInlineError('Please provide at least 10 characters explaining your identity or public presence.');
       return;
     }
 
@@ -1238,16 +1290,22 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
         })
       });
 
+      if (res.status === 401) {
+        setVerifSessionExpired(true);
+        return;
+      }
+
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || 'Failed to submit verification details');
       }
 
-      setSettingsSuccessMsg('Verification details submitted successfully! The top admin has been notified.');
+      // State 10: Success reassurance
+      setSettingsSuccessMsg('Verification details submitted successfully! Your submission is now queued for priority review.');
       setVerificationDocFile(null);
       await refreshVerificationState();
     } catch (err: any) {
-      setSettingsErrorMsg(err.message || 'Failed to submit verification request.');
+      setSettingsErrorMsg(err.message || 'Failed to submit verification request. Your uploaded files are safe.');
     } finally {
       setVerifyingState('idle');
       setUploadingVerificationDoc(false);
@@ -2199,6 +2257,47 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                 {/* TAB: REQUEST VERIFICATION */}
                 {settingsTab === 'verification' && (
                   <div className="space-y-5">
+                    {/* State 4: Offline Alert */}
+                    {!navigator.onLine && (
+                      <div role="status" aria-live="polite" className="p-3.5 rounded-2xl bg-[color-mix(in_srgb,var(--gold)_12%,transparent)] border border-[color-mix(in_srgb,var(--gold)_30%,transparent)] flex items-center justify-between gap-3 text-xs select-none animate-fade-in">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-xl bg-[color-mix(in_srgb,var(--gold)_20%,transparent)] flex items-center justify-center flex-shrink-0 text-[var(--gold)]">
+                            <WifiOff className="w-4 h-4" />
+                          </div>
+                          <p className="text-[var(--text)] leading-snug">
+                            <span className="font-semibold text-[var(--gold)] mr-1">You're offline.</span>
+                            Verification checkout and document uploads are paused until your connection returns.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* State 8: Session Expired Modal */}
+                    {verifSessionExpired && (
+                      <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 select-none animate-fade-in">
+                        <div className="w-full max-w-sm bg-[var(--card)] border border-[var(--line)] rounded-2xl p-6 shadow-2xl text-center space-y-4">
+                          <div className="w-12 h-12 rounded-2xl bg-[color-mix(in_srgb,var(--gold)_15%,transparent)] border border-[color-mix(in_srgb,var(--gold)_30%,transparent)] flex items-center justify-center text-[var(--gold)] mx-auto">
+                            <Lock className="w-6 h-6" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <h3 className="text-base font-semibold text-[var(--text)]">Session Timed Out</h3>
+                            <p className="text-xs text-[var(--muted)] leading-relaxed">
+                              Your session timed out. Your verification checkout inputs and selected category have been preserved.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              logout();
+                              onNavigate('auth');
+                            }}
+                            className="btn-primary w-full h-[44px] rounded-full text-xs font-semibold"
+                          >
+                            Sign In to Complete Verification
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {profile?.is_verified ? (
                       /* STATE 1: FULLY VERIFIED */
                       <div className="bg-[var(--card)] border border-[var(--line)] rounded-[20px] p-6 shadow-[var(--shadow-card)] space-y-4">
@@ -2353,11 +2452,23 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                                     id="checkout-upi-vpa"
                                     type="text"
                                     value={upiVpa}
-                                    onChange={(e) => setUpiVpa(e.target.value)}
+                                    onChange={(e) => {
+                                      setUpiVpa(e.target.value);
+                                      if (upiInlineError) setUpiInlineError(null);
+                                    }}
                                     placeholder="e.g. yourname@okhdfcbank or 9876543210@paytm"
-                                    className="w-full h-[52px] px-4 rounded-[14px] bg-[var(--card)] border border-[var(--line)] text-[15px] font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:border-[var(--accent-2)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--accent-2)_22%,transparent)] transition-all"
+                                    className={`w-full h-[52px] px-4 rounded-[14px] bg-[var(--card)] border text-[15px] font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none focus:ring-4 transition-all ${
+                                      upiInlineError 
+                                        ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[color-mix(in_srgb,var(--danger)_22%,transparent)]'
+                                        : 'border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-[color-mix(in_srgb,var(--accent-2)_22%,transparent)]'
+                                    }`}
                                   />
                                 </div>
+                                {upiInlineError && (
+                                  <p role="alert" className="text-xs text-[var(--danger)] font-medium pl-1 mt-1 animate-fade-in">
+                                    {upiInlineError}
+                                  </p>
+                                )}
                               </div>
 
                               {/* Popular handle chips */}
@@ -2486,6 +2597,17 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                             </div>
                           )}
 
+                          {/* State 5: Slow Network Reassurance */}
+                          {isCheckoutSlow && paymentStatusStep === 'processing' && (
+                            <div className="p-4 bg-[color-mix(in_srgb,var(--accent)_12%,var(--card))] border border-[var(--accent-2)] rounded-[14px] flex items-center gap-3 text-xs select-none animate-fade-in">
+                              <Clock className="w-5 h-5 text-[var(--accent-2)] animate-spin shrink-0" />
+                              <div className="text-left">
+                                <p className="font-semibold text-[var(--text)]">Contacting UPI banking gateway...</p>
+                                <p className="text-[var(--muted)] mt-0.5">Please do not close or reload this window. Your payment request is in progress and safe.</p>
+                              </div>
+                            </div>
+                          )}
+
                           {paymentStatusStep === 'success' && (
                             <div className="p-4 bg-emerald-500/15 border border-emerald-500/40 rounded-[14px] flex items-center gap-3">
                               <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -2577,24 +2699,36 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
 
                           <div className="space-y-2">
                             <label htmlFor="verified-doc-upload" className="block text-[14px] font-semibold text-[var(--muted)]">
-                              Supporting document (ID card)
+                              Supporting document (Government ID / Business License)
                             </label>
-                            <div className="border border-dashed border-[var(--line)] rounded-[16px] p-6 text-center hover:border-[var(--accent-2)] transition-colors cursor-pointer relative bg-[var(--input)]">
+                            <div className={`border border-dashed rounded-[16px] p-6 text-center transition-colors cursor-pointer relative bg-[var(--input)] ${
+                              docInlineError 
+                                ? 'border-[var(--danger)] bg-[color-mix(in_srgb,var(--danger)_8%,var(--input))]'
+                                : 'border-[var(--line)] hover:border-[var(--accent-2)]'
+                            }`}>
                               <Sparkles className="w-6 h-6 text-[var(--accent-2)] mx-auto mb-2" />
                               <p className="text-[14px] text-[var(--text)] font-semibold">
                                 {verificationDocFile ? verificationDocFile.name : 'Upload Government Photo ID or Business License'}
                               </p>
-                              <p className="text-[12px] text-[var(--muted)] mt-1">PDF, PNG, JPG accepted</p>
+                              <p className="text-[12px] text-[var(--muted)] mt-1">PDF, PNG, JPG accepted (max 10MB)</p>
                               <input 
                                 id="verified-doc-upload"
                                 type="file" 
                                 aria-label="Upload Government Photo ID or Business License"
                                 className="absolute inset-0 opacity-0 cursor-pointer" 
                                 accept="image/*,application/pdf" 
-                                onChange={(e) => setVerificationDocFile(e.target.files?.[0] || null)}
+                                onChange={(e) => {
+                                  setVerificationDocFile(e.target.files?.[0] || null);
+                                  if (docInlineError) setDocInlineError(null);
+                                }}
                                 required={!profile.verification_document_url} 
                               />
                             </div>
+                            {docInlineError && (
+                              <p role="alert" className="text-xs text-[var(--danger)] font-medium pl-1 mt-1 animate-fade-in">
+                                {docInlineError}
+                              </p>
+                            )}
                             {profile.verification_document_url && (
                               <p className="text-[12px] text-[var(--muted)] pl-1">
                                 📄 Current Document: <a href={`/api/media/file/${encodeURIComponent(profile.verification_document_url)}`} target="_blank" rel="noreferrer" className="text-[var(--accent-2)] hover:underline font-semibold">View Uploaded ID File</a>
@@ -2610,11 +2744,23 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                               id="verified-reason-input"
                               rows={3}
                               value={reasonInput}
-                              onChange={(e) => setReasonInput(e.target.value)}
-                              className="w-full min-h-[120px] p-4 rounded-[14px] bg-[var(--input)] border border-[var(--line)] text-[16px] sm:text-[15px] font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none transition-all focus:border-[var(--accent-2)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--accent-2)_22%,transparent)] resize-y"
+                              onChange={(e) => {
+                                setReasonInput(e.target.value);
+                                if (reasonInlineError) setReasonInlineError(null);
+                              }}
+                              className={`w-full min-h-[120px] p-4 rounded-[14px] bg-[var(--input)] border text-[16px] sm:text-[15px] font-medium text-[var(--text)] placeholder-[var(--muted)] outline-none transition-all focus:ring-4 resize-y ${
+                                reasonInlineError
+                                  ? 'border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[color-mix(in_srgb,var(--danger)_22%,transparent)]'
+                                  : 'border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-[color-mix(in_srgb,var(--accent-2)_22%,transparent)]'
+                              }`}
                               placeholder="Briefly state why your account requires verification..."
                               required
                             />
+                            {reasonInlineError && (
+                              <p role="alert" className="text-xs text-[var(--danger)] font-medium pl-1 mt-1 animate-fade-in">
+                                {reasonInlineError}
+                              </p>
+                            )}
                           </div>
 
                           <div className="pt-4 border-t border-[var(--line)] flex items-center justify-end">
