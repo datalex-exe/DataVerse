@@ -1158,132 +1158,134 @@ export const Auth: React.FC = () => {
       <Footer className="max-w-md mx-auto relative z-10 border-t-0 mt-6" />
       <CookieBanner />
 
-      {/* State Preview Toolbar */}
-      <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end">
-        {showPreviewToolbar && (
-          <div className="mb-2 p-3 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl space-y-2 text-xs w-60 animate-fade-in backdrop-blur-md">
-            <div className="flex items-center justify-between pb-1 border-b border-[var(--card-border)]">
-              <span className="font-bold text-[var(--accent-2)]">Auth 10-State Preview</span>
-              <button 
-                type="button" 
-                onClick={() => {
-                  setPreviewState(null);
-                  setError(null);
-                  setFieldErrors({});
-                  setAuthSuccessUser(null);
-                  setLoading(false);
-                  setIsOffline(!navigator.onLine);
-                  setIsSlowNetwork(false);
-                }} 
-                className="text-[10px] text-[var(--muted)] hover:text-[var(--text)] cursor-pointer"
-              >
-                Reset Live
-              </button>
+      {/* State Preview Toolbar (Only shown in local dev or via ?debug_states=1) */}
+      {(import.meta.env.DEV || (typeof window !== 'undefined' && window.location.search.includes('debug_states=1'))) && (
+        <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end">
+          {showPreviewToolbar && (
+            <div className="mb-2 p-3 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl space-y-2 text-xs w-60 animate-fade-in backdrop-blur-md">
+              <div className="flex items-center justify-between pb-1 border-b border-[var(--card-border)]">
+                <span className="font-bold text-[var(--accent-2)]">Auth 10-State Preview</span>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setPreviewState(null);
+                    setError(null);
+                    setFieldErrors({});
+                    setAuthSuccessUser(null);
+                    setLoading(false);
+                    setIsOffline(!navigator.onLine);
+                    setIsSlowNetwork(false);
+                  }} 
+                  className="text-[10px] text-[var(--muted)] hover:text-[var(--text)] cursor-pointer"
+                >
+                  Reset Live
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewState('loading');
+                    setLoading(true);
+                    setError(null);
+                  }}
+                  className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                    previewState === 'loading'
+                      ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                      : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                  }`}
+                >
+                  loading
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewState('error');
+                    setLoading(false);
+                    setError('Incorrect username or password. Please verify your credentials and try again.');
+                  }}
+                  className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                    previewState === 'error'
+                      ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                      : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                  }`}
+                >
+                  error
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewState('offline');
+                    setIsOffline(true);
+                  }}
+                  className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                    previewState === 'offline'
+                      ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                      : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                  }`}
+                >
+                  offline
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewState('slow');
+                    setIsSlowNetwork(true);
+                    setLoading(true);
+                  }}
+                  className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                    previewState === 'slow'
+                      ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                      : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                  }`}
+                >
+                  slow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewState('error');
+                    setIsLogin(false);
+                    setFieldErrors({
+                      username: 'Username must be 3-30 characters (letters, numbers, _)',
+                      email: 'Please enter a valid email format',
+                      password: 'Password must be at least 8 characters long',
+                      terms: 'You must agree to the Terms of Service to register'
+                    });
+                  }}
+                  className="py-1 px-2 rounded-lg text-[10px] font-semibold text-left bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
+                >
+                  validation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewState('success');
+                    setAuthSuccessUser('Alex Morgan');
+                    setError(null);
+                  }}
+                  className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
+                    previewState === 'success'
+                      ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
+                      : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                  }`}
+                >
+                  success
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewState('loading');
-                  setLoading(true);
-                  setError(null);
-                }}
-                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
-                  previewState === 'loading'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
-                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
-                }`}
-              >
-                loading
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewState('error');
-                  setLoading(false);
-                  setError('Incorrect username or password. Please verify your credentials and try again.');
-                }}
-                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
-                  previewState === 'error'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
-                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
-                }`}
-              >
-                error
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewState('offline');
-                  setIsOffline(true);
-                }}
-                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
-                  previewState === 'offline'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
-                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
-                }`}
-              >
-                offline
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewState('slow');
-                  setIsSlowNetwork(true);
-                  setLoading(true);
-                }}
-                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
-                  previewState === 'slow'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
-                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
-                }`}
-              >
-                slow
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewState('error');
-                  setIsLogin(false);
-                  setFieldErrors({
-                    username: 'Username must be 3-30 characters (letters, numbers, _)',
-                    email: 'Please enter a valid email format',
-                    password: 'Password must be at least 8 characters long',
-                    terms: 'You must agree to the Terms of Service to register'
-                  });
-                }}
-                className="py-1 px-2 rounded-lg text-[10px] font-semibold text-left bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)] cursor-pointer"
-              >
-                validation
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPreviewState('success');
-                  setAuthSuccessUser('Alex Morgan');
-                  setError(null);
-                }}
-                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left cursor-pointer transition-colors ${
-                  previewState === 'success'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]'
-                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
-                }`}
-              >
-                success
-              </button>
-            </div>
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => setShowPreviewToolbar(prev => !prev)}
-          aria-label="Toggle Auth State Preview Toolbar"
-          className="h-9 px-3 rounded-full bg-[var(--card)] border border-[var(--card-border)] text-[var(--accent-2)] shadow-xl hover:bg-[var(--hover)] transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          <span>States</span>
-        </button>
-      </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowPreviewToolbar(prev => !prev)}
+            aria-label="Toggle Auth State Preview Toolbar"
+            className="h-9 px-3 rounded-full bg-[var(--card)] border border-[var(--card-border)] text-[var(--accent-2)] shadow-xl hover:bg-[var(--hover)] transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span>States</span>
+          </button>
+        </div>
+      )}
     </main>
   );
 };

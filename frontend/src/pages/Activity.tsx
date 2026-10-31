@@ -692,49 +692,51 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
     <div className="w-full max-w-[640px] mx-auto self-center px-4 sm:px-6 pt-3 sm:pt-6 pb-24 md:pb-12 animate-fade-in relative z-10">
       
       {/* ───────────────────────────────────────────────────────────────────────
-          STATE PREVIEW TOOLBAR (Allows reviewer/developer to audit all states)
+          STATE PREVIEW TOOLBAR (Only shown in local dev or via ?debug_states=1)
       ──────────────────────────────────────────────────────────────────────── */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between pb-2">
-          <button
-            type="button"
-            onClick={() => setShowPreviewToolbar(!showPreviewToolbar)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-            aria-expanded={showPreviewToolbar}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>State Inspector ({effectiveStatus})</span>
-          </button>
-          {previewState && (
+      {(import.meta.env.DEV || (typeof window !== 'undefined' && window.location.search.includes('debug_states=1'))) && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between pb-2">
             <button
               type="button"
-              onClick={() => setPreviewState(null)}
-              className="text-[10px] text-[var(--accent-2)] hover:underline cursor-pointer"
+              onClick={() => setShowPreviewToolbar(!showPreviewToolbar)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              aria-expanded={showPreviewToolbar}
             >
-              Reset to Live
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>State Inspector ({effectiveStatus})</span>
             </button>
+            {previewState && (
+              <button
+                type="button"
+                onClick={() => setPreviewState(null)}
+                className="text-[10px] text-[var(--accent-2)] hover:underline cursor-pointer"
+              >
+                Reset to Live
+              </button>
+            )}
+          </div>
+
+          {showPreviewToolbar && (
+            <div className="p-2.5 rounded-xl bg-[var(--card)] border border-[var(--card-border)] flex flex-wrap gap-1.5 text-[11px] animate-fade-in">
+              {(['idle', 'loading', 'empty', 'error', 'offline', 'slow', 'session_expired'] as ActivityStatus[]).map(st => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setPreviewState(st)}
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+                    effectiveStatus === st
+                      ? 'bg-[var(--accent-2)] text-[var(--bg)] border-[var(--accent-2)] font-semibold'
+                      : 'bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] border-[var(--card-border)]'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-
-        {showPreviewToolbar && (
-          <div className="p-2.5 rounded-xl bg-[var(--card)] border border-[var(--card-border)] flex flex-wrap gap-1.5 text-[11px] animate-fade-in">
-            {(['idle', 'loading', 'empty', 'error', 'offline', 'slow', 'session_expired'] as ActivityStatus[]).map(st => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => setPreviewState(st)}
-                className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
-                  effectiveStatus === st
-                    ? 'bg-[var(--accent-2)] text-[var(--bg)] border-[var(--accent-2)] font-semibold'
-                    : 'bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] border-[var(--card-border)]'
-                }`}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       <div className="space-y-4 sm:space-y-6">
         {/* Main Heading Header */}

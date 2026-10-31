@@ -747,50 +747,55 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     );
   };
 
-  // State Preview Toolbar (For verification and interactive QA)
-  const renderStatePreviewToolbar = () => (
-    <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end">
-      {showPreviewToolbar && (
-        <div className="mb-2 p-3 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl space-y-2 text-xs w-60 animate-fade-in backdrop-blur-md">
-          <div className="flex items-center justify-between pb-1 border-b border-[var(--card-border)]">
-            <span className="font-bold text-[var(--accent-2)]">Feed 10-State Preview</span>
-            <button 
-              type="button" 
-              onClick={() => setPreviewState(null)} 
-              className="text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
-            >
-              Reset Live
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(['loading', 'empty', 'error', 'offline', 'slow', 'session_expired'] as FeedStatus[]).map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => setPreviewState(st)}
-                className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left transition-colors ${
-                  previewState === st 
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]' 
-                    : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
-                }`}
+  // State Preview Toolbar (Only shown in local dev or via ?debug_states=1)
+  const renderStatePreviewToolbar = () => {
+    if (!import.meta.env.DEV && !(typeof window !== 'undefined' && window.location.search.includes('debug_states=1'))) {
+      return null;
+    }
+    return (
+      <div className="fixed bottom-20 right-4 z-40 flex flex-col items-end">
+        {showPreviewToolbar && (
+          <div className="mb-2 p-3 bg-[var(--card)] border border-[var(--card-border)] rounded-2xl shadow-2xl space-y-2 text-xs w-60 animate-fade-in backdrop-blur-md">
+            <div className="flex items-center justify-between pb-1 border-b border-[var(--card-border)]">
+              <span className="font-bold text-[var(--accent-2)]">Feed 10-State Preview</span>
+              <button 
+                type="button" 
+                onClick={() => setPreviewState(null)} 
+                className="text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
               >
-                {st}
+                Reset Live
               </button>
-            ))}
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(['loading', 'empty', 'error', 'offline', 'slow', 'session_expired'] as FeedStatus[]).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setPreviewState(st)}
+                  className={`py-1 px-2 rounded-lg text-[10px] font-semibold text-left transition-colors ${
+                    previewState === st 
+                      ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)]' 
+                      : 'bg-[var(--input)] text-[var(--text)] hover:bg-[var(--hover)]'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={() => setShowPreviewToolbar(prev => !prev)}
-        aria-label="Toggle Feed State Preview Toolbar"
-        className="h-9 px-3 rounded-full bg-[var(--card)] border border-[var(--card-border)] text-[var(--accent-2)] shadow-xl hover:bg-[var(--hover)] transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
-      >
-        <SlidersHorizontal className="w-3.5 h-3.5" />
-        <span>States</span>
-      </button>
-    </div>
-  );
+        )}
+        <button
+          type="button"
+          onClick={() => setShowPreviewToolbar(prev => !prev)}
+          aria-label="Toggle Feed State Preview Toolbar"
+          className="h-9 px-3 rounded-full bg-[var(--card)] border border-[var(--card-border)] text-[var(--accent-2)] shadow-xl hover:bg-[var(--hover)] transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer"
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span>States</span>
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="w-full max-w-[620px] mx-auto min-h-screen py-0 pb-28 sm:pb-16 select-none border-x border-[#1c1c2b]/60 relative">

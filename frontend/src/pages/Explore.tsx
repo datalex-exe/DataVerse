@@ -529,49 +529,51 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
     <div className="w-full max-w-[640px] mx-auto self-center px-4 pt-3 sm:pt-6 pb-24 md:pb-12 space-y-5 animate-fade-in select-none">
       
       {/* ───────────────────────────────────────────────────────────────────────
-          STATE PREVIEW TOOLBAR (For UI/UX Quality Verification)
+          STATE PREVIEW TOOLBAR (Only shown in local dev or via ?debug_states=1)
       ──────────────────────────────────────────────────────────────────────── */}
-      <div className="border-b border-[var(--card-border)] pb-2">
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setShowPreviewToolbar(!showPreviewToolbar)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-            aria-expanded={showPreviewToolbar}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>State Inspector ({effectiveStatus})</span>
-          </button>
-          {previewState && (
+      {(import.meta.env.DEV || (typeof window !== 'undefined' && window.location.search.includes('debug_states=1'))) && (
+        <div className="border-b border-[var(--card-border)] pb-2">
+          <div className="flex items-center justify-between">
             <button
               type="button"
-              onClick={() => setPreviewState(null)}
-              className="text-[10px] text-[var(--accent-2)] hover:underline cursor-pointer"
+              onClick={() => setShowPreviewToolbar(!showPreviewToolbar)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              aria-expanded={showPreviewToolbar}
             >
-              Reset to Live
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>State Inspector ({effectiveStatus})</span>
             </button>
+            {previewState && (
+              <button
+                type="button"
+                onClick={() => setPreviewState(null)}
+                className="text-[10px] text-[var(--accent-2)] hover:underline cursor-pointer"
+              >
+                Reset to Live
+              </button>
+            )}
+          </div>
+
+          {showPreviewToolbar && (
+            <div className="mt-2 p-2 rounded-xl bg-[var(--card)] border border-[var(--card-border)] flex flex-wrap gap-1 text-[11px] animate-fade-in">
+              {(['empty', 'loading', 'success', 'no_results', 'error', 'offline', 'slow', 'session_expired'] as ExploreStatus[]).map(st => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setPreviewState(st)}
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+                    effectiveStatus === st
+                      ? 'bg-[var(--accent-2)] text-[var(--bg)] border-[var(--accent-2)] font-semibold'
+                      : 'bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] border-[var(--card-border)]'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-
-        {showPreviewToolbar && (
-          <div className="mt-2 p-2 rounded-xl bg-[var(--card)] border border-[var(--card-border)] flex flex-wrap gap-1 text-[11px] animate-fade-in">
-            {(['empty', 'loading', 'success', 'no_results', 'error', 'offline', 'slow', 'session_expired'] as ExploreStatus[]).map(st => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => setPreviewState(st)}
-                className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
-                  effectiveStatus === st
-                    ? 'bg-[var(--accent-2)] text-[var(--bg)] border-[var(--accent-2)] font-semibold'
-                    : 'bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] border-[var(--card-border)]'
-                }`}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* ───────────────────────────────────────────────────────────────────────
           SEARCH BAR

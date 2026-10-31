@@ -288,51 +288,53 @@ export const NotFound: React.FC<NotFoundProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* State Preview Toolbar */}
-      <aside 
-        aria-label="UI State Inspector"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-[var(--card)]/95 backdrop-blur-md border border-[var(--card-border)] rounded-full shadow-2xl px-3 py-1.5 flex items-center gap-1.5 text-xs text-[var(--muted)] select-none"
-      >
-        <button
-          type="button"
-          onClick={() => setShowPreviewToolbar(!showPreviewToolbar)}
-          className="flex items-center gap-1.5 font-bold text-[var(--text)] px-2 py-1 hover:text-[var(--accent-2)] transition-colors cursor-pointer"
+      {/* State Preview Toolbar (Only shown in local dev or via ?debug_states=1) */}
+      {(import.meta.env.DEV || (typeof window !== 'undefined' && window.location.search.includes('debug_states=1'))) && (
+        <aside 
+          aria-label="UI State Inspector"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-[var(--card)]/95 backdrop-blur-md border border-[var(--card-border)] rounded-full shadow-2xl px-3 py-1.5 flex items-center gap-1.5 text-xs text-[var(--muted)] select-none"
         >
-          <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--accent-2)]" />
-          <span className="text-[11px]">States</span>
-        </button>
-        {showPreviewToolbar && (
-          <div className="flex items-center gap-1 border-l border-[var(--line)] pl-2 overflow-x-auto max-w-[80vw]">
-            {(['idle', 'typo_match', 'error', 'offline'] as NotFoundStatus[]).map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => {
-                  if (st === 'idle') {
-                    setPreviewState(null);
-                    setIsOffline(false);
-                    setJumpError(null);
-                  } else if (st === 'typo_match') {
-                    setPreviewState('typo_match');
-                  } else if (st === 'error') {
-                    setPreviewState('error');
-                  } else if (st === 'offline') {
-                    setPreviewState('offline');
-                    setIsOffline(true);
-                  }
-                }}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
-                  previewState === st || (st === 'idle' && !previewState && !isOffline)
-                    ? 'bg-[var(--accent)] text-[var(--on-accent)]'
-                    : 'hover:bg-[var(--hover)] text-[var(--muted)]'
-                }`}
-              >
-                {st}
-              </button>
-            ))}
-          </div>
-        )}
-      </aside>
+          <button
+            type="button"
+            onClick={() => setShowPreviewToolbar(!showPreviewToolbar)}
+            className="flex items-center gap-1.5 font-bold text-[var(--text)] px-2 py-1 hover:text-[var(--accent-2)] transition-colors cursor-pointer"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+            <span className="text-[11px]">States</span>
+          </button>
+          {showPreviewToolbar && (
+            <div className="flex items-center gap-1 border-l border-[var(--line)] pl-2 overflow-x-auto max-w-[80vw]">
+              {(['idle', 'typo_match', 'error', 'offline'] as NotFoundStatus[]).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => {
+                    if (st === 'idle') {
+                      setPreviewState(null);
+                      setIsOffline(false);
+                      setJumpError(null);
+                    } else if (st === 'typo_match') {
+                      setPreviewState('typo_match');
+                    } else if (st === 'error') {
+                      setPreviewState('error');
+                    } else if (st === 'offline') {
+                      setPreviewState('offline');
+                      setIsOffline(true);
+                    }
+                  }}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
+                    previewState === st || (st === 'idle' && !previewState && !isOffline)
+                      ? 'bg-[var(--accent)] text-[var(--on-accent)]'
+                      : 'hover:bg-[var(--hover)] text-[var(--muted)]'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
+      )}
     </div>
   );
 };
