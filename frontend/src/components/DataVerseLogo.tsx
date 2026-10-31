@@ -5,12 +5,14 @@ interface DataVerseLogoProps {
   size?: number;
   className?: string;
   rounded?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+  style?: React.CSSProperties;
 }
 
 export const DataVerseLogo: React.FC<DataVerseLogoProps> = ({ 
   size = 40, 
   className = '', 
-  rounded = 'full' 
+  rounded = 'full',
+  style
 }) => {
   const roundClass = 
     rounded === 'full' ? 'rounded-full' : 
@@ -26,6 +28,13 @@ export const DataVerseLogo: React.FC<DataVerseLogoProps> = ({
       alt="DataVerse Logo" 
       width={size} 
       height={size} 
+      style={{
+        width: size ? `${size}px` : undefined,
+        height: size ? `${size}px` : undefined,
+        maxWidth: '100%',
+        maxHeight: '100%',
+        ...style
+      }}
       className={`${roundClass} ${className} select-none object-contain`}
       loading="eager"
       decoding="sync"
