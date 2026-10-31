@@ -10,9 +10,7 @@ import {
   Lock, 
   Sparkles,
   SlidersHorizontal,
-  ArrowRight,
-  TrendingUp,
-  ShieldCheck
+  ArrowRight
 } from 'lucide-react';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 
@@ -223,12 +221,12 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
   // 10-STATE RENDERERS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // STATE 1: EMPTY STATE (Discovery categories & prompt)
+  // STATE 1: EMPTY STATE (Discovery prompt)
   const renderEmptyState = () => (
     <div 
       role="region" 
       aria-label="Search suggestions" 
-      className="w-full py-12 px-6 text-center space-y-5 bg-[var(--card)] rounded-[20px] border border-[var(--card-border)] shadow-sm animate-fade-in select-none"
+      className="w-full py-12 px-6 text-center space-y-4 bg-[var(--card)] rounded-[20px] border border-[var(--card-border)] shadow-sm animate-fade-in select-none"
     >
       <div className="w-14 h-14 rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_25%,transparent)] flex items-center justify-center mx-auto text-[var(--accent-2)] shadow-inner">
         <Sparkles className="w-6 h-6 stroke-[1.8]" />
@@ -236,29 +234,8 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
       <div className="space-y-1.5 max-w-sm mx-auto">
         <h2 className="text-base font-semibold text-[var(--text)]">Discover Creators & Topics</h2>
         <p className="text-xs text-[var(--muted)] leading-relaxed font-normal">
-          Search by name or handle to find friends and community creators. Or tap a suggested topic below:
+          Search by name or handle to find friends and community creators.
         </p>
-      </div>
-
-      {/* Suggested Search Chips */}
-      <div className="flex flex-wrap items-center justify-center gap-2 pt-2 max-w-md mx-auto">
-        {[
-          { label: 'Verified Creators', query: 'verified', icon: ShieldCheck },
-          { label: 'Technology', query: 'tech', icon: TrendingUp },
-          { label: 'Design', query: 'design', icon: Sparkles },
-          { label: 'Photography', query: 'photo', icon: null },
-          { label: 'Music', query: 'music', icon: null },
-        ].map(chip => (
-          <button
-            key={chip.query}
-            type="button"
-            onClick={() => setSearchQuery(chip.query)}
-            className="px-3.5 py-1.5 rounded-full bg-[var(--input)] hover:bg-[var(--hover)] border border-[var(--card-border)] text-[var(--text)] text-xs font-medium transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
-          >
-            {chip.icon && <chip.icon className="w-3.5 h-3.5 text-[var(--accent-2)]" />}
-            <span>{chip.label}</span>
-          </button>
-        ))}
       </div>
     </div>
   );
