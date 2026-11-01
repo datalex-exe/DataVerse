@@ -1,5 +1,5 @@
-// Offline Arcade service worker for DataVerse (v4)
-const VERSION = "v4";
+// Offline Arcade service worker for DataVerse (v5)
+const VERSION = "v5";
 const SLOW_MS = 6000;
 const OFFLINE_URL = "/arcade-offline.html";
 const CACHE = `offline-arcade-${VERSION}`;
@@ -241,25 +241,44 @@ self.addEventListener("push", (event) => {
         }
       } else {
         try {
-          const res = await fetch("/api/push/latest");
+          const latestApi = new URL("/api/push/latest?t=" + Date.now(), self.location.origin).href;
+          const res = await fetch(latestApi, { cache: "no-store" });
           if (res.ok) {
             const data = await res.json();
-            if (data.body) payload = Object.assign(payload, data);
+            if (data && data.body) {
+              payload.title = data.title || payload.title;
+              payload.body = data.body;
+              payload.url = data.url || payload.url;
+              payload.id = data.id;
+            }
           }
-        } catch (_) {}
+        } catch (fetchErr) {
+          console.warn("Service worker fetch latest push error:", fetchErr);
+        }
       }
 
+      const iconUrl = new URL("/logo.png", self.location.origin).href;
       const options = {
         body: payload.body,
-        icon: "/logo.png?v=10",
-        badge: "/favicon.svg?v=10",
+        icon: iconUrl,
         data: { url: payload.url || "https://dataverse.datalexcloud.tech" },
-        vibrate: [120, 60, 120],
-        tag: payload.id || "dataverse-push",
-        renotify: true
+        vibrate: [200, 100, 200],
+        tag: String(payload.id || Date.now()),
+        renotify: true,
+        requireInteraction: true
       };
 
-      return self.registration.showNotification(payload.title || "DataVerse", options);
+      try {
+        await self.registration.showNotification(payload.title || "DataVerse", options);
+      } catch (notifErr) {
+        console.warn("showNotification standard failed, using fallback:", notifErr);
+        try {
+          await self.registration.showNotification(payload.title || "DataVerse", {
+            body: payload.body,
+            tag: String(Date.now())
+          });
+        } catch (_) {}
+      }
     })()
   );
 });

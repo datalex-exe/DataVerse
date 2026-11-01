@@ -487,6 +487,23 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     if (!currentUser?.id) return;
     setSendingPush(true);
     try {
+      // 1. Immediately trigger native lock-screen notification on this device
+      if ('serviceWorker' in navigator && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          await reg.showNotification('DataVerse Test Alert 🚀', {
+            body: `Hi @${currentUser.username}, native pop-ups are working on this device!`,
+            icon: '/logo.png',
+            tag: 'test-' + Date.now(),
+            requireInteraction: true,
+            data: { url: 'https://dataverse.datalexcloud.tech' }
+          });
+        } catch (localErr) {
+          console.warn('Local native notification test:', localErr);
+        }
+      }
+
+      // 2. Also dispatch remote broadcast through Google FCM
       const res = await fetch('/api/push/admin/broadcast', {
         method: 'POST',
         headers: {
@@ -1988,6 +2005,14 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                   </button>
                 </div>
               )}
+
+              {/* Troubleshooting Note for Android / iOS */}
+              <div className="p-3.5 rounded-2xl bg-[var(--input)] border border-[var(--line)] text-[11px] text-[var(--muted)] flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-[var(--accent-2)] shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <span className="font-bold text-[var(--text)]">Phone Notification Settings:</span> If your phone does not pop up a banner on the screen, verify that Chrome notifications are allowed in your device settings (<strong className="text-[var(--text)]">Android Settings &gt; Apps &gt; Chrome &gt; Notifications &gt; ON</strong>). On iOS, add DataVerse to Home Screen first.
+                </div>
+              </div>
 
               {/* Main Composer & Mobile Lock-Screen Preview Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
