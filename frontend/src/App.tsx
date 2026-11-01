@@ -533,8 +533,8 @@ const AppContent: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[var(--bg)] flex flex-col items-center justify-center gap-5 text-[var(--muted)] animate-fade-in select-none">
-        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#0b343d] via-[#041d22] to-[#031317] border border-[color-mix(in_srgb,var(--accent-2)_45%,transparent)] shadow-[0_0_24px_rgba(45,212,191,0.22)] flex items-center justify-center p-1.5 animate-pulse">
-          <DataVerseLogo size={46} rounded="full" className="w-full h-full object-contain" />
+        <div className="w-16 h-16 rounded-full shadow-[0_0_24px_rgba(45,212,191,0.25)] flex items-center justify-center overflow-hidden animate-pulse">
+          <DataVerseLogo size={64} rounded="full" className="w-full h-full object-contain" />
         </div>
         <div className="flex flex-col items-center gap-2">
           <div className="text-base font-bold tracking-wide">

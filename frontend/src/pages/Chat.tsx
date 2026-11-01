@@ -5141,8 +5141,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                       style={{ maxWidth: '100%', minWidth: 0 }}
                                     >
                                       <div className="flex items-center gap-1.5">
-                                        <div className="w-5 h-5 rounded-md bg-[#040b0d] border border-[var(--line)] flex items-center justify-center p-0.5 overflow-hidden flex-shrink-0">
-                                          <DataVerseLogo size={18} rounded="md" className="w-full h-full object-contain" />
+                                        <div className="w-5 h-5 rounded-full shadow-[0_0_8px_rgba(45,212,191,0.2)] flex items-center justify-center overflow-hidden flex-shrink-0">
+                                          <DataVerseLogo size={20} rounded="full" className="w-full h-full object-contain" />
                                         </div>
                                         <span className="text-[9px] font-black text-[var(--muted)] tracking-wide uppercase">Shared Post</span>
                                       </div>

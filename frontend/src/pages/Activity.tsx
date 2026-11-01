@@ -504,19 +504,16 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
             <div 
               className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold overflow-hidden shadow-sm ${
                 !item.notifier_id || isWelcome
-                  ? 'border border-[color-mix(in_srgb,var(--accent-2)_40%,transparent)] shadow-[0_0_12px_rgba(45,212,191,0.18),inset_0_0_6px_rgba(45,212,191,0.1)]'
+                  ? 'shadow-[0_0_12px_rgba(45,212,191,0.22)]'
                   : 'bg-[var(--card)] border border-[var(--card-border)]'
               }`}
-              style={(!item.notifier_id || isWelcome) ? { background: 'radial-gradient(circle at 45% 45%, #0b343d 0%, #031317 80%)' } : undefined}
             >
               {!item.notifier_id || isWelcome ? (
-                <div className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center shrink-0">
-                  <DataVerseLogo 
-                    size={28} 
-                    rounded="full" 
-                    className="w-full h-full object-contain select-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]" 
-                  />
-                </div>
+                <DataVerseLogo 
+                  size={44} 
+                  rounded="full" 
+                  className="w-full h-full object-contain select-none" 
+                />
               ) : item.avatar_url ? (
                 <img src={`/api/media/file/${item.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
               ) : (

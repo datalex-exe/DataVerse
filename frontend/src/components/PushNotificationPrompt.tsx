@@ -64,8 +64,8 @@ export const PushNotificationPrompt: React.FC = () => {
       className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:max-w-md z-50 bg-[var(--card)]/95 backdrop-blur-xl border border-[color-mix(in_srgb,var(--accent-2)_30%,var(--line))] rounded-2xl p-4 shadow-2xl animate-fade-in select-none"
     >
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#0b343d] via-[#041d22] to-[#031317] border border-[var(--accent-2)]/40 shadow-[0_0_12px_rgba(45,212,191,0.25)] flex items-center justify-center p-1 flex-shrink-0">
-          <DataVerseLogo size={32} rounded="full" className="w-full h-full object-contain" />
+        <div className="w-10 h-10 rounded-full shadow-[0_0_12px_rgba(45,212,191,0.25)] flex items-center justify-center overflow-hidden flex-shrink-0">
+          <DataVerseLogo size={40} rounded="full" className="w-full h-full object-contain" />
         </div>
 
         <div className="flex-1 min-w-0 pr-1">

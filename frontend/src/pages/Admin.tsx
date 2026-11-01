@@ -2525,8 +2525,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                           {/* Card Header */}
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#0b343d] via-[#041d22] to-[#031317] border border-teal-400/50 flex items-center justify-center p-0.5 flex-shrink-0">
-                                <DataVerseLogo size={16} rounded="full" className="w-full h-full object-contain" />
+                              <div className="w-5 h-5 rounded-full shadow-[0_0_8px_rgba(45,212,191,0.25)] flex items-center justify-center overflow-hidden flex-shrink-0">
+                                <DataVerseLogo size={20} rounded="full" className="w-full h-full object-contain" />
                               </div>
                               <span className="text-[10px] font-black uppercase tracking-wider text-teal-300 truncate">
                                 DATAVERSE
