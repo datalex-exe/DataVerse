@@ -352,11 +352,15 @@ pushApp.post('/admin/broadcast', authMiddleware, async (c) => {
       const uniqueUserIds = [...new Set(targetUserIdsToNotify)];
 
       if (uniqueUserIds.length > 0) {
+        const cleanTitle = finalTitle.replace(/^DataVerse\s*[•\-:]\s*/i, '').trim();
+        const notifContent = cleanTitle && cleanTitle.toLowerCase() !== 'dataverse'
+          ? `${cleanTitle}: ${finalBody}`
+          : finalBody;
         for (const uid of uniqueUserIds) {
           await c.env.DB.prepare(`
             INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read)
             VALUES (?, ?, NULL, 'welcome', ?, ?, 0)
-          `).bind(crypto.randomUUID(), uid, `${finalTitle}: ${finalBody}`, now).run();
+          `).bind(crypto.randomUUID(), uid, notifContent, now).run();
         }
       }
     } catch {}

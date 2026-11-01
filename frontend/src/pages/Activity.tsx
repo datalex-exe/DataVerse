@@ -486,7 +486,7 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
 
   const renderItem = (item: NotificationItem, idx: number) => {
     const isWelcome = item.type === 'welcome';
-    const notifierName = item.display_name || item.username || 'System';
+    const notifierName = item.display_name || item.username || 'DataVerse';
     const isUnread = !item.is_read;
     const isAccepted = Boolean(acceptedRequests[item.id]);
 
@@ -538,10 +538,12 @@ export const Activity: React.FC<ActivityProps> = ({ onNavigate }) => {
                       </span>
                     ) : (
                       <span className="font-bold text-[var(--accent-2)] mr-1.5">
-                        System:
+                        DataVerse:
                       </span>
                     )}
-                    <span className="text-[var(--muted)] font-normal">{item.body}</span>
+                    <span className="text-[var(--muted)] font-normal">
+                      {item.body?.replace(/^DataVerse\s*[•\-:]\s*/i, '')}
+                    </span>
                   </span>
                 ) : (
                   <span>
