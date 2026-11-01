@@ -257,7 +257,7 @@ self.addEventListener("push", (event) => {
         }
       }
 
-      const iconUrl = new URL("/logo.png?v=12", self.location.origin).href;
+      const iconUrl = new URL("/logo.png?v=13", self.location.origin).href;
       const options = {
         body: payload.body,
         icon: iconUrl,
