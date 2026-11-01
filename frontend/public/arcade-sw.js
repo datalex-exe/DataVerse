@@ -219,3 +219,70 @@ async function notify(url, type) {
     for (const client of await self.clients.matchAll({ type: "window" })) client.postMessage({ type, url });
   } catch (_) {}
 }
+
+// ==========================================
+// WEB PUSH NOTIFICATIONS & POP-UP DISPATCHER
+// ==========================================
+self.addEventListener("push", (event) => {
+  event.waitUntil(
+    (async () => {
+      let payload = {
+        title: "DataVerse",
+        body: "Check out the latest trending posts and messages on DataVerse! 🚀",
+        url: "https://dataverse.datalexcloud.tech"
+      };
+
+      if (event.data) {
+        try {
+          payload = Object.assign(payload, event.data.json());
+        } catch {
+          const text = event.data.text();
+          if (text) payload.body = text;
+        }
+      } else {
+        try {
+          const res = await fetch("/api/push/latest");
+          if (res.ok) {
+            const data = await res.json();
+            if (data.body) payload = Object.assign(payload, data);
+          }
+        } catch (_) {}
+      }
+
+      const options = {
+        body: payload.body,
+        icon: "/logo.png?v=10",
+        badge: "/favicon.svg?v=10",
+        data: { url: payload.url || "https://dataverse.datalexcloud.tech" },
+        vibrate: [120, 60, 120],
+        tag: payload.id || "dataverse-push",
+        renotify: true
+      };
+
+      return self.registration.showNotification(payload.title || "DataVerse", options);
+    })()
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || "https://dataverse.datalexcloud.tech";
+
+  event.waitUntil(
+    (async () => {
+      const allClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of allClients) {
+        if ("focus" in client) {
+          if (client.url && client.url.includes(self.location.origin)) {
+            client.navigate(targetUrl);
+            return client.focus();
+          }
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })()
+  );
+});
+

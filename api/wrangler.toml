@@ -23,6 +23,9 @@ bindings = [
 [vars]
 JWT_SECRET = "dataverse-production-secure-jwt-key-9b8f2a4e7c1d3f5a8b0c6e4d2a1b"
 TWO_FACTOR_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+VAPID_PUBLIC_KEY = "BHyO66HTpn7JPtBva979VXMAujGZjgTU05e42aZlKTRKdNHm_Ds8wXipd6bCaCsheWilGjOxqI2GAg9cuFBRbV0"
+VAPID_PRIVATE_KEY = "X4ClCxhqH-nf7OK1iE2FhESKuYqeEpBhvyBI5w0CA94"
+VAPID_SUBJECT = "mailto:support@datalexcloud.tech"
 
 [[migrations]]
 tag = "v1"

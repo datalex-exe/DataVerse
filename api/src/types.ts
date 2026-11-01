@@ -7,6 +7,9 @@ export interface Bindings {
   JWT_SECRET?: string; // Optional JWT secret override from variables
   TWO_FACTOR_ENCRYPTION_KEY?: string; // 256-bit AES-GCM encryption key
   CHAT_ROOM: DurableObjectNamespace;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
 }
 
 export interface Variables {

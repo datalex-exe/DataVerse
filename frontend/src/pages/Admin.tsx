@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
+import { DataVerseLogo } from '../components/DataVerseLogo';
 import { 
   Loader2, 
   Shield, 
@@ -22,7 +23,16 @@ import {
   RefreshCw,
   SlidersHorizontal,
   ArrowLeft,
-  CheckCircle2
+  CheckCircle2,
+  Radio,
+  Send,
+  Smartphone,
+  Megaphone,
+  Clock,
+  Target,
+  Layers,
+  ExternalLink,
+  Check
 } from 'lucide-react';
 
 export type AdminStatus = 
@@ -176,13 +186,40 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const { token, user: currentUser } = useAuth();
   const { toast } = useToast();
   
-  const [activeTab, setActiveTab] = useState<'users' | 'chats' | 'restrictions' | 'verifications' | 'reports'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'chats' | 'restrictions' | 'verifications' | 'reports' | 'push'>('users');
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [convos, setConvos] = useState<SystemConvo[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [reportsLoading, setReportsLoading] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Web Push Notifications / Broadcast States (Available to Admin and Super Admin)
+  interface PushStatsData {
+    totalSubscribers: number;
+    active3d: number;
+    inactive3d: number;
+    inactive7d: number;
+    recentCampaigns: Array<{
+      id: string;
+      title: string;
+      body: string;
+      url: string;
+      target_audience: string;
+      sent_count: number;
+      success_count: number;
+      created_at: number;
+    }>;
+  }
+  const [pushStats, setPushStats] = useState<PushStatsData | null>(null);
+  const [loadingPushStats, setLoadingPushStats] = useState<boolean>(false);
+  const [pushTitle, setPushTitle] = useState<string>('DataVerse');
+  const [pushBody, setPushBody] = useState<string>('');
+  const [pushUrl, setPushUrl] = useState<string>('https://dataverse.datalexcloud.tech');
+  const [pushAudience, setPushAudience] = useState<'all' | 'inactive_3d' | 'inactive_7d' | 'users'>('all');
+  const [pushUserFilter, setPushUserFilter] = useState<string>('');
+  const [selectedPushUsers, setSelectedPushUsers] = useState<string[]>([]);
+  const [sendingPush, setSendingPush] = useState<boolean>(false);
 
   // 10-State Architecture variables
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
@@ -361,6 +398,69 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     }
   };
 
+  const fetchPushStats = async () => {
+    if (!token) return;
+    setLoadingPushStats(true);
+    try {
+      const res = await fetch('/api/push/admin/stats', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPushStats(data);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.warn('Failed to fetch push stats:', errData);
+      }
+    } catch (err) {
+      console.error('Network error loading push stats:', err);
+    } finally {
+      setLoadingPushStats(false);
+    }
+  };
+
+  const handleBroadcastPush = async () => {
+    if (!token) return;
+    if (!pushBody.trim()) {
+      toast.error('Please enter a notification message.');
+      return;
+    }
+    if (pushAudience === 'users' && selectedPushUsers.length === 0) {
+      toast.error('Please select at least one target user.');
+      return;
+    }
+
+    setSendingPush(true);
+    try {
+      const res = await fetch('/api/push/admin/broadcast', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: pushTitle.trim() || 'DataVerse',
+          body: pushBody.trim(),
+          url: pushUrl.trim() || 'https://dataverse.datalexcloud.tech',
+          targetAudience: pushAudience,
+          targetUserIds: pushAudience === 'users' ? selectedPushUsers : undefined,
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to dispatch notification');
+      }
+
+      toast.success(data.message || `Push notification dispatched to ${data.successCount} active device(s)!`);
+      await fetchPushStats();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to broadcast push notification');
+    } finally {
+      setSendingPush(false);
+    }
+  };
+
   const handleResolveReport = (reportId: string) => {
     if (!token) return;
     setConfirmDialog({
@@ -481,6 +581,11 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
         await fetchUsers();
       } else if (activeTab === 'reports') {
         await fetchReports();
+      } else if (activeTab === 'push') {
+        await fetchPushStats();
+        if (users.length === 0) {
+          fetchUsers().catch(() => {});
+        }
       } else {
         await fetchConvos();
       }
@@ -786,6 +891,22 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Restrictions
           </button>
+          {(currentUser?.is_admin || currentUser?.is_top_admin) && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'push'}
+              onClick={() => setActiveTab('push')}
+              className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
+                activeTab === 'push'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                  : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--accent-2)]" />
+              Push Alerts
+            </button>
+          )}
           {currentUser?.is_top_admin && (
             <>
               <button
@@ -1685,6 +1806,531 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+          {/* TAB: WEB PUSH ALERTS & RE-ENGAGEMENT (ADMIN & SUPER ADMIN) */}
+          {activeTab === 'push' && (currentUser?.is_admin || currentUser?.is_top_admin) && (
+            <div className="space-y-6 animate-fade-in select-none">
+              {/* Header Card */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle_at_top_right,var(--glow),transparent_70%)] pointer-events-none opacity-50" />
+                
+                <div className="flex items-start gap-3.5 relative z-10 min-w-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-2)] flex items-center justify-center text-[var(--on-accent)] shadow-lg shadow-[var(--shadow-accent)] flex-shrink-0">
+                    <Radio className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base sm:text-lg font-black text-[var(--text)] tracking-wide uppercase">Web Push Alerts & Re-engagement</h3>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--accent-2)_15%,transparent)] text-[var(--accent-2)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)]">
+                        Admin & Super Admin
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--muted)] mt-1 max-w-2xl leading-relaxed">
+                      Send native lock-screen and browser pop-up notifications to visitors and inactive users who left the site. Target all subscribers, dormant users who haven't opened DataVerse in 3+ or 7+ days, or specific accounts.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={fetchPushStats}
+                  disabled={loadingPushStats}
+                  className="self-start sm:self-auto px-3.5 py-2 rounded-xl bg-[var(--hover)] hover:bg-[var(--card-border)] text-xs font-bold text-[var(--text)] border border-[var(--line)] transition-all flex items-center gap-2 cursor-pointer relative z-10"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingPushStats ? 'animate-spin text-[var(--accent-2)]' : ''}`} />
+                  <span>Refresh Stats</span>
+                </button>
+              </div>
+
+              {/* 4 Metrics Stats Grid */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="p-4 sm:p-5 rounded-2xl bg-[var(--card)] border border-[var(--line)] relative overflow-hidden group hover:border-[var(--accent-2)]/40 transition-all">
+                  <div className="flex items-center justify-between text-[var(--muted)] mb-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Total Subscribers</span>
+                    <Smartphone className="w-4 h-4 text-[var(--accent-2)]" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-[var(--text)]">
+                    {pushStats ? pushStats.totalSubscribers.toLocaleString() : '—'}
+                  </div>
+                  <p className="text-[10px] text-[var(--muted)] mt-1">Browser device endpoints saved</p>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-[var(--card)] border border-[var(--line)] relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+                  <div className="flex items-center justify-between text-[var(--muted)] mb-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Active (&lt; 3 Days)</span>
+                    <Clock className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-400">
+                    {pushStats ? pushStats.active3d.toLocaleString() : '—'}
+                  </div>
+                  <p className="text-[10px] text-[var(--muted)] mt-1">Visited DataVerse recently</p>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-[var(--card)] border border-[var(--line)] relative overflow-hidden group hover:border-amber-500/40 transition-all">
+                  <div className="flex items-center justify-between text-[var(--muted)] mb-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Inactive (&gt; 3 Days)</span>
+                    <Target className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-amber-400">
+                    {pushStats ? pushStats.inactive3d.toLocaleString() : '—'}
+                  </div>
+                  <p className="text-[10px] text-[var(--muted)] mt-1">Re-engagement candidate</p>
+                </div>
+
+                <div className="p-4 sm:p-5 rounded-2xl bg-[var(--card)] border border-[var(--line)] relative overflow-hidden group hover:border-rose-500/40 transition-all">
+                  <div className="flex items-center justify-between text-[var(--muted)] mb-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider">Inactive (&gt; 7 Days)</span>
+                    <Layers className="w-4 h-4 text-rose-400" />
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-rose-400">
+                    {pushStats ? pushStats.inactive7d.toLocaleString() : '—'}
+                  </div>
+                  <p className="text-[10px] text-[var(--muted)] mt-1">Dormant win-back target</p>
+                </div>
+              </div>
+
+              {/* Main Composer & Mobile Lock-Screen Preview Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Form: Notification Composer (7 Cols) */}
+                <div className="lg:col-span-7 space-y-5 bg-[var(--card)] border border-[var(--line)] rounded-3xl p-5 sm:p-6 shadow-xl">
+                  <div>
+                    <h4 className="text-sm font-black text-[var(--text)] uppercase tracking-wide flex items-center gap-2">
+                      <Megaphone className="w-4 h-4 text-[var(--accent-2)]" />
+                      Compose Push Alert
+                    </h4>
+                    <p className="text-[11px] text-[var(--muted)] mt-0.5">Customize your pop-up message and select your target audience.</p>
+                  </div>
+
+                  {/* Target Audience Segment Selector */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-[var(--muted)] block">
+                      Target Audience
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPushAudience('all')}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          pushAudience === 'all'
+                            ? 'bg-gradient-to-br from-[color-mix(in_srgb,var(--accent)_20%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_20%,transparent)] border-[var(--accent-2)] text-[var(--text)] shadow-md shadow-[var(--shadow-accent)]'
+                            : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:border-[var(--card-border)]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[var(--text)]">🌐 All Subscribers</span>
+                          {pushAudience === 'all' && <Check className="w-3.5 h-3.5 text-[var(--accent-2)]" />}
+                        </div>
+                        <span className="text-[10px] text-[var(--muted)] mt-1">Broadcast to all devices</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPushAudience('inactive_3d')}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          pushAudience === 'inactive_3d'
+                            ? 'bg-gradient-to-br from-[color-mix(in_srgb,var(--accent)_20%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_20%,transparent)] border-[var(--accent-2)] text-[var(--text)] shadow-md shadow-[var(--shadow-accent)]'
+                            : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:border-[var(--card-border)]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[var(--text)]">⏳ Inactive &gt; 3 Days</span>
+                          {pushAudience === 'inactive_3d' && <Check className="w-3.5 h-3.5 text-[var(--accent-2)]" />}
+                        </div>
+                        <span className="text-[10px] text-[var(--muted)] mt-1">Haven't visited in 3+ days</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPushAudience('inactive_7d')}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          pushAudience === 'inactive_7d'
+                            ? 'bg-gradient-to-br from-[color-mix(in_srgb,var(--accent)_20%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_20%,transparent)] border-[var(--accent-2)] text-[var(--text)] shadow-md shadow-[var(--shadow-accent)]'
+                            : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:border-[var(--card-border)]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[var(--text)]">💤 Inactive &gt; 7 Days</span>
+                          {pushAudience === 'inactive_7d' && <Check className="w-3.5 h-3.5 text-[var(--accent-2)]" />}
+                        </div>
+                        <span className="text-[10px] text-[var(--muted)] mt-1">Dormant win-back segment</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPushAudience('users')}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          pushAudience === 'users'
+                            ? 'bg-gradient-to-br from-[color-mix(in_srgb,var(--accent)_20%,transparent)] to-[color-mix(in_srgb,var(--accent-2)_20%,transparent)] border-[var(--accent-2)] text-[var(--text)] shadow-md shadow-[var(--shadow-accent)]'
+                            : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:border-[var(--card-border)]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[var(--text)]">🎯 Specific Users</span>
+                          {pushAudience === 'users' && <Check className="w-3.5 h-3.5 text-[var(--accent-2)]" />}
+                        </div>
+                        <span className="text-[10px] text-[var(--muted)] mt-1">Select individual accounts</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Specific User Selector (Conditional) */}
+                  {pushAudience === 'users' && (
+                    <div className="p-3.5 rounded-2xl bg-[var(--input)] border border-[var(--line)] space-y-3 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-[var(--text)]">Pick Target Users ({selectedPushUsers.length} selected)</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPushUsers(users.map(u => u.id))}
+                            className="text-[10px] text-[var(--accent-2)] hover:underline font-semibold cursor-pointer"
+                          >
+                            Select All
+                          </button>
+                          <span className="text-[var(--muted)] text-[10px]">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPushUsers([])}
+                            className="text-[10px] text-[var(--muted)] hover:underline font-semibold cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+                        <input
+                          type="text"
+                          value={pushUserFilter}
+                          onChange={(e) => setPushUserFilter(e.target.value)}
+                          placeholder="Search username or display name..."
+                          className="w-full bg-[var(--card)] border border-[var(--line)] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:border-[var(--accent-2)]"
+                        />
+                      </div>
+
+                      <div className="max-h-48 overflow-y-auto space-y-1.5 scrollbar-thin pr-1">
+                        {users
+                          .filter(u => {
+                            if (!pushUserFilter.trim()) return true;
+                            const q = pushUserFilter.toLowerCase().trim();
+                            return u.username.toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q);
+                          })
+                          .slice(0, 30)
+                          .map(u => {
+                            const isSelected = selectedPushUsers.includes(u.id);
+                            return (
+                              <div
+                                key={u.id}
+                                onClick={() => {
+                                  setSelectedPushUsers(prev =>
+                                    isSelected ? prev.filter(id => id !== u.id) : [...prev, u.id]
+                                  );
+                                }}
+                                className={`flex items-center justify-between p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'bg-[color-mix(in_srgb,var(--accent-2)_15%,transparent)] border-[var(--accent-2)]/60 text-[var(--text)]'
+                                    : 'bg-[var(--card)] border-[var(--line)] text-[var(--muted)] hover:bg-[var(--hover)]'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={28} />
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-[var(--text)] truncate text-[11px]">
+                                      {u.display_name || u.username}
+                                    </div>
+                                    <div className="text-[10px] text-[var(--muted)] truncate">@{u.username}</div>
+                                  </div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {}} // Handled by parent div
+                                  className="accent-[var(--accent-2)] w-4 h-4 cursor-pointer"
+                                />
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 1-Click Message Presets */}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[var(--muted)] block">
+                      Quick 1-Click Templates
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPushTitle('DataVerse • We miss you!');
+                          setPushBody('New conversations, viral posts and discussions are happening right now. Come back and see what is new!');
+                          setPushUrl('https://dataverse.datalexcloud.tech');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[var(--input)] border border-[var(--line)] text-[10px] font-bold text-[var(--text)] hover:border-[var(--accent-2)] hover:text-[var(--accent-2)] transition-all cursor-pointer"
+                      >
+                        👋 We Miss You!
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPushTitle('DataVerse • Trending Right Now');
+                          setPushBody('Catch the most liked reels and hot threads in DataVerse today! Tap to view what is buzzing.');
+                          setPushUrl('https://dataverse.datalexcloud.tech');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[var(--input)] border border-[var(--line)] text-[10px] font-bold text-[var(--text)] hover:border-[var(--accent-2)] hover:text-[var(--accent-2)] transition-all cursor-pointer"
+                      >
+                        🔥 Trending Alert
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPushTitle('DataVerse • Community Updates');
+                          setPushBody('You have unread updates in your community circles. Tap to join the conversation.');
+                          setPushUrl('https://dataverse.datalexcloud.tech');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[var(--input)] border border-[var(--line)] text-[10px] font-bold text-[var(--text)] hover:border-[var(--accent-2)] hover:text-[var(--accent-2)] transition-all cursor-pointer"
+                      >
+                        💬 Community Circles
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPushTitle('DataVerse • New Features Released');
+                          setPushBody('We upgraded DataVerse with lightning-fast speeds and brand new features! Tap to explore.');
+                          setPushUrl('https://dataverse.datalexcloud.tech');
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[var(--input)] border border-[var(--line)] text-[10px] font-bold text-[var(--text)] hover:border-[var(--accent-2)] hover:text-[var(--accent-2)] transition-all cursor-pointer"
+                      >
+                        ✨ New Features
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Form Inputs: Title, Body, URL */}
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[11px] font-black uppercase tracking-wider text-[var(--muted)] block mb-1">
+                        Notification Title
+                      </label>
+                      <input
+                        type="text"
+                        value={pushTitle}
+                        onChange={(e) => setPushTitle(e.target.value)}
+                        placeholder="e.g. DataVerse"
+                        maxLength={50}
+                        className="w-full bg-[var(--input)] border border-[var(--line)] rounded-xl px-3.5 py-2 text-xs text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:border-[var(--accent-2)] transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-black uppercase tracking-wider text-[var(--muted)] block">
+                          Notification Message (Pop-up Body)
+                        </label>
+                        <span className="text-[10px] text-[var(--muted)] font-mono">
+                          {pushBody.length}/180
+                        </span>
+                      </div>
+                      <textarea
+                        value={pushBody}
+                        onChange={(e) => setPushBody(e.target.value)}
+                        placeholder="Write your custom notification text here... This will display directly on user lock screens, desktops and browser pop-ups."
+                        rows={3}
+                        maxLength={180}
+                        className="w-full bg-[var(--input)] border border-[var(--line)] rounded-xl p-3 text-xs text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:border-[var(--accent-2)] transition-colors resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-black uppercase tracking-wider text-[var(--muted)] block mb-1">
+                        Action Target URL (Opens when notification is clicked)
+                      </label>
+                      <input
+                        type="url"
+                        value={pushUrl}
+                        onChange={(e) => setPushUrl(e.target.value)}
+                        placeholder="https://dataverse.datalexcloud.tech"
+                        className="w-full bg-[var(--input)] border border-[var(--line)] rounded-xl px-3.5 py-2 text-xs text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:border-[var(--accent-2)] transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Dispatch Action */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={handleBroadcastPush}
+                      disabled={sendingPush || !pushBody.trim() || (pushAudience === 'users' && selectedPushUsers.length === 0)}
+                      className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs sm:text-sm font-black uppercase tracking-wider shadow-lg shadow-[var(--shadow-accent)] hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {sendingPush ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-[var(--on-accent)]" />
+                          <span>Dispatching Web Push...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>Send Push Notification Now</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[10px] text-center text-[var(--muted)] mt-2">
+                      Delivers natively through Google FCM, Apple APNs, &amp; Mozilla WebPush standards.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right Column: Realistic Smartphone Lock-Screen Preview (5 Cols) */}
+                <div className="lg:col-span-5 flex flex-col space-y-4">
+                  <div className="bg-[var(--card)] border border-[var(--line)] rounded-3xl p-5 sm:p-6 shadow-xl flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-xs font-black uppercase tracking-wider text-[var(--text)] flex items-center gap-1.5">
+                          <Smartphone className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+                          Live Lock-Screen Preview
+                        </span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          Real-time
+                        </span>
+                      </div>
+
+                      {/* Phone Shell Mockup */}
+                      <div className="relative mx-auto w-full max-w-[280px] sm:max-w-[310px] rounded-[36px] p-3 bg-[#020709] border-4 border-[#12282e] shadow-2xl overflow-hidden text-white font-sans">
+                        {/* Phone Camera Notch/Pill */}
+                        <div className="w-24 h-4 bg-black rounded-full mx-auto mb-2 flex items-center justify-center">
+                          <div className="w-2.5 h-2.5 rounded-full bg-[#05181c] border border-white/10" />
+                        </div>
+
+                        {/* Lock Screen Status Bar */}
+                        <div className="flex items-center justify-between text-[10px] text-white/70 px-2 mb-4 font-medium tracking-tight">
+                          <span>11:31</span>
+                          <div className="flex items-center gap-1.5">
+                            <span>5G</span>
+                            <div className="w-3.5 h-2 rounded-sm border border-white/60 relative flex items-center p-0.5">
+                              <div className="w-2 h-full bg-white rounded-xs" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Lock Screen Clock */}
+                        <div className="text-center my-4 space-y-0.5">
+                          <div className="text-3xl font-extralight tracking-tight text-white/90">11:31</div>
+                          <div className="text-[10px] text-teal-200/60 font-medium">Sunday, November 1</div>
+                        </div>
+
+                        {/* Native Notification Card Mockup */}
+                        <div className="relative bg-[#061e24]/90 backdrop-blur-xl border border-teal-500/30 rounded-2xl p-3 shadow-xl transition-all">
+                          {/* Card Header */}
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-[#0b343d] via-[#041d22] to-[#031317] border border-teal-400/50 flex items-center justify-center p-0.5 flex-shrink-0">
+                                <DataVerseLogo size={16} rounded="full" className="w-full h-full object-contain" />
+                              </div>
+                              <span className="text-[10px] font-black uppercase tracking-wider text-teal-300 truncate">
+                                DATAVERSE
+                              </span>
+                            </div>
+                            <span className="text-[9px] text-white/40 font-medium">now</span>
+                          </div>
+
+                          {/* Card Content */}
+                          <div className="space-y-1">
+                            <h5 className="text-[11px] font-bold text-white leading-tight break-words">
+                              {pushTitle.trim() || 'DataVerse'}
+                            </h5>
+                            <p className="text-[10px] text-white/80 leading-snug line-clamp-3 break-words">
+                              {pushBody.trim() || 'Your notification message will appear right here on user lock screens, notifications shades, and desktop displays.'}
+                            </p>
+                          </div>
+
+                          {/* Card Action Subtext */}
+                          <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center justify-between text-[9px] text-teal-300/80">
+                            <span className="truncate">Tap to open {pushUrl.replace(/^https?:\/\//, '')}</span>
+                            <ExternalLink className="w-2.5 h-2.5 flex-shrink-0 ml-1" />
+                          </div>
+                        </div>
+
+                        {/* Phone Bottom Home Bar */}
+                        <div className="w-28 h-1 bg-white/40 rounded-full mx-auto mt-6 mb-1" />
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-[var(--input)] border border-[var(--line)] text-[10px] text-[var(--muted)] space-y-1.5 mt-4">
+                      <div className="font-bold text-[var(--text)] flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        Full Device Compatibility
+                      </div>
+                      <p className="leading-relaxed">
+                        Notifications wake the device screen and alert users even when DataVerse is closed or running in background. Supported on Android Chrome, Windows Edge/Chrome, macOS Safari/Chrome, and iOS 16.4+ (Add to Home Screen).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Past Broadcast History */}
+              <div className="bg-[var(--card)] border border-[var(--line)] rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-black text-[var(--text)] uppercase tracking-wide flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[var(--accent-2)]" />
+                      Recent Broadcast History
+                    </h4>
+                    <p className="text-[11px] text-[var(--muted)] mt-0.5">Log of notifications sent to DataVerse subscribers.</p>
+                  </div>
+                </div>
+
+                {(!pushStats || pushStats.recentCampaigns.length === 0) ? (
+                  <div className="p-8 border border-[var(--line)] bg-[var(--input)] rounded-2xl text-center space-y-1.5">
+                    <Radio className="w-6 h-6 text-[var(--muted)] mx-auto opacity-60" />
+                    <p className="text-xs font-bold text-[var(--text)]">No Broadcasts Sent Yet</p>
+                    <p className="text-[10px] text-[var(--muted)] max-w-sm mx-auto">
+                      Use the composer above to dispatch your first web push notification.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto scrollbar-none">
+                    <div className="space-y-2 min-w-[500px]">
+                      {pushStats.recentCampaigns.map((camp) => (
+                        <div
+                          key={camp.id}
+                          className="p-3.5 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-between gap-4 hover:border-[var(--card-border)] transition-colors"
+                        >
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] border border-[var(--line)] flex items-center justify-center text-[var(--accent-2)] flex-shrink-0 mt-0.5">
+                              <Radio className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs text-[var(--text)] truncate">{camp.title}</span>
+                                <span className="text-[9px] font-extrabold uppercase px-2 py-0.2 rounded-full bg-[var(--card)] border border-[var(--line)] text-[var(--accent-2)]">
+                                  {camp.target_audience === 'all' ? 'All Users' : camp.target_audience === 'inactive_3d' ? 'Inactive > 3d' : camp.target_audience === 'inactive_7d' ? 'Inactive > 7d' : 'Specific Users'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-[var(--muted)] truncate max-w-md mt-0.5">{camp.body}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 flex-shrink-0 text-right">
+                            <div>
+                              <div className="text-xs font-bold text-emerald-400">
+                                {camp.success_count} / {camp.sent_count}
+                              </div>
+                              <div className="text-[9px] text-[var(--muted)]">Delivered</div>
+                            </div>
+                            <div className="text-[10px] font-mono text-[var(--muted)]">
+                              {new Date(camp.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </>

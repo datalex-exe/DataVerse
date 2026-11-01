@@ -18,6 +18,8 @@ import { SidebarThemeSwitch } from './utils/theme';
 
 import { ToastProvider } from './context/ToastContext';
 import { CookieBanner } from './components/CookieBanner';
+import { PushNotificationPrompt } from './components/PushNotificationPrompt';
+import { sendPushHeartbeat } from './utils/push';
 import { DataVerseLogo } from './components/DataVerseLogo';
 
 import { Auth } from './pages/Auth';
@@ -57,8 +59,9 @@ const AppContent: React.FC = () => {
     () => new Set(['feed', 'messages', 'search', 'notifications', 'create', 'profile'])
   );
 
-  // Preload heavy camera modal in idle time
+  // Preload heavy camera modal in idle time and sync push heartbeat
   React.useEffect(() => {
+    sendPushHeartbeat().catch(() => {});
     if (user) {
       const preloadCamera = () => {
         import('./camera/SocialCameraModal').catch(() => {});
@@ -1073,6 +1076,7 @@ const AppContent: React.FC = () => {
       {/* UI UPDATE END */}
 
       <CookieBanner onNavigate={navigate} />
+      <PushNotificationPrompt />
     </div>
   );
 };
