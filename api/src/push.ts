@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from './types';
-import { authMiddleware } from './auth';
+import { authMiddleware, verifyToken } from './auth';
 import * as jose from 'jose';
 
 export const pushApp = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -81,10 +81,9 @@ pushApp.post('/subscribe', async (c) => {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       try {
-        const secret = new TextEncoder().encode(c.env.JWT_SECRET || 'dataverse-production-secure-jwt-key-9b8f2a4e7c1d3f5a8b0c6e4d2a1b');
-        const { payload } = await jose.jwtVerify(token, secret);
-        if (payload?.userId) {
-          userId = String(payload.userId);
+        const verified = await verifyToken(token, c.env.JWT_SECRET);
+        if (verified?.userId) {
+          userId = verified.userId;
         }
       } catch {
         // Continue as anonymous visitor subscription
@@ -201,11 +200,17 @@ pushApp.get('/admin/stats', authMiddleware, async (c) => {
       LIMIT 8
     `).all<any>();
 
+    const { results: userRows } = await c.env.DB.prepare(`
+      SELECT DISTINCT user_id FROM push_subscriptions WHERE user_id IS NOT NULL
+    `).all<any>();
+    const subscribedUserIds = (userRows || []).map((r: any) => r.user_id);
+
     return c.json({
       totalSubscribers: totalSubscribers?.count || 0,
       active3d: active3d?.count || 0,
       inactive3d: inactive3d?.count || 0,
       inactive7d: inactive7d?.count || 0,
+      subscribedUserIds,
       recentCampaigns: recentCampaigns || [],
     });
   } catch (err: any) {
@@ -330,9 +335,14 @@ pushApp.post('/admin/broadcast', authMiddleware, async (c) => {
 
     // 5. Also insert in-app notification for registered users who match target audience
     try {
-      const targetUserIdsToNotify = subscriptions
-        .map(s => s.user_id)
-        .filter((uid): uid is string => !!uid);
+      let targetUserIdsToNotify: string[] = [];
+      if (targetAudience === 'users' && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+        targetUserIdsToNotify = targetUserIds;
+      } else {
+        targetUserIdsToNotify = subscriptions
+          .map(s => s.user_id)
+          .filter((uid): uid is string => !!uid);
+      }
       const uniqueUserIds = [...new Set(targetUserIdsToNotify)];
 
       if (uniqueUserIds.length > 0) {
@@ -345,13 +355,18 @@ pushApp.post('/admin/broadcast', authMiddleware, async (c) => {
       }
     } catch {}
 
+    let message = `Push notification dispatched to ${successCount} device(s).`;
+    if (targetAudience === 'users' && subscriptions.length === 0) {
+      message = `Notice: Selected user(s) have not enabled browser pop-up permissions yet. Alert was saved to their in-app notification center.`;
+    }
+
     return c.json({
       success: true,
       campaignId,
       sentCount: subscriptions.length,
       successCount,
       prunedStale: staleEndpoints.length,
-      message: `Push notification dispatched to ${successCount} device(s).`,
+      message,
     });
   } catch (err: any) {
     console.error('Push broadcast error:', err);

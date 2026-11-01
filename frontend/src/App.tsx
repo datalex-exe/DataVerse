@@ -19,7 +19,7 @@ import { SidebarThemeSwitch } from './utils/theme';
 import { ToastProvider } from './context/ToastContext';
 import { CookieBanner } from './components/CookieBanner';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
-import { sendPushHeartbeat } from './utils/push';
+import { sendPushHeartbeat, registerServiceWorker, autoSyncPushSubscription } from './utils/push';
 import { DataVerseLogo } from './components/DataVerseLogo';
 
 import { Auth } from './pages/Auth';
@@ -59,9 +59,11 @@ const AppContent: React.FC = () => {
     () => new Set(['feed', 'messages', 'search', 'notifications', 'create', 'profile'])
   );
 
-  // Preload heavy camera modal in idle time and sync push heartbeat
+  // Initialize service worker, push heartbeat & auto-sync push subscription
   React.useEffect(() => {
+    registerServiceWorker().catch(() => {});
     sendPushHeartbeat().catch(() => {});
+    autoSyncPushSubscription(token).catch(() => {});
     if (user) {
       const preloadCamera = () => {
         import('./camera/SocialCameraModal').catch(() => {});

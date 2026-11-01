@@ -38,6 +38,25 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   }
 }
 
+export async function checkDevicePushSubscribed(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return false;
+    const sub = await reg.pushManager.getSubscription();
+    return !!sub;
+  } catch {
+    return false;
+  }
+}
+
+export async function autoSyncPushSubscription(token?: string | null): Promise<void> {
+  if (!isPushSupported()) return;
+  if (Notification.permission === 'granted') {
+    await subscribeToPush(token);
+  }
+}
+
 export async function subscribeToPush(token?: string | null): Promise<{ success: boolean; error?: string }> {
   if (!isPushSupported()) {
     return { success: false, error: 'Push notifications are not supported by this browser.' };
@@ -46,26 +65,34 @@ export async function subscribeToPush(token?: string | null): Promise<{ success:
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      return { success: false, error: 'Notification permission was dismissed or blocked.' };
+      return { success: false, error: 'Notification permission was denied or dismissed.' };
     }
 
-    // 1. Fetch VAPID Public Key from Backend
+    // 1. Ensure Service Worker is Active (REGISTER FIRST!)
+    let registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) {
+      registration = await navigator.serviceWorker.register('/arcade-sw.js', { scope: '/' });
+    }
+
+    // Wait until service worker is active/ready
+    if (!registration.active) {
+      await navigator.serviceWorker.ready;
+    }
+
+    // 2. Fetch VAPID Public Key from Backend
     const keyRes = await fetch('/api/push/vapid-public-key');
     if (!keyRes.ok) throw new Error('Failed to retrieve push authorization key');
     const { publicKey } = await keyRes.json();
 
-    // 2. Ensure Service Worker is Active
-    let registration = await navigator.serviceWorker.ready;
-    if (!registration) {
-      registration = (await registerServiceWorker()) || (await navigator.serviceWorker.ready);
+    // 3. Get existing subscription or create a new one
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      const applicationServerKey = urlBase64ToUint8Array(publicKey);
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey as any
+      });
     }
-
-    // 3. Subscribe with PushManager
-    const applicationServerKey = urlBase64ToUint8Array(publicKey);
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey as any
-    });
 
     const subJson = subscription.toJSON();
     if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {

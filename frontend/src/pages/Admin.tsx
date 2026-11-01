@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { DataVerseLogo } from '../components/DataVerseLogo';
+import { subscribeToPush, checkDevicePushSubscribed } from '../utils/push';
 import { 
   Loader2, 
   Shield, 
@@ -200,6 +201,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     active3d: number;
     inactive3d: number;
     inactive7d: number;
+    subscribedUserIds?: string[];
     recentCampaigns: Array<{
       id: string;
       title: string;
@@ -220,6 +222,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const [pushUserFilter, setPushUserFilter] = useState<string>('');
   const [selectedPushUsers, setSelectedPushUsers] = useState<string[]>([]);
   const [sendingPush, setSendingPush] = useState<boolean>(false);
+  const [isThisDeviceSubscribed, setIsThisDeviceSubscribed] = useState<boolean>(false);
+  const [subscribingThisDevice, setSubscribingThisDevice] = useState<boolean>(false);
 
   // 10-State Architecture variables
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
@@ -461,6 +465,53 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleSubscribeCurrentDevice = async () => {
+    setSubscribingThisDevice(true);
+    try {
+      const res = await subscribeToPush(token);
+      if (res.success) {
+        setIsThisDeviceSubscribed(true);
+        toast.success('Success! This device is registered to receive push alerts.');
+        await fetchPushStats();
+      } else {
+        toast.error(res.error || 'Failed to register this device for push.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error subscribing device');
+    } finally {
+      setSubscribingThisDevice(false);
+    }
+  };
+
+  const handleSendTestToThisDevice = async () => {
+    if (!currentUser?.id) return;
+    setSendingPush(true);
+    try {
+      const res = await fetch('/api/push/admin/broadcast', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: 'DataVerse Alert 🚀',
+          body: `Hi @${currentUser.username}, your web push notifications are working perfectly on this device!`,
+          url: 'https://dataverse.datalexcloud.tech',
+          targetAudience: 'users',
+          targetUserIds: [currentUser.id]
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to dispatch test');
+      toast.success(data.message || 'Test push alert dispatched to your device!');
+      await fetchPushStats();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to dispatch test notification');
+    } finally {
+      setSendingPush(false);
+    }
+  };
+
   const handleResolveReport = (reportId: string) => {
     if (!token) return;
     setConfirmDialog({
@@ -583,6 +634,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
         await fetchReports();
       } else if (activeTab === 'push') {
         await fetchPushStats();
+        checkDevicePushSubscribed().then(setIsThisDeviceSubscribed).catch(() => {});
         if (users.length === 0) {
           fetchUsers().catch(() => {});
         }
@@ -1890,6 +1942,53 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 </div>
               </div>
 
+              {/* This Device Push Status Banner */}
+              {!isThisDeviceSubscribed ? (
+                <div className="p-4 sm:p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                      <Bell className="w-5 h-5 animate-bounce" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs sm:text-sm font-bold text-amber-300">This Device Is Not Subscribed To Push Alerts</h4>
+                      <p className="text-[11px] text-amber-200/70 mt-0.5">
+                        To receive pop-up notifications and test them right on this phone or browser, tap the button to enable notifications.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSubscribeCurrentDevice}
+                    disabled={subscribingThisDevice}
+                    className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-2 shrink-0 disabled:opacity-50"
+                  >
+                    {subscribingThisDevice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                    Enable On This Device
+                  </button>
+                </div>
+              ) : (
+                <div className="p-3.5 sm:p-4 rounded-3xl bg-emerald-500/10 border border-emerald-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-fade-in">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-emerald-300 font-bold">This device is subscribed &amp; active as @{currentUser?.username}</span>
+                      <p className="text-[10px] text-emerald-300/70">Ready to receive lock-screen pop-ups and desktop alerts.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSendTestToThisDevice}
+                    disabled={sendingPush}
+                    className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-bold border border-emerald-500/30 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    <Send className="w-3 h-3" />
+                    Send Test Alert To Myself
+                  </button>
+                </div>
+              )}
+
               {/* Main Composer & Mobile Lock-Screen Preview Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Left Form: Notification Composer (7 Cols) */}
@@ -2036,8 +2135,19 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                 <div className="flex items-center gap-2 min-w-0">
                                   <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={28} />
                                   <div className="min-w-0">
-                                    <div className="font-bold text-[var(--text)] truncate text-[11px]">
-                                      {u.display_name || u.username}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-bold text-[var(--text)] truncate text-[11px]">
+                                        {u.display_name || u.username}
+                                      </span>
+                                      {pushStats?.subscribedUserIds?.includes(u.id) ? (
+                                        <span className="px-1.5 py-0.2 rounded text-[8px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                          🔔 Push Active
+                                        </span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.2 rounded text-[8px] font-medium uppercase bg-slate-500/15 text-slate-400 border border-slate-500/20">
+                                          🔕 In-App Only
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-[10px] text-[var(--muted)] truncate">@{u.username}</div>
                                   </div>

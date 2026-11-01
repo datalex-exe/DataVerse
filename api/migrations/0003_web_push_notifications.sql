@@ -29,3 +29,4 @@ CREATE TABLE IF NOT EXISTS push_campaigns (
 );
 
 CREATE INDEX IF NOT EXISTS idx_push_campaigns_created ON push_campaigns(created_at DESC);
+
