@@ -224,6 +224,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const [sendingPush, setSendingPush] = useState<boolean>(false);
   const [isThisDeviceSubscribed, setIsThisDeviceSubscribed] = useState<boolean>(false);
   const [subscribingThisDevice, setSubscribingThisDevice] = useState<boolean>(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   // 10-State Architecture variables
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
@@ -527,6 +528,23 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     } finally {
       setSendingPush(false);
     }
+  };
+
+  const handleDelayedLockScreenTest = () => {
+    let secondsLeft = 5;
+    setCountdown(secondsLeft);
+    toast.info('Lock your phone or exit Chrome now! Notification will pop in 5 seconds...');
+
+    const timer = setInterval(() => {
+      secondsLeft -= 1;
+      if (secondsLeft > 0) {
+        setCountdown(secondsLeft);
+      } else {
+        clearInterval(timer);
+        setCountdown(null);
+        handleSendTestToThisDevice();
+      }
+    }, 1000);
   };
 
   const handleResolveReport = (reportId: string) => {
@@ -1994,15 +2012,26 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       <p className="text-[10px] text-emerald-300/70">Ready to receive lock-screen pop-ups and desktop alerts.</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSendTestToThisDevice}
-                    disabled={sendingPush}
-                    className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-bold border border-emerald-500/30 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
-                  >
-                    <Send className="w-3 h-3" />
-                    Send Test Alert To Myself
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleSendTestToThisDevice}
+                      disabled={sendingPush || countdown !== null}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-bold border border-emerald-500/30 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    >
+                      <Send className="w-3 h-3" />
+                      Send Test Alert
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDelayedLockScreenTest}
+                      disabled={sendingPush || countdown !== null}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-bold border border-amber-500/30 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    >
+                      <Clock className="w-3 h-3" />
+                      {countdown !== null ? `Lock Screen (${countdown}s)...` : 'Lock Phone & Test (5s)'}
+                    </button>
+                  </div>
                 </div>
               )}
 

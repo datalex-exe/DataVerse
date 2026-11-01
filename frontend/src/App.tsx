@@ -61,7 +61,9 @@ const AppContent: React.FC = () => {
 
   // Initialize service worker, push heartbeat & auto-sync push subscription
   React.useEffect(() => {
-    registerServiceWorker().catch(() => {});
+    registerServiceWorker()
+      .then((reg) => reg?.update().catch(() => {}))
+      .catch(() => {});
     sendPushHeartbeat().catch(() => {});
     autoSyncPushSubscription(token).catch(() => {});
     if (user) {

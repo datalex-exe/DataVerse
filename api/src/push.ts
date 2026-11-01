@@ -294,6 +294,7 @@ pushApp.post('/admin/broadcast', authMiddleware, async (c) => {
             'TTL': '86400',
             'Urgency': 'high',
             'Authorization': `vapid t=${jwt}, k=${publicKey}`,
+            'Crypto-Key': `p256ecdsa=${publicKey}`,
           },
         });
 
