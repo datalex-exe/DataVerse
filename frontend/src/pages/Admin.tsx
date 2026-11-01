@@ -725,7 +725,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
 /* THEME START */
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-8 animate-fade-in select-none" style={{ background: 'radial-gradient(ellipse at 50% 0%, var(--glow) 0%, transparent 70%)' }}>
+    <div className="max-w-5xl mx-auto px-4 pt-6 sm:pt-8 pb-32 sm:pb-12 space-y-8 animate-fade-in select-none" style={{ background: 'radial-gradient(ellipse at 50% 0%, var(--glow) 0%, transparent 70%)' }}>
       
       {/* Console Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--line)] pb-6">
@@ -740,16 +740,16 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
         </div>
 
         {/* Tab Selector */}
-        <div role="tablist" aria-label="Admin Console Sections" className="flex items-center gap-1.5 sm:gap-2 w-full overflow-x-auto scrollbar-none pb-2 pt-0.5 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div role="tablist" aria-label="Admin Console Sections" className="flex items-center gap-2 w-full overflow-x-auto scrollbar-none pb-2 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth">
           <button
             type="button"
             role="tab"
             aria-selected={activeTab === 'users'}
             onClick={() => setActiveTab('users')}
-            className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
               activeTab === 'users'
-                ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
-                : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
+                ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
             }`}
           >
             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -761,10 +761,10 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               role="tab"
               aria-selected={activeTab === 'chats'}
               onClick={() => setActiveTab('chats')}
-              className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
                 activeTab === 'chats'
-                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
-                  : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                  : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -776,13 +776,13 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             role="tab"
             aria-selected={activeTab === 'restrictions'}
             onClick={() => setActiveTab('restrictions')}
-            className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
               activeTab === 'restrictions'
-                ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
-                : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
+                ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
             }`}
           >
-            <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Restrictions
           </button>
           {currentUser?.is_top_admin && (
@@ -792,10 +792,10 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 role="tab"
                 aria-selected={activeTab === 'verifications'}
                 onClick={() => setActiveTab('verifications')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
                   activeTab === 'verifications'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
-                    : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                    : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -806,10 +806,10 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 role="tab"
                 aria-selected={activeTab === 'reports'}
                 onClick={() => setActiveTab('reports')}
-                className={`shrink-0 whitespace-nowrap py-1.5 px-3.5 sm:py-2 sm:px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
                   activeTab === 'reports'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)]'
-                    : 'bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
+                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                    : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
                 }`}
               >
                 <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

@@ -666,9 +666,9 @@ export const Auth: React.FC = () => {
         
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-8">
-          {/* Logo in rounded tile with dark --bg color (#040b0d) and 1px border */}
-          <div className="w-16 h-16 mb-4 flex items-center justify-center relative p-1.5 rounded-2xl bg-[#040b0d] border border-white/10 shadow-md overflow-hidden">
-            <DataVerseLogo size={56} rounded="2xl" className="w-full h-full object-contain intro-logo" />
+          {/* Logo in circular disc with radial gradient backdrop and glow border */}
+          <div className="w-16 h-16 mb-4 flex items-center justify-center relative p-1.5 rounded-full bg-gradient-to-br from-[#0b343d] via-[#041d22] to-[#031317] border border-[#2dd4bf]/40 shadow-[0_0_16px_rgba(45,212,191,0.25)] overflow-hidden">
+            <DataVerseLogo size={52} rounded="full" className="w-full h-full object-contain intro-logo" />
           </div>
           {/* THEME END */}
           {/* ANIMATION END */}
