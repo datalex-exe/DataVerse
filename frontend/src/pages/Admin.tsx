@@ -725,22 +725,23 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
 /* THEME START */
   return (
-    <div className="max-w-5xl mx-auto px-4 pt-6 sm:pt-8 pb-32 sm:pb-12 space-y-8 animate-fade-in select-none" style={{ background: 'radial-gradient(ellipse at 50% 0%, var(--glow) 0%, transparent 70%)' }}>
+    <div className="w-full max-w-5xl mx-auto px-4 pt-6 sm:pt-8 pb-32 sm:pb-12 space-y-6 sm:space-y-8 animate-fade-in select-none min-w-0 overflow-x-hidden" style={{ background: 'radial-gradient(ellipse at 50% 0%, var(--glow) 0%, transparent 70%)' }}>
       
       {/* Console Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--line)] pb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[var(--line)] flex items-center justify-center text-[var(--accent-2)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--line)] pb-6 w-full min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-11 h-11 rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[var(--line)] flex items-center justify-center text-[var(--accent-2)] flex-shrink-0">
             <Shield className="w-5.5 h-5.5" />
           </div>
-          <div>
-            <h1 className="text-base font-black text-[var(--text)] tracking-wide uppercase">Admin Console</h1>
-            <p className="text-[10px] text-[var(--muted)] mt-0.5">Global DataVerse platform directory and message logs audit system.</p>
+          <div className="min-w-0">
+            <h1 className="text-base font-black text-[var(--text)] tracking-wide uppercase truncate">Admin Console</h1>
+            <p className="text-[10px] text-[var(--muted)] mt-0.5 line-clamp-2">Global DataVerse platform directory and message logs audit system.</p>
           </div>
         </div>
 
         {/* Tab Selector */}
-        <div role="tablist" aria-label="Admin Console Sections" className="flex items-center gap-2 w-full overflow-x-auto scrollbar-none pb-2 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth">
+        <div className="relative w-full min-w-0 max-w-full">
+          <div role="tablist" aria-label="Admin Console Sections" className="flex items-center gap-2 w-full min-w-0 max-w-full overflow-x-auto scrollbar-none pb-2 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth touch-pan-x">
           <button
             type="button"
             role="tab"
@@ -817,6 +818,9 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               </button>
             </>
           )}
+          </div>
+          {/* Subtle scroll gradient cue on mobile to signal horizontal swipe */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-2 w-8 bg-gradient-to-l from-[var(--bg)] to-transparent sm:hidden" />
         </div>
       </div>
       {/* THEME END */}
@@ -1068,11 +1072,11 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     </div>
 
                     {/* Mobile View (Single-line Rows below 768px: avatar | name and handle | actions) */}
-                    <div className="md:hidden glass-card rounded-2xl overflow-hidden border border-[var(--line)] bg-[var(--card)] shadow-md divide-y divide-[var(--line)]">
+                    <div className="md:hidden glass-card rounded-2xl overflow-hidden border border-[var(--line)] bg-[var(--card)] shadow-md divide-y divide-[var(--line)] w-full min-w-0">
                       {filteredUsers.map(u => (
                         <div 
                           key={u.id} 
-                          className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 min-h-[72px] hover:bg-[var(--hover)] transition-colors"
+                          className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-3 min-h-[72px] hover:bg-[var(--hover)] transition-colors w-full min-w-0"
                         >
                           {/* Col 1: Avatar (44px) */}
                           <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={44} />

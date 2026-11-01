@@ -879,12 +879,12 @@ const AppContent: React.FC = () => {
       {/* THEME END */}
 
       {/* RIGHT MAIN BLOCK (Main Viewport) */}
-      <div className={`flex-1 flex flex-col relative z-10 min-w-0 ${
+      <div className={`flex-1 flex flex-col relative z-10 min-w-0 w-full overflow-x-hidden ${
         activeView === 'messages' 
           ? 'h-full min-h-0 overflow-hidden' 
-          : 'min-h-[100dvh] md:pb-0 pb-16'
+          : 'min-h-[100dvh] md:pb-0 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))]'
       }`}>
-        <main id="main-content" tabIndex={-1} className={`flex-1 relative z-10 flex flex-col focus:outline-none ${activeView === 'messages' ? 'h-full min-h-0 overflow-hidden' : ''}`}>
+        <main id="main-content" tabIndex={-1} className={`flex-1 relative z-10 flex flex-col min-w-0 w-full focus:outline-none ${activeView === 'messages' ? 'h-full min-h-0 overflow-hidden' : ''}`}>
           <React.Suspense fallback={<ViewFallback />}>
             {/* Primary Core Views - Kept mounted once visited for 0ms instant tab switching */}
             {visitedTabs.has('feed') && (
