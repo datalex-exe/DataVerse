@@ -602,8 +602,8 @@ const AppContent: React.FC = () => {
             onClick={() => navigate('feed')}
             className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-transform"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0b343d] via-[#041d22] to-[#031317] border border-[color-mix(in_srgb,var(--accent-2)_45%,transparent)] shadow-[0_0_10px_rgba(45,212,191,0.2)] flex items-center justify-center p-0.5 overflow-hidden">
-              <DataVerseLogo size={28} rounded="full" className="w-full h-full object-contain" />
+            <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+              <DataVerseLogo size={32} rounded="full" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(45,212,191,0.3)]" />
             </div>
             <span className="text-base font-semibold tracking-wide">
               <span className="text-[var(--text)]">Data</span><span className="text-[var(--accent-2)]">Verse</span>
@@ -661,9 +661,7 @@ const AppContent: React.FC = () => {
             }`}
           >
             <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#0b343d] via-[#041d22] to-[#031317] border border-[color-mix(in_srgb,var(--accent-2)_45%,transparent)] shadow-[0_0_12px_rgba(45,212,191,0.2)] flex items-center justify-center p-0.5 overflow-hidden">
-                <DataVerseLogo size={32} rounded="full" className="w-full h-full object-contain" />
-              </div>
+              <DataVerseLogo size={36} rounded="full" className="w-full h-full object-contain drop-shadow-[0_0_10px_rgba(45,212,191,0.35)]" />
             </div>
             <span className={`text-base font-semibold tracking-wide whitespace-nowrap transition-all duration-300 overflow-hidden ${
               isSidebarHovered 

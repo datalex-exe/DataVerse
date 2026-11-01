@@ -1,5 +1,5 @@
-// Offline Arcade service worker for DataVerse (v7)
-const VERSION = "v7";
+// Offline Arcade service worker for DataVerse (v8)
+const VERSION = "v8";
 const SLOW_MS = 6000;
 const OFFLINE_URL = "/arcade-offline.html";
 const CACHE = `offline-arcade-${VERSION}`;
@@ -257,7 +257,7 @@ self.addEventListener("push", (event) => {
         }
       }
 
-      const iconUrl = new URL("/logo.png", self.location.origin).href;
+      const iconUrl = new URL("/logo.png?v=12", self.location.origin).href;
       const options = {
         body: payload.body,
         icon: iconUrl,
