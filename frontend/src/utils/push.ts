@@ -30,7 +30,7 @@ export function getPushPermission(): NotificationPermission {
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!isPushSupported()) return null;
   try {
-    const reg = await navigator.serviceWorker.register('/arcade-sw.js?v=6', { 
+    const reg = await navigator.serviceWorker.register('/arcade-sw.js?v=7', { 
       scope: '/',
       updateViaCache: 'none'
     });
@@ -74,7 +74,7 @@ export async function subscribeToPush(token?: string | null): Promise<{ success:
     // 1. Ensure Service Worker is Active (REGISTER FIRST!)
     let registration = await navigator.serviceWorker.getRegistration();
     if (!registration) {
-      registration = await navigator.serviceWorker.register('/arcade-sw.js?v=6', { 
+      registration = await navigator.serviceWorker.register('/arcade-sw.js?v=7', { 
         scope: '/',
         updateViaCache: 'none'
       });

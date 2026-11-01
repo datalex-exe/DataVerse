@@ -1,5 +1,5 @@
-// Offline Arcade service worker for DataVerse (v6)
-const VERSION = "v6";
+// Offline Arcade service worker for DataVerse (v7)
+const VERSION = "v7";
 const SLOW_MS = 6000;
 const OFFLINE_URL = "/arcade-offline.html";
 const CACHE = `offline-arcade-${VERSION}`;
@@ -263,7 +263,7 @@ self.addEventListener("push", (event) => {
         icon: iconUrl,
         data: { url: payload.url || "https://dataverse.datalexcloud.tech" },
         vibrate: [200, 100, 200],
-        tag: String(payload.id || Date.now()),
+        tag: 'dv-' + (payload.id || 'notif') + '-' + Date.now(),
         renotify: true,
         requireInteraction: true
       };

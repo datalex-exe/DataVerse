@@ -282,9 +282,25 @@ pushApp.post('/admin/broadcast', authMiddleware, async (c) => {
     let successCount = 0;
     const staleEndpoints: string[] = [];
 
+    // 2. Save campaign record FIRST so service worker's /api/push/latest can retrieve it immediately
+    await c.env.DB.prepare(`
+      INSERT INTO push_campaigns (id, sender_id, title, body, url, target_audience, sent_count, success_count, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      campaignId,
+      callerId,
+      finalTitle,
+      finalBody,
+      finalUrl,
+      targetAudience || 'all',
+      subscriptions.length,
+      0,
+      now
+    ).run();
+
     const { publicKey } = getVapidKeys(c.env);
 
-    // 2. Dispatch push to all matching devices
+    // 3. Dispatch push to all matching devices
     for (const sub of subscriptions) {
       try {
         const jwt = await createVapidJwt(sub.endpoint, c.env);
@@ -309,7 +325,12 @@ pushApp.post('/admin/broadcast', authMiddleware, async (c) => {
       }
     }
 
-    // 3. Clean up stale/uninstalled browser endpoints
+    // 4. Update campaign with actual success count
+    await c.env.DB.prepare(`
+      UPDATE push_campaigns SET success_count = ? WHERE id = ?
+    `).bind(successCount, campaignId).run();
+
+    // 5. Clean up stale/uninstalled browser endpoints
     if (staleEndpoints.length > 0) {
       const placeholders = staleEndpoints.map(() => '?').join(',');
       await c.env.DB.prepare(`
@@ -317,22 +338,6 @@ pushApp.post('/admin/broadcast', authMiddleware, async (c) => {
         WHERE endpoint IN (${placeholders})
       `).bind(...staleEndpoints).run();
     }
-
-    // 4. Save campaign record
-    await c.env.DB.prepare(`
-      INSERT INTO push_campaigns (id, sender_id, title, body, url, target_audience, sent_count, success_count, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      campaignId,
-      callerId,
-      finalTitle,
-      finalBody,
-      finalUrl,
-      targetAudience || 'all',
-      subscriptions.length,
-      successCount,
-      now
-    ).run();
 
     // 5. Also insert in-app notification for registered users who match target audience
     try {

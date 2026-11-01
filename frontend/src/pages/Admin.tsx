@@ -491,23 +491,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     if (!currentUser?.id) return;
     setSendingPush(true);
     try {
-      // 1. Immediately trigger native lock-screen notification on this device
-      if ('serviceWorker' in navigator && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        try {
-          const reg = await navigator.serviceWorker.ready;
-          await reg.showNotification('DataVerse Test Alert 🚀', {
-            body: `Hi @${currentUser.username}, native pop-ups are working on this device!`,
-            icon: '/logo.png',
-            tag: 'test-' + Date.now(),
-            requireInteraction: true,
-            data: { url: 'https://dataverse.datalexcloud.tech' }
-          });
-        } catch (localErr) {
-          console.warn('Local native notification test:', localErr);
-        }
-      }
-
-      // 2. Also dispatch remote broadcast through Google FCM
+      // Dispatch remote broadcast through Google FCM to this user's registered device(s)
       const res = await fetch('/api/push/admin/broadcast', {
         method: 'POST',
         headers: {
@@ -516,7 +500,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
         },
         body: JSON.stringify({
           title: 'DataVerse Alert 🚀',
-          body: `Hi @${currentUser.username}, your web push notifications are working perfectly on this device!`,
+          body: `Hi @${currentUser.username}, your web push notifications are working perfectly!`,
           url: 'https://dataverse.datalexcloud.tech',
           targetAudience: 'users',
           targetUserIds: [currentUser.id]
@@ -2029,7 +2013,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           )}
           {/* TAB: WEB PUSH ALERTS & RE-ENGAGEMENT (ADMIN & SUPER ADMIN) */}
           {activeTab === 'push' && (currentUser?.is_admin || currentUser?.is_top_admin) && (
-            <div className="space-y-6 animate-fade-in select-none">
+            <div className="space-y-6 animate-fade-in select-none pb-36 sm:pb-16">
               {/* Header Card */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle_at_top_right,var(--glow),transparent_70%)] pointer-events-none opacity-50" />
@@ -2359,8 +2343,9 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                 <input
                                   type="checkbox"
                                   checked={isSelected}
-                                  onChange={() => {}} // Handled by parent div
-                                  className="accent-[var(--accent-2)] w-4 h-4 cursor-pointer"
+                                  onChange={() => {}}
+                                  tabIndex={-1}
+                                  className="accent-[var(--accent-2)] w-4 h-4 cursor-pointer pointer-events-none"
                                 />
                               </div>
                             );
@@ -2476,8 +2461,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     <button
                       type="button"
                       onClick={handleBroadcastPush}
-                      disabled={sendingPush || !pushBody.trim() || (pushAudience === 'users' && selectedPushUsers.length === 0)}
-                      className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs sm:text-sm font-black uppercase tracking-wider shadow-lg shadow-[var(--shadow-accent)] hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={sendingPush}
+                      className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs sm:text-sm font-black uppercase tracking-wider shadow-lg shadow-[var(--shadow-accent)] hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {sendingPush ? (
                         <>
