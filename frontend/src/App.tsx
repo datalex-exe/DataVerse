@@ -522,16 +522,21 @@ const AppContent: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  // Fullscreen Loading State
+  // Fullscreen Loading State (Smooth theme-aware branded loader)
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#030303] flex flex-col items-center justify-center gap-4 text-slate-400">
-        <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-brand-500/20 animate-bounce bg-slate-900 border border-slate-800 flex items-center justify-center">
-          <span className="text-xl font-black text-white">A</span>
+      <div className="min-h-screen bg-[var(--bg)] flex flex-col items-center justify-center gap-5 text-[var(--muted)] animate-fade-in select-none">
+        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#0b343d] via-[#041d22] to-[#031317] border border-[color-mix(in_srgb,var(--accent-2)_45%,transparent)] shadow-[0_0_24px_rgba(45,212,191,0.22)] flex items-center justify-center p-1.5 animate-pulse">
+          <DataVerseLogo size={46} rounded="full" className="w-full h-full object-contain" />
         </div>
-        <div className="flex items-center gap-2 text-xs font-semibold">
-          <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
-          Restoring DataVerse session...
+        <div className="flex flex-col items-center gap-2">
+          <div className="text-base font-bold tracking-wide">
+            <span className="text-[var(--text)]">Data</span><span className="text-[var(--accent-2)]">Verse</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--muted)]">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent-2)]" />
+            <span>Connecting to DataVerse...</span>
+          </div>
         </div>
       </div>
     );
@@ -888,50 +893,50 @@ const AppContent: React.FC = () => {
           <React.Suspense fallback={<ViewFallback />}>
             {/* Primary Core Views - Kept mounted once visited for 0ms instant tab switching */}
             {visitedTabs.has('feed') && (
-              <div className={activeView === 'feed' ? 'block w-full flex-1' : 'hidden'}>
+              <div className={activeView === 'feed' ? 'block w-full flex-1 animate-fade-in' : 'hidden'}>
                 <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} targetPostId={postParam} />
               </div>
             )}
 
             {visitedTabs.has('messages') && (
-              <div className={activeView === 'messages' ? 'h-full min-h-0 flex-1 flex flex-col' : 'hidden'}>
+              <div className={activeView === 'messages' ? 'h-full min-h-0 flex-1 flex flex-col animate-fade-in' : 'hidden'}>
                 <Chat onToggleBottomNav={setHideBottomNav} onNavigate={navigate} targetConvoId={messagesParam} />
               </div>
             )}
 
             {visitedTabs.has('search') && (
-              <div className={activeView === 'search' ? 'block w-full flex-1' : 'hidden'}>
+              <div className={activeView === 'search' ? 'block w-full flex-1 animate-fade-in' : 'hidden'}>
                 <Explore activeRoom="general" onNavigate={navigate} />
               </div>
             )}
 
             {visitedTabs.has('notifications') && (
-              <div className={activeView === 'notifications' ? 'block w-full flex-1' : 'hidden'}>
+              <div className={activeView === 'notifications' ? 'block w-full flex-1 animate-fade-in' : 'hidden'}>
                 <Activity onNavigate={navigate} />
               </div>
             )}
 
             {visitedTabs.has('create') && (
-              <div className={activeView === 'create' ? 'block w-full flex-1' : 'hidden'}>
+              <div className={activeView === 'create' ? 'block w-full flex-1 animate-fade-in' : 'hidden'}>
                 <Create onNavigate={navigate} />
               </div>
             )}
 
             {visitedTabs.has('profile') && !profileParam && activeView !== 'settings' && (
-              <div className={activeView === 'profile' && !profileParam ? 'block w-full flex-1' : 'hidden'}>
+              <div className={activeView === 'profile' && !profileParam ? 'block w-full flex-1 animate-fade-in' : 'hidden'}>
                 <Profile onNavigate={navigate} />
               </div>
             )}
 
             {/* Dynamic / Parameter-based Views */}
-            {activeView === 'settings' && <Profile initialShowSettings={true} onNavigate={navigate} />}
-            {activeView === 'profile' && !!profileParam && <Profile targetUsername={profileParam} onNavigate={navigate} />}
-            {activeView === 'admin' && <Admin onNavigate={navigate} />}
+            {activeView === 'settings' && <div className="w-full flex-1 animate-fade-in"><Profile initialShowSettings={true} onNavigate={navigate} /></div>}
+            {activeView === 'profile' && !!profileParam && <div className="w-full flex-1 animate-fade-in"><Profile targetUsername={profileParam} onNavigate={navigate} /></div>}
+            {activeView === 'admin' && <div className="w-full flex-1 animate-fade-in"><Admin onNavigate={navigate} /></div>}
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (
-              <Legal type={activeView as any} onNavigate={navigate} />
+              <div className="w-full flex-1 animate-fade-in"><Legal type={activeView as any} onNavigate={navigate} /></div>
             )}
-            {activeView === 'contact' && <Contact onNavigate={navigate} />}
-            {activeView === '404' && <NotFound onNavigate={navigate} />}
+            {activeView === 'contact' && <div className="w-full flex-1 animate-fade-in"><Contact onNavigate={navigate} /></div>}
+            {activeView === '404' && <div className="w-full flex-1 animate-fade-in"><NotFound onNavigate={navigate} /></div>}
           </React.Suspense>
         </main>
       </div>
