@@ -1,5 +1,5 @@
-// Offline Arcade service worker for DataVerse (v5)
-const VERSION = "v5";
+// Offline Arcade service worker for DataVerse (v6)
+const VERSION = "v6";
 const SLOW_MS = 6000;
 const OFFLINE_URL = "/arcade-offline.html";
 const CACHE = `offline-arcade-${VERSION}`;

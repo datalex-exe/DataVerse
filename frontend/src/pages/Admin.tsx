@@ -225,6 +225,9 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const [isThisDeviceSubscribed, setIsThisDeviceSubscribed] = useState<boolean>(false);
   const [subscribingThisDevice, setSubscribingThisDevice] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [diagnosticOpen, setDiagnosticOpen] = useState<boolean>(false);
+  const [diagnosticLogs, setDiagnosticLogs] = useState<{ step: string; status: 'ok' | 'fail' | 'warn' | 'info'; detail: string }[]>([]);
+  const [runningDiagnostic, setRunningDiagnostic] = useState<boolean>(false);
 
   // 10-State Architecture variables
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
@@ -545,6 +548,135 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
         handleSendTestToThisDevice();
       }
     }, 1000);
+  };
+
+  const runPushDiagnostic = async () => {
+    setRunningDiagnostic(true);
+    setDiagnosticOpen(true);
+    const logs: { step: string; status: 'ok' | 'fail' | 'warn' | 'info'; detail: string }[] = [];
+
+    const addLog = (step: string, status: 'ok' | 'fail' | 'warn' | 'info', detail: string) => {
+      logs.push({ step, status, detail });
+      setDiagnosticLogs([...logs]);
+    };
+
+    // Step 1: Check browser support
+    const hasSW = 'serviceWorker' in navigator;
+    const hasNotification = typeof window !== 'undefined' && 'Notification' in window;
+    const hasPushManager = typeof window !== 'undefined' && 'PushManager' in window;
+
+    if (!hasSW || !hasNotification || !hasPushManager) {
+      addLog('Browser Push API', 'fail', 'This browser does not support Web Push notifications.');
+      setRunningDiagnostic(false);
+      return;
+    }
+    addLog('Browser Push API', 'ok', 'ServiceWorker, Notification & PushManager APIs supported.');
+
+    // Step 2: Check Notification Permission
+    const perm = Notification.permission;
+    if (perm === 'granted') {
+      addLog('Browser Permission', 'ok', 'Permission is GRANTED in Chrome.');
+    } else if (perm === 'denied') {
+      addLog('Browser Permission', 'fail', 'Permission is BLOCKED in Chrome. Tap the lock/tune icon near the URL bar in Chrome to reset permissions.');
+      setRunningDiagnostic(false);
+      return;
+    } else {
+      addLog('Browser Permission', 'info', 'Permission is unprompted. Requesting permission now...');
+      const requested = await Notification.requestPermission();
+      if (requested !== 'granted') {
+        addLog('Browser Permission', 'fail', 'Notification permission was denied or dismissed.');
+        setRunningDiagnostic(false);
+        return;
+      }
+      addLog('Browser Permission', 'ok', 'Permission successfully GRANTED!');
+    }
+
+    // Step 3: Register / Update Service Worker
+    let reg: ServiceWorkerRegistration | null | undefined = null;
+    try {
+      addLog('Service Worker', 'info', 'Checking active service worker registration...');
+      reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/arcade-sw.js?v=6', { scope: '/', updateViaCache: 'none' });
+      } else {
+        await reg.update().catch(() => {});
+      }
+      reg = await navigator.serviceWorker.ready;
+      addLog('Service Worker', 'ok', `Service worker is ready & active (Scope: ${reg.scope}).`);
+    } catch (swErr: any) {
+      addLog('Service Worker', 'fail', `Service worker error: ${swErr.message}`);
+      setRunningDiagnostic(false);
+      return;
+    }
+
+    // Step 4: Check Subscription State
+    try {
+      addLog('Device Subscription', 'info', 'Verifying device push subscription in browser...');
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        addLog('Device Subscription', 'warn', 'Device not registered yet. Subscribing now...');
+        const subRes = await subscribeToPush(token);
+        if (!subRes.success) {
+          addLog('Device Subscription', 'fail', `Failed to subscribe: ${subRes.error}`);
+          setRunningDiagnostic(false);
+          return;
+        }
+        setIsThisDeviceSubscribed(true);
+        addLog('Device Subscription', 'ok', 'Successfully registered device endpoint with DataVerse server!');
+      } else {
+        setIsThisDeviceSubscribed(true);
+        addLog('Device Subscription', 'ok', 'Device is actively registered in push_subscriptions database.');
+      }
+    } catch (subErr: any) {
+      addLog('Device Subscription', 'fail', `Subscription check failed: ${subErr.message}`);
+    }
+
+    // Step 5: Direct Local Notification Test
+    try {
+      addLog('Direct Pop-up Test', 'info', 'Triggering direct on-device notification banner...');
+      await reg.showNotification('DataVerse Diagnostic Pop-up 🔔', {
+        body: 'If you see this banner, native notifications are fully functional on your phone!',
+        icon: '/logo.png',
+        tag: 'diag-' + Date.now(),
+        requireInteraction: true,
+        data: { url: 'https://dataverse.datalexcloud.tech' }
+      });
+      addLog('Direct Pop-up Test', 'ok', 'Direct showNotification call succeeded! Check top of your phone screen.');
+    } catch (directErr: any) {
+      addLog('Direct Pop-up Test', 'fail', `Local showNotification failed: ${directErr.message}`);
+    }
+
+    // Step 6: Remote FCM Broadcast Test
+    if (currentUser?.id) {
+      try {
+        addLog('Remote FCM Cloud Dispatch', 'info', 'Dispatching live test from Cloudflare API to Google FCM...');
+        const res = await fetch('/api/push/admin/broadcast', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: 'DataVerse Cloud Alert 🚀',
+            body: `Hi @${currentUser.username}, remote cloud push dispatched successfully!`,
+            url: 'https://dataverse.datalexcloud.tech',
+            targetAudience: 'users',
+            targetUserIds: [currentUser.id]
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.successCount > 0) {
+          addLog('Remote FCM Cloud Dispatch', 'ok', `Google FCM accepted push (Status: 201 Created).`);
+        } else {
+          addLog('Remote FCM Cloud Dispatch', 'warn', data.message || 'Dispatch completed with 0 devices.');
+        }
+      } catch (fcmErr: any) {
+        addLog('Remote FCM Cloud Dispatch', 'fail', `Remote dispatch error: ${fcmErr.message}`);
+      }
+    }
+
+    await fetchPushStats();
+    setRunningDiagnostic(false);
   };
 
   const handleResolveReport = (reportId: string) => {
@@ -1991,15 +2123,25 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSubscribeCurrentDevice}
-                    disabled={subscribingThisDevice}
-                    className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-2 shrink-0 disabled:opacity-50"
-                  >
-                    {subscribingThisDevice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
-                    Enable On This Device
-                  </button>
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={runPushDiagnostic}
+                      className="px-3.5 py-2.5 rounded-xl bg-[var(--card)] hover:bg-[var(--hover)] text-amber-300 font-bold text-xs border border-amber-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Test &amp; Diagnose
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSubscribeCurrentDevice}
+                      disabled={subscribingThisDevice}
+                      className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-2 shrink-0 disabled:opacity-50"
+                    >
+                      {subscribingThisDevice ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                      Enable On This Device
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="p-3.5 sm:p-4 rounded-3xl bg-emerald-500/10 border border-emerald-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-fade-in">
@@ -2013,6 +2155,14 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={runPushDiagnostic}
+                      className="px-3.5 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-[11px] font-bold border border-teal-500/30 transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      Test &amp; Diagnose
+                    </button>
                     <button
                       type="button"
                       onClick={handleSendTestToThisDevice}
@@ -2672,6 +2822,105 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               </span>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Device Push Notification Diagnostic Modal */}
+      {diagnosticOpen && (
+        <div 
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in"
+        >
+          <div className="bg-[var(--card)] border border-[var(--line)] rounded-3xl p-5 sm:p-6 max-w-lg w-full shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--line)]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-[var(--text)] uppercase tracking-wide">
+                    Phone Push Diagnostic
+                  </h3>
+                  <p className="text-[10px] text-[var(--muted)]">Live check of browser, service worker &amp; native pop-up engine.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDiagnosticOpen(false)}
+                className="w-8 h-8 rounded-full bg-[var(--hover)] hover:bg-[var(--card-border)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Logs List */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 py-1 pr-1 font-mono text-xs scrollbar-thin">
+              {diagnosticLogs.map((log, idx) => (
+                <div
+                  key={idx}
+                  className={`p-3 rounded-2xl border ${
+                    log.status === 'ok'
+                      ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+                      : log.status === 'fail'
+                      ? 'bg-red-500/10 border-red-500/25 text-red-300'
+                      : log.status === 'warn'
+                      ? 'bg-amber-500/10 border-amber-500/25 text-amber-300'
+                      : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between font-bold text-[11px] mb-1">
+                    <span>{log.step}</span>
+                    <span className="uppercase text-[9px] px-1.5 py-0.5 rounded-full bg-black/20 font-bold">
+                      {log.status === 'ok' ? 'PASS' : log.status === 'fail' ? 'FAIL' : log.status === 'warn' ? 'WARN' : 'INFO'}
+                    </span>
+                  </div>
+                  <p className="font-sans text-[11px] leading-relaxed break-words">{log.detail}</p>
+                </div>
+              ))}
+
+              {runningDiagnostic && (
+                <div className="p-3 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center gap-2.5 text-xs text-[var(--accent-2)]">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Running step-by-step diagnostic test...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Android Settings Help Box */}
+            <div className="p-3.5 rounded-2xl bg-[var(--input)] border border-[var(--line)] text-[11px] space-y-1.5 text-[var(--muted)]">
+              <div className="font-bold text-[var(--text)] flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+                Still no pop-up on your phone? Check Android OS Settings:
+              </div>
+              <ol className="list-decimal list-inside space-y-1 text-[10px] leading-relaxed text-[var(--muted)] pl-1">
+                <li>Open your Android phone&apos;s <strong className="text-[var(--text)]">Settings</strong> app.</li>
+                <li>Tap <strong className="text-[var(--text)]">Apps &gt; Chrome &gt; Notifications</strong>.</li>
+                <li>Make sure <strong className="text-[var(--text)]">Allow notifications</strong> is turned ON.</li>
+                <li>Tap <strong className="text-[var(--text)]">Notification categories &gt; Sites</strong> and ensure <strong className="text-[var(--text)]">Pop on screen (Banner)</strong> is allowed.</li>
+                <li>Ensure your phone is not in <strong className="text-[var(--text)]">Do Not Disturb</strong> mode.</li>
+              </ol>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-[var(--line)]">
+              <button
+                type="button"
+                onClick={runPushDiagnostic}
+                disabled={runningDiagnostic}
+                className="px-4 py-2 rounded-xl bg-[var(--hover)] hover:bg-[var(--card-border)] text-xs font-bold text-[var(--text)] border border-[var(--line)] transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${runningDiagnostic ? 'animate-spin' : ''}`} />
+                Re-run Test
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiagnosticOpen(false)}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold transition-all cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

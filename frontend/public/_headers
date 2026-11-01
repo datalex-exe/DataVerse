@@ -1,0 +1,6 @@
+/arcade-sw.js
+  Cache-Control: no-cache, no-store, must-revalidate, max-age=0
+  Service-Worker-Allowed: /
+
+/manifest.json
+  Cache-Control: no-cache, must-revalidate, max-age=0

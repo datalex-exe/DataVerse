@@ -156,7 +156,26 @@ export default {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 5. STATIC ASSET REQUESTS (images, fonts, scripts, css)
+    // 5. SERVICE WORKER & MANIFEST (Must never be cached immutably!)
+    // ──────────────────────────────────────────────────────────────────────────
+    const isServiceWorker = url.pathname.includes('sw.js') || url.pathname === '/manifest.json';
+    if (isServiceWorker) {
+      const response = await env.ASSETS.fetch(request);
+      const newHeaders = new Headers(response.headers);
+      for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+        newHeaders.set(key, value);
+      }
+      newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+      newHeaders.set('Service-Worker-Allowed', '/');
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: newHeaders,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 6. STATIC ASSET REQUESTS (images, fonts, scripts, css)
     // ──────────────────────────────────────────────────────────────────────────
     const isStaticFile = /\.(js|css|svg|png|jpg|jpeg|webp|ico|json|woff2?|txt|map)$/i.test(url.pathname);
     if (isStaticFile) {
@@ -165,8 +184,8 @@ export default {
       for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
         newHeaders.set(key, value);
       }
-      // Cache static assets aggressively
-      if (response.status === 200) {
+      // Cache static assets aggressively (except service worker files)
+      if (response.status === 200 && !url.pathname.includes('sw.js')) {
         newHeaders.set('Cache-Control', 'public, max-age=31536000, immutable');
       }
       return new Response(response.body, {

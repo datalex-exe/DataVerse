@@ -359,6 +359,8 @@ pushApp.post('/admin/broadcast', authMiddleware, async (c) => {
     let message = `Push notification dispatched to ${successCount} device(s).`;
     if (targetAudience === 'users' && subscriptions.length === 0) {
       message = `Notice: Selected user(s) have not enabled browser pop-up permissions yet. Alert was saved to their in-app notification center.`;
+    } else if (subscriptions.length > 0 && successCount === 0) {
+      message = `Notice: Contacted push service for ${subscriptions.length} device(s), but delivery could not be completed. Check device network.`;
     }
 
     return c.json({
