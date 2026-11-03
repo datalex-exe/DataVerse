@@ -5,6 +5,7 @@ import { compressImage } from '../utils/compress';
 import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { ImageCropper } from '../components/ImageCropper';
+import { ReportModal } from '../components/ReportModal';
 import { 
   Loader2, 
   Heart, 
@@ -301,6 +302,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
   const [confirmedTxnId, setConfirmedTxnId] = useState<string>('');
 
   // Report form state
+  const [showReportUserModal, setShowReportUserModal] = useState<boolean>(false);
   const [reportTypeInput, setReportTypeInput] = useState<string>('spam');
   const [reportDescInput, setReportDescInput] = useState<string>('');
   const [reportedUsernameInput, setReportedUsernameInput] = useState<string>('');
@@ -4021,23 +4023,42 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                     <button
                       type="button"
                       onClick={handleBlockUser}
-                      className="btn-danger h-10 px-4 text-xs sm:text-sm font-semibold flex items-center justify-center cursor-pointer"
+                      className="btn-danger h-10 px-3.5 text-xs sm:text-sm font-semibold flex items-center justify-center cursor-pointer shrink-0"
                     >
                       Block
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowReportUserModal(true)}
+                      className="h-10 px-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 shrink-0"
+                      title="Report User"
+                    >
+                      <Flag className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Report</span>
+                    </button>
                   </>
                 ) : (
-                  <>
+                  <div className="flex items-center gap-2.5 w-full">
                     {!viewerBlocked && (
                       <button
                         type="button"
                         onClick={handleUnblockUser}
-                        className="btn-secondary w-full h-10 text-xs sm:text-sm font-semibold flex items-center justify-center cursor-pointer"
+                        className="btn-secondary flex-1 h-10 text-xs sm:text-sm font-semibold flex items-center justify-center cursor-pointer"
                       >
                         Unblock
                       </button>
                     )}
-                  </>
+                    <button
+                      type="button"
+                      onClick={() => setShowReportUserModal(true)}
+                      className="h-10 px-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 shrink-0"
+                      title="Report User"
+                    >
+                      <Flag className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Report User</span>
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -4331,6 +4352,15 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
           isAvatar={true}
           onCrop={handleAvatarCropComplete}
           onCancel={() => setAvatarToCrop(null)}
+        />
+      )}
+
+      {showReportUserModal && profile && (
+        <ReportModal
+          isOpen={showReportUserModal}
+          onClose={() => setShowReportUserModal(false)}
+          targetUsername={profile.username}
+          targetType="user"
         />
       )}
 

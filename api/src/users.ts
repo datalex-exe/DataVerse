@@ -1316,17 +1316,17 @@ usersApp.post('/report', authMiddleware, async (c) => {
   }
 });
 
-// ─── ADMIN: GET ALL REPORTS (TOP ADMIN ONLY) ──────────────────────────────────
+// ─── ADMIN: GET ALL REPORTS (ADMIN & TOP ADMIN) ───────────────────────────────
 usersApp.get('/admin/reports', authMiddleware, async (c) => {
   const callerId = c.get('userId');
 
-  // Verify caller is Top Admin
-  const caller = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+  // Verify caller is Admin or Top Admin
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
     .bind(callerId)
     .first<any>();
 
-  if (!caller || !caller.is_top_admin) {
-    return c.json({ error: 'Unauthorized: Top Admin only' }, 403);
+  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
+    return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
   }
 
   // Fetch reports joined with reporter metadata
@@ -1341,18 +1341,18 @@ usersApp.get('/admin/reports', authMiddleware, async (c) => {
   return c.json({ reports: reports || [] });
 });
 
-// ─── ADMIN: RESOLVE/DELETE REPORT (TOP ADMIN ONLY) ────────────────────────────
+// ─── ADMIN: RESOLVE/DELETE REPORT (ADMIN & TOP ADMIN) ─────────────────────────
 usersApp.delete('/admin/reports/:id', authMiddleware, async (c) => {
   const callerId = c.get('userId');
   const reportId = c.req.param('id');
 
-  // Verify caller is Top Admin
-  const caller = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+  // Verify caller is Admin or Top Admin
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
     .bind(callerId)
     .first<any>();
 
-  if (!caller || !caller.is_top_admin) {
-    return c.json({ error: 'Unauthorized: Top Admin only' }, 403);
+  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
+    return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
   }
 
   await c.env.DB.prepare('DELETE FROM reports WHERE id = ?')

@@ -21,8 +21,10 @@ import {
   RefreshCw,
   Compass,
   Lock,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Flag
 } from 'lucide-react';
+import { ReportModal } from '../components/ReportModal';
 
 export type FeedStatus = 
   | 'idle'
@@ -115,6 +117,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
 
   /* UI UPDATE START - More menu state & click outside handler */
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
+  const [reportingPost, setReportingPost] = useState<Post | null>(null);
 
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuPostId(null);
@@ -1043,6 +1046,20 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                           <Share2 className="w-4 h-4 text-[var(--accent-2)]" aria-hidden="true" />
                           Share Link
                         </button>
+
+                        {post.user_id !== user?.id && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenMenuPostId(null);
+                              setReportingPost(post);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors min-h-[38px] cursor-pointer"
+                          >
+                            <Flag className="w-4 h-4 text-rose-400" aria-hidden="true" />
+                            Report Post
+                          </button>
+                        )}
                         
                         {(post.user_id === user?.id || user?.is_admin || user?.is_top_admin) && (
                           <button
@@ -1549,6 +1566,17 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
 
       {/* State Preview Toolbar */}
       {renderStatePreviewToolbar()}
+
+      {/* Report Post / User Modal */}
+      {reportingPost && (
+        <ReportModal
+          isOpen={!!reportingPost}
+          onClose={() => setReportingPost(null)}
+          targetUsername={reportingPost.username}
+          targetPostId={reportingPost.id}
+          targetType="post"
+        />
+      )}
 
     </div>
   );

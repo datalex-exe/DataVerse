@@ -781,6 +781,9 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     try {
       if (activeTab === 'users' || activeTab === 'restrictions' || activeTab === 'verifications') {
         await fetchUsers();
+        if (currentUser?.is_admin || currentUser?.is_top_admin) {
+          fetchReports().catch(() => {});
+        }
       } else if (activeTab === 'reports') {
         await fetchReports();
       } else if (activeTab === 'push') {
@@ -1110,37 +1113,42 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               Push Alerts
             </button>
           )}
+          {(currentUser?.is_admin || currentUser?.is_top_admin) && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'reports'}
+              onClick={() => setActiveTab('reports')}
+              className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
+                activeTab === 'reports'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                  : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+              <span>Reports</span>
+              {reports.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                  {reports.length}
+                </span>
+              )}
+            </button>
+          )}
           {currentUser?.is_top_admin && (
-            <>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === 'verifications'}
-                onClick={() => setActiveTab('verifications')}
-                className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
-                  activeTab === 'verifications'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
-                    : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Verifications
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === 'reports'}
-                onClick={() => setActiveTab('reports')}
-                className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
-                  activeTab === 'reports'
-                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
-                    : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
-                }`}
-              >
-                <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Reports
-              </button>
-            </>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'verifications'}
+              onClick={() => setActiveTab('verifications')}
+              className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
+                activeTab === 'verifications'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                  : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              Verifications
+            </button>
           )}
           </div>
           {/* Subtle scroll gradient cue on mobile to signal horizontal swipe */}
@@ -1930,8 +1938,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             </div>
           )}
 
-          {/* TAB: SAFETY REPORTS (TOP ADMIN ONLY) */}
-          {activeTab === 'reports' && currentUser?.is_top_admin && (
+          {/* TAB: SAFETY REPORTS (ADMIN & TOP ADMIN) */}
+          {activeTab === 'reports' && (currentUser?.is_admin || currentUser?.is_top_admin) && (
             <div className="space-y-6 animate-fade-in select-none">
               <div>
                 <h3 className="text-base font-black text-white tracking-wide uppercase">Safety & Abuse Reports</h3>
