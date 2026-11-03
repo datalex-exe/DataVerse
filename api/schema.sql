@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
   is_blocked INTEGER DEFAULT 0,
   is_private INTEGER DEFAULT 0,
   chat_restricted_until INTEGER DEFAULT 0,
+  suspended_until INTEGER DEFAULT 0,
   is_verification_paid INTEGER DEFAULT 0,
   verification_paid_at INTEGER DEFAULT 0,
   verification_category TEXT,

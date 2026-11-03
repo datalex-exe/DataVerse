@@ -109,7 +109,7 @@ usersApp.get('/', authMiddleware, async (c) => {
 
   try {
     const { results: users } = await c.env.DB.prepare(`
-      SELECT u.id, u.username, u.email, u.display_name, u.avatar_url, u.is_verified, u.is_admin, u.is_top_admin, u.is_blocked, u.chat_restricted_until, u.is_verification_paid, u.verification_paid_at, u.verification_category, u.verification_document_url, u.verification_reason, u.verification_status, u.created_at,
+      SELECT u.id, u.username, u.email, u.display_name, u.avatar_url, u.is_verified, u.is_admin, u.is_top_admin, u.is_blocked, u.suspended_until, u.chat_restricted_until, u.is_verification_paid, u.verification_paid_at, u.verification_category, u.verification_document_url, u.verification_reason, u.verification_status, u.created_at,
              COALESCE(t.enabled, 0) AS has_2fa
       FROM users u
       LEFT JOIN user_2fa t ON u.id = t.user_id
@@ -124,6 +124,7 @@ usersApp.get('/', authMiddleware, async (c) => {
       is_blocked: !!u.is_blocked,
       has_2fa: !!u.has_2fa,
       chat_restricted_until: u.chat_restricted_until || 0,
+      suspended_until: u.suspended_until || 0,
       is_verification_paid: !!u.is_verification_paid,
       verification_paid_at: u.verification_paid_at || 0,
       verification_category: u.verification_category || null,
@@ -1329,16 +1330,300 @@ usersApp.get('/admin/reports', authMiddleware, async (c) => {
     return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
   }
 
-  // Fetch reports joined with reporter metadata
+  // Fetch reports joined with reporter metadata and target user metadata
   const { results: reports } = await c.env.DB.prepare(`
     SELECT r.id, r.reporter_id, r.report_type, r.description, r.reported_username, r.created_at,
-           u.username AS reporter_username, u.display_name AS reporter_display_name
+           u.username AS reporter_username, u.display_name AS reporter_display_name,
+           ru.id AS reported_user_id, ru.display_name AS reported_display_name, ru.avatar_url AS reported_avatar_url,
+           COALESCE(ru.is_blocked, 0) AS reported_is_blocked,
+           COALESCE(ru.chat_restricted_until, 0) AS reported_chat_restricted_until,
+           COALESCE(ru.suspended_until, 0) AS reported_suspended_until,
+           COALESCE(ru.is_admin, 0) AS reported_is_admin,
+           COALESCE(ru.is_top_admin, 0) AS reported_is_top_admin
     FROM reports r
     JOIN users u ON r.reporter_id = u.id
+    LEFT JOIN users ru ON LOWER(REPLACE(COALESCE(r.reported_username, ''), '@', '')) = LOWER(ru.username)
     ORDER BY r.created_at DESC
   `).all();
 
   return c.json({ reports: reports || [] });
+});
+
+// ─── ADMIN: RESOLVE REPORT WITH ACTION (ADMIN & TOP ADMIN) ────────────────────
+usersApp.post('/admin/reports/:id/action', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  const reportId = c.req.param('id');
+  const { action, targetUserId, durationMinutes, reason } = await c.req.json();
+
+  // Verify caller is Admin or Top Admin
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
+    .bind(callerId)
+    .first<any>();
+
+  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
+    return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
+  }
+
+  let enforcementMsg = 'Report resolved';
+
+  if (targetUserId) {
+    const target = await c.env.DB.prepare('SELECT id, username, is_admin, is_top_admin FROM users WHERE id = ?')
+      .bind(targetUserId)
+      .first<any>();
+
+    if (target) {
+      if (target.is_top_admin && !caller.is_top_admin) {
+        return c.json({ error: 'Cannot enforce action against a Super Admin' }, 403);
+      }
+      if (target.id === callerId) {
+        return c.json({ error: 'Cannot enforce action against yourself' }, 400);
+      }
+
+      if (action === 'chat_restrict') {
+        const mins = Number(durationMinutes) || 60;
+        const restrictUntil = Date.now() + mins * 60 * 1000;
+        await c.env.DB.prepare('UPDATE users SET chat_restricted_until = ? WHERE id = ?')
+          .bind(restrictUntil, targetUserId)
+          .run();
+
+        let durationText = `${mins} minutes`;
+        if (mins >= 1440 && mins % 1440 === 0) durationText = `${mins / 1440} day(s)`;
+        else if (mins >= 60 && mins % 60 === 0) durationText = `${mins / 60} hour(s)`;
+
+        try {
+          await c.env.DB.prepare(
+            'INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)'
+          ).bind(
+            crypto.randomUUID(),
+            targetUserId,
+            null,
+            'restriction',
+            `Your chat privileges have been restricted for ${durationText} following safety report review. Reason: ${reason || 'Community Guidelines violation'}.`,
+            Date.now()
+          ).run();
+        } catch (_) {}
+
+        enforcementMsg = `Chat restricted for ${durationText} and report resolved`;
+
+      } else if (action === 'suspend') {
+        const mins = Number(durationMinutes);
+        let durationText = '';
+
+        if (mins === -1) {
+          // Permanent suspension / ban
+          await c.env.DB.prepare('UPDATE users SET is_blocked = 1, suspended_until = 0 WHERE id = ?')
+            .bind(targetUserId)
+            .run();
+          durationText = 'permanently';
+          enforcementMsg = 'Account permanently banned and report resolved';
+        } else {
+          // Time-based suspension (hours/days)
+          const suspendUntil = Date.now() + mins * 60 * 1000;
+          await c.env.DB.prepare('UPDATE users SET suspended_until = ?, is_blocked = 0 WHERE id = ?')
+            .bind(suspendUntil, targetUserId)
+            .run();
+
+          if (mins >= 1440 && mins % 1440 === 0) durationText = `for ${mins / 1440} day(s)`;
+          else if (mins >= 60 && mins % 60 === 0) durationText = `for ${mins / 60} hour(s)`;
+          else durationText = `for ${mins} minutes`;
+
+          enforcementMsg = `Account suspended ${durationText} and report resolved`;
+        }
+
+        try {
+          await c.env.DB.prepare(
+            'INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)'
+          ).bind(
+            crypto.randomUUID(),
+            targetUserId,
+            null,
+            'system',
+            `Your account has been suspended ${durationText}. Reason: ${reason || 'Terms of Service violation'}.`,
+            Date.now()
+          ).run();
+        } catch (_) {}
+
+      } else if (action === 'remove_account') {
+        // Complete account removal
+        await c.env.DB.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').bind(targetUserId, targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?').bind(targetUserId, targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM notifications WHERE user_id = ? OR notifier_id = ?').bind(targetUserId, targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM likes WHERE user_id = ?').bind(targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM comments WHERE user_id = ?').bind(targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM posts WHERE user_id = ?').bind(targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM user_2fa WHERE user_id = ?').bind(targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM backup_codes WHERE user_id = ?').bind(targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').bind(targetUserId).run();
+        await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetUserId).run();
+
+        enforcementMsg = 'Account permanently removed and report resolved';
+      }
+    }
+  }
+
+  // Delete/Resolve the report
+  await c.env.DB.prepare('DELETE FROM reports WHERE id = ?')
+    .bind(reportId)
+    .run();
+
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+      .bind(crypto.randomUUID(), callerId, `report_action_${action || 'resolve'}`, reportId, JSON.stringify({ action, targetUserId, durationMinutes, reason }), Date.now())
+      .run();
+  } catch (_) {}
+
+  return c.json({ success: true, message: enforcementMsg });
+});
+
+// ─── ADMIN: SUSPEND USER DIRECTLY (HOURS / DAYS / PERMANENT) ──────────────────
+usersApp.put('/:id/suspend', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  const targetUserId = c.req.param('id');
+  const { minutes, reason } = await c.req.json();
+
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
+    .bind(callerId)
+    .first<any>();
+
+  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
+    return c.json({ error: 'Unauthorized user suspension request' }, 403);
+  }
+
+  if (callerId === targetUserId) {
+    return c.json({ error: 'Cannot suspend yourself' }, 400);
+  }
+
+  const targetUser = await c.env.DB.prepare('SELECT id, is_top_admin FROM users WHERE id = ?')
+    .bind(targetUserId)
+    .first<any>();
+
+  if (!targetUser) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+
+  if (targetUser.is_top_admin === 1 && caller.is_top_admin !== 1) {
+    return c.json({ error: 'Cannot suspend a top admin' }, 403);
+  }
+
+  try {
+    const mins = Number(minutes);
+    let suspendUntil = 0;
+    let isBlocked = 0;
+    let durationText = '';
+
+    if (mins === -1) {
+      // Permanent ban
+      isBlocked = 1;
+      suspendUntil = 0;
+      durationText = 'permanently';
+    } else if (mins > 0) {
+      // Temporary suspension
+      suspendUntil = Date.now() + mins * 60 * 1000;
+      isBlocked = 0;
+      if (mins >= 1440 && mins % 1440 === 0) durationText = `for ${mins / 1440} day(s)`;
+      else if (mins >= 60 && mins % 60 === 0) durationText = `for ${mins / 60} hour(s)`;
+      else durationText = `for ${mins} minutes`;
+    } else {
+      // Lift suspension
+      suspendUntil = 0;
+      isBlocked = 0;
+    }
+
+    await c.env.DB.prepare('UPDATE users SET suspended_until = ?, is_blocked = ? WHERE id = ?')
+      .bind(suspendUntil, isBlocked, targetUserId)
+      .run();
+
+    if (mins !== 0) {
+      try {
+        await c.env.DB.prepare(
+          'INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)'
+        ).bind(
+          crypto.randomUUID(),
+          targetUserId,
+          null,
+          'system',
+          `Your account has been suspended ${durationText}. Reason: ${reason || 'Community Guidelines violation'}.`,
+          Date.now()
+        ).run();
+      } catch (_) {}
+    }
+
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+        .bind(crypto.randomUUID(), callerId, mins === 0 ? 'lift_suspension' : 'suspend_user', targetUserId, JSON.stringify({ minutes: mins, suspendUntil, isBlocked }), Date.now())
+        .run();
+    } catch (_) {}
+
+    return c.json({ 
+      success: true, 
+      suspended_until: suspendUntil, 
+      is_blocked: isBlocked === 1,
+      message: mins === 0 ? 'Suspension lifted successfully' : `User suspended ${durationText}` 
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ─── ADMIN: REMOVE / DELETE USER ACCOUNT PERMANENTLY ──────────────────────────
+usersApp.delete('/admin/users/:id', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  const targetUserId = c.req.param('id');
+
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
+    .bind(callerId)
+    .first<any>();
+
+  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
+    return c.json({ error: 'Unauthorized user removal request' }, 403);
+  }
+
+  if (callerId === targetUserId) {
+    return c.json({ error: 'Cannot delete yourself from admin console' }, 400);
+  }
+
+  const targetUser = await c.env.DB.prepare('SELECT id, is_top_admin, username FROM users WHERE id = ?')
+    .bind(targetUserId)
+    .first<any>();
+
+  if (!targetUser) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+
+  if (targetUser.is_top_admin === 1 && caller.is_top_admin !== 1) {
+    return c.json({ error: 'Cannot delete a top admin' }, 403);
+  }
+
+  try {
+    await c.env.DB.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').bind(targetUserId, targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM user_blocks WHERE blocker_id = ? OR blocked_id = ?').bind(targetUserId, targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM notifications WHERE user_id = ? OR notifier_id = ?').bind(targetUserId, targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM likes WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM comments WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM posts WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM user_2fa WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM backup_codes WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').bind(targetUserId).run();
+    await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetUserId).run();
+
+    try {
+      await c.env.DB.prepare(
+        'INSERT INTO admin_audit_logs (id, admin_id, action, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      )
+        .bind(crypto.randomUUID(), callerId, 'delete_user_account', targetUserId, JSON.stringify({ targetUsername: targetUser.username }), Date.now())
+        .run();
+    } catch (_) {}
+
+    return c.json({ success: true, message: `Account @${targetUser.username} removed successfully` });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
 });
 
 // ─── ADMIN: RESOLVE/DELETE REPORT (ADMIN & TOP ADMIN) ─────────────────────────

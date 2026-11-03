@@ -62,14 +62,17 @@ export async function authMiddleware(c: Context<{ Bindings: Bindings; Variables:
   c.set('userId', payload.userId);
   c.set('token', token);
 
-  // Check if user is blocked in DB
-  const user = await c.env.DB.prepare('SELECT is_blocked FROM users WHERE id = ?')
+  // Check if user is blocked or suspended in DB
+  const user = await c.env.DB.prepare('SELECT is_blocked, suspended_until FROM users WHERE id = ?')
     .bind(payload.userId)
     .first<any>();
 
-  if (!user || user.is_blocked === 1) {
+  if (!user || user.is_blocked === 1 || (user.suspended_until && user.suspended_until > Date.now())) {
     await c.env.SESSION_KV.delete(kvKey);
-    return c.json({ error: 'This account has been blocked' }, 403);
+    const msg = user?.suspended_until && user.suspended_until > Date.now()
+      ? `This account has been suspended until ${new Date(user.suspended_until).toUTCString()}`
+      : 'This account has been blocked';
+    return c.json({ error: msg }, 403);
   }
 
   await next();
@@ -227,6 +230,10 @@ authApp.post('/login', async (c) => {
 
     if (user.is_blocked) {
       return c.json({ error: 'Account blocked by administrator' }, 403);
+    }
+
+    if (user.suspended_until && user.suspended_until > Date.now()) {
+      return c.json({ error: `Account suspended until ${new Date(user.suspended_until).toUTCString()}` }, 403);
     }
 
     const isMatch = await verifyPassword(String(password), user.password_salt, user.password_hash);

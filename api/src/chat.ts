@@ -228,13 +228,13 @@ export class ChatRoom {
       const [userId, conversationId] = this.state.getTags(ws);
       if (!userId || !conversationId) return;
 
-      const userCheck = await this.env.DB.prepare('SELECT is_blocked FROM users WHERE id = ?')
+      const userCheck = await this.env.DB.prepare('SELECT is_blocked, suspended_until FROM users WHERE id = ?')
         .bind(userId)
         .first<any>();
 
-      if (!userCheck || userCheck.is_blocked === 1) {
-        ws.send(JSON.stringify({ type: 'error', error: 'This account has been blocked' }));
-        ws.close(1008, 'Account blocked');
+      if (!userCheck || userCheck.is_blocked === 1 || (userCheck.suspended_until && userCheck.suspended_until > Date.now())) {
+        ws.send(JSON.stringify({ type: 'error', error: 'This account has been blocked or suspended' }));
+        ws.close(1008, 'Account blocked or suspended');
         return;
       }
 

@@ -94,13 +94,13 @@ app.get('/api/chat/ws/:id', async (c) => {
     return c.text('Unauthorized: Session expired or revoked', 401);
   }
 
-  // Check if user is blocked in DB
-  const user = await c.env.DB.prepare('SELECT is_blocked FROM users WHERE id = ?')
+  // Check if user is blocked or suspended in DB
+  const user = await c.env.DB.prepare('SELECT is_blocked, suspended_until FROM users WHERE id = ?')
     .bind(userId)
     .first<any>();
 
-  if (!user || user.is_blocked === 1) {
-    return c.text('Unauthorized: Account is blocked', 403);
+  if (!user || user.is_blocked === 1 || (user.suspended_until && user.suspended_until > Date.now())) {
+    return c.text('Unauthorized: Account is blocked or suspended', 403);
   }
 
   // Verify membership and existence for private chats

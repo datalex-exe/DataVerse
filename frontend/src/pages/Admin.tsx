@@ -33,7 +33,9 @@ import {
   Target,
   Layers,
   ExternalLink,
-  Check
+  Check,
+  Trash2,
+  MessageSquareOff
 } from 'lucide-react';
 
 export type AdminStatus = 
@@ -61,6 +63,7 @@ interface SystemUser {
   is_blocked: boolean;
   has_2fa?: boolean;
   chat_restricted_until?: number;
+  suspended_until?: number;
   is_verification_paid?: boolean;
   verification_paid_at?: number;
   verification_category?: string | null;
@@ -242,6 +245,13 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     isDestructive?: boolean;
     onConfirm: () => void;
   } | null>(null);
+
+  // Moderation Action Modal States (for resolving reports with enforcement)
+  const [reportActionTarget, setReportActionTarget] = useState<any | null>(null);
+  const [reportActionType, setReportActionType] = useState<'chat_restrict' | 'suspend' | 'remove_account' | 'resolve'>('chat_restrict');
+  const [reportActionDuration, setReportActionDuration] = useState<number>(1440); // 24 hours default
+  const [reportActionReason, setReportActionReason] = useState<string>('');
+  const [executingReportAction, setExecutingReportAction] = useState<boolean>(false);
   const slowTimerRef = useRef<any>(null);
 
   useEffect(() => {
@@ -687,6 +697,72 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
         } catch (err) {
           console.error(err);
           toast.error('Network error resolving report');
+        }
+      }
+    });
+  };
+
+  const handleExecuteReportAction = async () => {
+    if (!reportActionTarget || !token) return;
+    setExecutingReportAction(true);
+    try {
+      const res = await fetch(`/api/users/admin/reports/${reportActionTarget.id}/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: reportActionType,
+          targetUserId: reportActionTarget.reported_user_id,
+          durationMinutes: reportActionDuration,
+          reason: reportActionReason.trim() || undefined
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to execute moderation action');
+      }
+
+      toast.success(data.message || 'Moderation action applied and report resolved.');
+      setReports(prev => prev.filter(r => r.id !== reportActionTarget.id));
+      setReportActionTarget(null);
+      fetchUsers().catch(() => {});
+    } catch (err: any) {
+      toast.error(err.message || 'An error occurred while enforcing action.');
+    } finally {
+      setExecutingReportAction(false);
+    }
+  };
+
+  const handleDeleteUser = (targetUser: SystemUser) => {
+    if (!token) return;
+    if (targetUser.id === currentUser?.id) {
+      toast.error('Cannot delete yourself.');
+      return;
+    }
+    setConfirmDialog({
+      title: `Delete Account @${targetUser.username}?`,
+      description: "Permanently purge this user account, their posts, comments, media, and credentials from the database. This action cannot be undone.",
+      actionLabel: "Permanently Delete",
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const res = await fetch(`/api/users/admin/users/${targetUser.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setUsers(prev => prev.filter(u => u.id !== targetUser.id));
+            toast.success(data.message || 'User account permanently removed.');
+          } else {
+            toast.error(data.error || 'Failed to remove user account');
+          }
+        } catch (err) {
+          toast.error('Network error removing user');
         }
       }
     });
@@ -1397,6 +1473,21 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                               >
                                 {u.is_blocked ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
                               </button>
+
+                              {/* Delete / Remove User Account Permanently */}
+                              <button
+                                onClick={() => handleDeleteUser(u)}
+                                disabled={u.id === currentUser?.id || u.is_top_admin}
+                                aria-label="Delete user account"
+                                title="Permanently Delete Account"
+                                className={`admin-action-btn ${
+                                  u.id === currentUser?.id || u.is_top_admin
+                                    ? 'opacity-40 cursor-not-allowed'
+                                    : 'hover:!text-rose-400 hover:!border-rose-500/40 hover:!bg-rose-500/10'
+                                }`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -1515,6 +1606,21 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                               }`}
                             >
                               {u.is_blocked ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                            </button>
+
+                            {/* Delete User */}
+                            <button
+                              onClick={() => handleDeleteUser(u)}
+                              disabled={u.id === currentUser?.id || u.is_top_admin}
+                              aria-label="Delete user account"
+                              title="Permanently Delete Account"
+                              className={`admin-action-btn ${
+                                u.id === currentUser?.id || u.is_top_admin
+                                  ? 'opacity-40 cursor-not-allowed'
+                                  : 'hover:!text-rose-400 hover:!border-rose-500/40 hover:!bg-rose-500/10'
+                              }`}
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
@@ -1984,11 +2090,39 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
                         {/* Reported user alert banner if present */}
                         {report.reported_username && (
-                          <div className="p-3 bg-red-500/5 border border-red-500/10 rounded-2xl flex items-center gap-2">
-                            <AlertTriangle className="w-4.5 h-4.5 text-red-500 flex-shrink-0" />
-                            <span className="text-[10px] font-extrabold text-red-400">
-                              Reported Account: @{report.reported_username}
-                            </span>
+                          <div className="p-3.5 bg-red-500/5 border border-red-500/10 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <AlertTriangle className="w-4.5 h-4.5 text-red-500 flex-shrink-0" />
+                              <div className="min-w-0">
+                                <span className="text-[11px] font-extrabold text-red-400 block truncate">
+                                  Reported Account: @{report.reported_username}
+                                  {report.reported_display_name ? ` (${report.reported_display_name})` : ''}
+                                </span>
+                                {report.reported_user_id ? (
+                                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                    {report.reported_is_blocked === 1 ? (
+                                      <span className="text-[8px] font-black uppercase tracking-wider text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                                        Permanently Blocked / Banned
+                                      </span>
+                                    ) : report.reported_suspended_until && report.reported_suspended_until > Date.now() ? (
+                                      <span className="text-[8px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                        Suspended ({Math.ceil((report.reported_suspended_until - Date.now()) / (1000 * 60 * 60))}h remaining)
+                                      </span>
+                                    ) : report.reported_chat_restricted_until && report.reported_chat_restricted_until > Date.now() ? (
+                                      <span className="text-[8px] font-black uppercase tracking-wider text-yellow-400 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">
+                                        Chat Restricted ({Math.ceil((report.reported_chat_restricted_until - Date.now()) / (1000 * 60 * 60))}h remaining)
+                                      </span>
+                                    ) : (
+                                      <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                        Active Account
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-[9px] text-slate-500">Account not found or deleted</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         )}
 
@@ -2002,16 +2136,33 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       </div>
 
                       {/* Action buttons */}
-                      <div className="flex items-center justify-between gap-4 pt-3 border-t border-white/[0.03]">
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/[0.03]">
                         <span className="text-[9px] text-slate-600 font-semibold font-mono">
                           ID: {report.id}
                         </span>
-                        <button
-                          onClick={() => handleResolveReport(report.id)}
-                          className="py-2 px-5 bg-brand-600 hover:bg-brand-500 text-white text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-brand-500/10"
-                        >
-                          Mark Resolved
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleResolveReport(report.id)}
+                            className="py-2 px-3.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer border border-white/5"
+                            title="Resolve and dismiss report without taking punitive action"
+                          >
+                            Mark Resolved
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReportActionTarget(report);
+                              setReportActionType('chat_restrict');
+                              setReportActionDuration(1440);
+                              setReportActionReason(`Reported for ${report.report_type.replace(/_/g, ' ')}`);
+                            }}
+                            className="py-2 px-4 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-md shadow-rose-600/20 flex items-center gap-1.5 active:scale-95"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5" />
+                            <span>Take Action</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -2958,6 +3109,254 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               >
                 {confirmDialog.actionLabel}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Moderation Action Modal for Reports */}
+      {reportActionTarget && (
+        <div 
+          role="dialog" 
+          aria-modal="true" 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in select-none"
+          onClick={() => !executingReportAction && setReportActionTarget(null)}
+        >
+          <div 
+            className="w-full max-w-lg bg-[var(--card)] border border-[var(--line)] rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--card)_90%,transparent)]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text)]">
+                    Take Moderation Action
+                  </h3>
+                  <p className="text-[11px] text-[var(--muted)]">
+                    Enforce policy on @{reportActionTarget.reported_username || 'user'} and resolve report
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !executingReportAction && setReportActionTarget(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-5">
+              {/* Report Summary Pill */}
+              <div className="p-3 bg-[color-mix(in_srgb,var(--input)_60%,transparent)] border border-[var(--line)] rounded-2xl space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[var(--muted)] font-medium">Report Reason:</span>
+                  <span className="text-amber-400 font-bold uppercase tracking-wider text-[10px] bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    {reportActionTarget.report_type.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <div className="text-[11px] text-[var(--muted)] truncate">
+                  Reported by: <span className="text-[var(--text)] font-semibold">@{reportActionTarget.reporter_username}</span>
+                </div>
+              </div>
+
+              {/* Action Selection Cards */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-[var(--text)] uppercase tracking-wider">
+                  Select Enforcement Action
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Option 1: Chat Restriction */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReportActionType('chat_restrict');
+                      setReportActionDuration(1440);
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                      reportActionType === 'chat_restrict'
+                        ? 'bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border-[var(--accent)] text-[var(--text)] ring-1 ring-[var(--accent)]'
+                        : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    <MessageSquareOff className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-[var(--text)]">Chat Restriction</div>
+                      <div className="text-[10px] text-[var(--muted)] mt-0.5">Mute direct messages and group chats</div>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Suspension */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReportActionType('suspend');
+                      setReportActionDuration(1440);
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                      reportActionType === 'suspend'
+                        ? 'bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border-[var(--accent)] text-[var(--text)] ring-1 ring-[var(--accent)]'
+                        : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-[var(--text)]">Account Suspension</div>
+                      <div className="text-[10px] text-[var(--muted)] mt-0.5">Temporary lock (hours/days) or ban</div>
+                    </div>
+                  </button>
+
+                  {/* Option 3: Account Removal */}
+                  <button
+                    type="button"
+                    onClick={() => setReportActionType('remove_account')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                      reportActionType === 'remove_account'
+                        ? 'bg-rose-500/10 border-rose-500 text-rose-300 ring-1 ring-rose-500'
+                        : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-rose-400">Account Removal</div>
+                      <div className="text-[10px] text-[var(--muted)] mt-0.5">Purge account and all records</div>
+                    </div>
+                  </button>
+
+                  {/* Option 4: Mark Resolved Only */}
+                  <button
+                    type="button"
+                    onClick={() => setReportActionType('resolve')}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                      reportActionType === 'resolve'
+                        ? 'bg-emerald-500/10 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500'
+                        : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-emerald-400">No Action / Dismiss</div>
+                      <div className="text-[10px] text-[var(--muted)] mt-0.5">Clear report as benign or resolved</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Duration Selector if Chat Restrict or Suspend */}
+              {reportActionType === 'chat_restrict' && (
+                <div className="space-y-2 animate-fade-in">
+                  <label htmlFor="modal-chat-duration" className="block text-xs font-bold text-[var(--text)] uppercase tracking-wider">
+                    Chat Restriction Duration
+                  </label>
+                  <select
+                    id="modal-chat-duration"
+                    value={reportActionDuration}
+                    onChange={(e) => setReportActionDuration(Number(e.target.value))}
+                    className="w-full bg-[var(--input)] border border-[var(--line)] rounded-2xl p-3 text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+                  >
+                    <option value={60}>1 Hour</option>
+                    <option value={720}>12 Hours</option>
+                    <option value={1440}>24 Hours (1 Day)</option>
+                    <option value={4320}>3 Days (72 Hours)</option>
+                    <option value={10080}>7 Days</option>
+                  </select>
+                </div>
+              )}
+
+              {reportActionType === 'suspend' && (
+                <div className="space-y-2 animate-fade-in">
+                  <label htmlFor="modal-suspend-duration" className="block text-xs font-bold text-[var(--text)] uppercase tracking-wider">
+                    Suspension Duration
+                  </label>
+                  <select
+                    id="modal-suspend-duration"
+                    value={reportActionDuration}
+                    onChange={(e) => setReportActionDuration(Number(e.target.value))}
+                    className="w-full bg-[var(--input)] border border-[var(--line)] rounded-2xl p-3 text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
+                  >
+                    <option value={360}>6 Hours</option>
+                    <option value={720}>12 Hours</option>
+                    <option value={1440}>24 Hours (1 Day)</option>
+                    <option value={4320}>3 Days</option>
+                    <option value={10080}>7 Days</option>
+                    <option value={43200}>30 Days</option>
+                    <option value={-1}>🚫 Permanent Account Ban</option>
+                  </select>
+                </div>
+              )}
+
+              {reportActionType === 'remove_account' && (
+                <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-start gap-2.5 text-xs text-rose-300 animate-fade-in">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Warning:</strong> Account removal will permanently purge the user, all posts, likes, comments, and media from the database.
+                  </span>
+                </div>
+              )}
+
+              {/* Note / Reason */}
+              {reportActionType !== 'resolve' && (
+                <div className="space-y-2 animate-fade-in">
+                  <label htmlFor="modal-action-reason" className="block text-xs font-bold text-[var(--text)] uppercase tracking-wider">
+                    Enforcement Reason (Sent to User)
+                  </label>
+                  <input
+                    id="modal-action-reason"
+                    type="text"
+                    value={reportActionReason}
+                    onChange={(e) => setReportActionReason(e.target.value)}
+                    placeholder="e.g. Violation of Community Guidelines regarding harassment"
+                    className="w-full bg-[var(--input)] border border-[var(--line)] rounded-2xl p-3 text-xs text-[var(--text)] placeholder-[var(--muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                  />
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[var(--line)]">
+                <button
+                  type="button"
+                  onClick={() => setReportActionTarget(null)}
+                  disabled={executingReportAction}
+                  className="btn-secondary h-10 px-4 text-xs font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteReportAction}
+                  disabled={executingReportAction}
+                  className={`h-10 px-5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    reportActionType === 'remove_account'
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/20'
+                      : reportActionType === 'resolve'
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
+                      : 'bg-gradient-to-r from-brand-600 to-rose-600 hover:from-brand-500 hover:to-rose-500 text-white shadow-lg shadow-brand-500/20'
+                  }`}
+                >
+                  {executingReportAction ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Executing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="w-4 h-4" />
+                      <span>
+                        {reportActionType === 'resolve'
+                          ? 'Dismiss & Resolve'
+                          : reportActionType === 'remove_account'
+                          ? 'Permanently Remove Account'
+                          : 'Apply & Resolve Report'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
