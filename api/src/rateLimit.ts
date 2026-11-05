@@ -51,7 +51,12 @@ export async function checkRateLimit(
     const remaining = Math.max(0, options.limit - data.count);
     const ttl = Math.max(60, data.resetAt - now); // KV expirationTtl must be at least 60s
 
-    await c.env.SESSION_KV.put(kvKey, JSON.stringify(data), { expirationTtl: ttl });
+    const putPromise = c.env.SESSION_KV.put(kvKey, JSON.stringify(data), { expirationTtl: ttl });
+    if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+      c.executionCtx.waitUntil(putPromise);
+    } else {
+      await putPromise;
+    }
 
     const retryAfter = Math.max(1, data.resetAt - now);
     const allowed = data.count <= options.limit;
@@ -141,7 +146,12 @@ export async function resetFailedLogin(
   try {
     const ip = getClientIp(c);
     const cleanId = identifier.trim().toLowerCase();
-    await c.env.SESSION_KV.delete(`lockout:${ip}:${cleanId}`);
+    const delPromise = c.env.SESSION_KV.delete(`lockout:${ip}:${cleanId}`);
+    if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+      c.executionCtx.waitUntil(delPromise);
+    } else {
+      await delPromise;
+    }
   } catch (err) {
     console.error('Reset failed login error:', err);
   }

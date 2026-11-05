@@ -23,9 +23,14 @@ app.use('*', async (c, next) => {
   c.header('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
 });
 
-// General API Rate Limiting Middleware (120 req/min per IP, excluding static file streams and websockets)
+// General API Rate Limiting Middleware (120 req/min per IP, excluding static file streams, websockets, and dedicated auth endpoints)
 app.use('/api/*', async (c, next) => {
-  if (c.req.path.startsWith('/api/media/file') || c.req.path.startsWith('/api/chat/ws')) {
+  if (
+    c.req.path.startsWith('/api/media/file') ||
+    c.req.path.startsWith('/api/chat/ws') ||
+    c.req.path === '/api/auth/login' ||
+    c.req.path === '/api/auth/signup'
+  ) {
     return next();
   }
   const rl = await checkRateLimit(c, { prefix: 'api_general', limit: 120, windowSeconds: 60 });

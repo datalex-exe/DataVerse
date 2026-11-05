@@ -251,9 +251,7 @@ export const Auth: React.FC = () => {
       }
 
       setAuthSuccessUser(data.user?.display_name || data.user?.username || 'User');
-      setTimeout(() => {
-        login(data.token, data.user);
-      }, 700);
+      login(data.token, data.user);
     } catch (err: any) {
       if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
       if (!navigator.onLine) {

@@ -54,10 +54,14 @@ const AppContent: React.FC = () => {
   const [postParam, setPostParam] = useState<string | undefined>(undefined);
   const [hideBottomNav, setHideBottomNav] = useState<boolean>(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState<boolean>(false);
-  // All primary tabs are mounted in DOM for 0ms instantaneous tab switching
-  const [visitedTabs] = useState<Set<string>>(
-    () => new Set(['feed', 'messages', 'search', 'notifications', 'create', 'profile'])
-  );
+  // Visited tabs are preserved in DOM for 0ms instantaneous tab switching once loaded.
+  // We initialize only with activeView to prevent 6 heavy tabs from mounting and firing concurrent network requests on login.
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['feed']));
+
+  const markTabVisited = (view: string) => {
+    const key = view === 'explore' ? 'search' : view === 'direct' ? 'messages' : view;
+    setVisitedTabs(prev => prev.has(key) ? prev : new Set([...prev, key]));
+  };
 
   // Initialize service worker, push heartbeat & auto-sync push subscription
   React.useEffect(() => {
@@ -416,6 +420,7 @@ const AppContent: React.FC = () => {
       const resolved = resolveRoute(window.location.pathname, window.location.hash);
 
       setActiveView(resolved.view);
+      markTabVisited(resolved.view);
       setProfileParam(resolved.profileParam);
       setMessagesParam(resolved.messagesParam);
       setPostParam(resolved.postParam);
@@ -441,6 +446,7 @@ const AppContent: React.FC = () => {
   }, [resolveRoute]);
 
   const navigate = (newView: string, param?: string) => {
+    markTabVisited(newView);
     let targetPath = '/';
 
     if (newView === 'feed' || newView === 'feed_redirect') {

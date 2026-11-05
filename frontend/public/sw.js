@@ -1,3 +1,3 @@
-// DataVerse Service Worker & Web Push Notifications
-importScripts('/arcade-sw.js');
+// DataVerse Service Worker & Web Push Notifications (v9)
+importScripts('/arcade-sw.js?v=9');
 

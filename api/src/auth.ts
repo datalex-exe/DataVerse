@@ -216,9 +216,13 @@ authApp.post('/login', async (c) => {
       }, 429);
     }
 
-    const user = await c.env.DB.prepare(
-      'SELECT * FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?'
-    )
+    // Single indexed query joining user details and 2FA status
+    const user = await c.env.DB.prepare(`
+      SELECT u.*, COALESCE(t.enabled, 0) AS has_2fa
+      FROM users u
+      LEFT JOIN user_2fa t ON u.id = t.user_id
+      WHERE u.username = ? OR u.email = ?
+    `)
       .bind(cleanLoginId, cleanLoginId)
       .first<any>();
 
@@ -249,17 +253,11 @@ authApp.post('/login', async (c) => {
       return c.json({ error: 'Invalid username/email or password' }, 400);
     }
 
-    // Reset failed login tracking on successful authentication
-    await resetFailedLogin(c, cleanLoginId);
+    // Reset failed login tracking on successful authentication (non-blocking)
+    resetFailedLogin(c, cleanLoginId).catch(() => {});
 
     // Check if user has Two-Factor Authentication enabled
-    const twoFactorConfig = await c.env.DB.prepare(
-      'SELECT enabled FROM user_2fa WHERE user_id = ?'
-    )
-      .bind(user.id)
-      .first<any>();
-
-    if (twoFactorConfig && twoFactorConfig.enabled === 1) {
+    if (user.has_2fa === 1) {
       // Check if current device is trusted (via cookie or header)
       const cookieHeader = c.req.header('Cookie') || '';
       const deviceTokenMatch = cookieHeader.match(/dv_trusted_device=([a-zA-Z0-9]+)/);
