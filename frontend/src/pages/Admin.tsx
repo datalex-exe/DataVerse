@@ -3019,39 +3019,39 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             <div className="space-y-6 animate-fade-in select-none pb-36 sm:pb-16">
               
               {/* Header Card: Cyber Command Vault */}
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 p-6 sm:p-7 rounded-3xl bg-gradient-to-br from-[var(--card)] via-[color-mix(in_srgb,var(--card)_95%,var(--accent-2))] to-[var(--card)] border border-[color-mix(in_srgb,var(--accent-2)_25%,var(--line))] shadow-2xl relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-5 p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-[var(--card)] via-[color-mix(in_srgb,var(--card)_95%,var(--accent-2))] to-[var(--card)] border border-[color-mix(in_srgb,var(--accent-2)_25%,var(--line))] shadow-2xl relative overflow-hidden">
                 {/* Background ambient lighting */}
                 <div className="absolute top-0 right-0 w-96 h-96 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--accent-2)_18%,transparent),transparent_70%)] pointer-events-none" />
                 <div className="absolute -bottom-10 -left-10 w-72 h-72 bg-[radial-gradient(circle_at_bottom_left,color-mix(in_srgb,var(--accent)_12%,transparent),transparent_70%)] pointer-events-none" />
                 
-                <div className="flex items-start gap-4 relative z-10 min-w-0">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[var(--accent)] via-[var(--accent-2)] to-emerald-400 flex items-center justify-center text-[var(--on-accent)] shadow-xl shadow-[var(--shadow-accent)] flex-shrink-0 ring-4 ring-white/10">
-                    <Film className="w-7 h-7" />
+                <div className="flex items-center sm:items-start gap-3 sm:gap-4 relative z-10 min-w-0">
+                  <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-[var(--accent)] via-[var(--accent-2)] to-emerald-400 flex items-center justify-center text-[var(--on-accent)] shadow-xl shadow-[var(--shadow-accent)] flex-shrink-0 ring-2 sm:ring-4 ring-white/10">
+                    <Film className="w-5 h-5 sm:w-7 sm:h-7" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm">
-                        <Shield className="w-3.5 h-3.5 text-amber-400" />
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm">
+                        <Shield className="w-3 h-3 text-amber-400" />
                         Super Admin Vault
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                         Live & Purged Asset Sync
                       </span>
                     </div>
 
-                    <h3 className="text-lg sm:text-xl font-extrabold text-[var(--text)] tracking-tight">
+                    <h3 className="text-base sm:text-xl font-extrabold text-[var(--text)] tracking-tight">
                       System Media Platform
                     </h3>
 
-                    <p className="text-xs text-[var(--muted)] mt-1.5 max-w-2xl leading-relaxed">
+                    <p className="text-[11px] sm:text-xs text-[var(--muted)] mt-1 hidden sm:block max-w-2xl leading-relaxed">
                       Central administrative media repository. Inspect, search, and manage all media assets sent across direct messages, group chats, feed posts, and reels — including deleted and unsent media, indexed by user.
                     </p>
                   </div>
                 </div>
 
                 {/* Top Controls */}
-                <div className="flex items-center gap-2.5 self-start lg:self-center relative z-10">
+                <div className="flex items-center gap-2 relative z-10 self-end sm:self-center">
                   {(mediaUserSearch || mediaStatusFilter !== 'all' || mediaTypeFilter !== 'all' || mediaSourceFilter !== 'all') && (
                     <button
                       type="button"
@@ -3061,10 +3061,10 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                         setMediaTypeFilter('all');
                         setMediaSourceFilter('all');
                       }}
-                      className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-[var(--muted)] hover:text-[var(--text)] border border-[var(--line)] transition-all flex items-center gap-1.5 active:scale-95"
+                      className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-[var(--muted)] hover:text-[var(--text)] border border-[var(--line)] transition-all flex items-center gap-1 active:scale-95"
                     >
                       <X className="w-3.5 h-3.5" />
-                      <span>Reset Filters</span>
+                      <span>Reset</span>
                     </button>
                   )}
 
@@ -3072,17 +3072,17 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     type="button"
                     onClick={fetchAdminMedia}
                     disabled={mediaLoading}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-black tracking-wide shadow-lg shadow-[var(--shadow-accent)] hover:opacity-90 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-black tracking-wide shadow-md hover:opacity-90 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
                     title="Refresh Vault"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${mediaLoading ? 'animate-spin' : ''}`} />
-                    <span>Refresh Vault</span>
+                    <span>Refresh</span>
                   </button>
                 </div>
               </div>
 
               {/* Metric Summary Strip: Interactive Filtering Tiles */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              <div className="flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 overflow-x-auto pb-1 scrollbar-none">
                 {/* Total Assets */}
                 <button
                   type="button"
@@ -3220,24 +3220,24 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               </div>
 
               {/* Filters & Command Toolbar */}
-              <div className="p-4 sm:p-5 rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl flex flex-col gap-4">
+              <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl flex flex-col gap-3">
                 
-                {/* Search Bar + View Toggle */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 text-[var(--muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                {/* Search Bar + View Toggle (Row 1) */}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1 min-w-0">
+                    <Search className="w-3.5 h-3.5 text-[var(--muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
                       value={mediaUserSearch}
                       onChange={(e) => setMediaUserSearch(e.target.value)}
-                      placeholder="Search media by username (@user), display name, or filename..."
-                      className="w-full bg-[var(--input)] border border-[var(--line)] rounded-2xl pl-10 pr-9 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)] transition-all"
+                      placeholder="Search @user, display name, file..."
+                      className="w-full bg-[var(--input)] border border-[var(--line)] rounded-xl pl-9 pr-8 py-2 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-teal-400 transition-all"
                     />
                     {mediaUserSearch && (
                       <button
                         type="button"
                         onClick={() => setMediaUserSearch('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] p-0.5 rounded-md"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] p-0.5 rounded-md"
                         title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -3245,79 +3245,52 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     )}
                   </div>
 
-                  {/* Dropdowns + Layout View Controls */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Status Dropdown */}
-                    <select
-                      value={mediaStatusFilter}
-                      onChange={(e) => setMediaStatusFilter(e.target.value as any)}
-                      aria-label="Filter media by status"
-                      className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
+                  {/* View Mode Toggle: List vs Grid vs Table */}
+                  <div className="flex items-center p-1 bg-[var(--input)] rounded-xl border border-[var(--line)] flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setMediaViewMode('list')}
+                      className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        mediaViewMode === 'list'
+                          ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black shadow-sm'
+                          : 'text-[var(--muted)] hover:text-[var(--text)]'
+                      }`}
+                      title="Phone-Friendly List View"
                     >
-                      <option value="all">Status: All (Sent & Deleted)</option>
-                      <option value="active">🟢 Live / Sent Only</option>
-                      <option value="deleted">🔴 Deleted / Purged Only</option>
-                    </select>
-
-                    {/* Source Dropdown */}
-                    <select
-                      value={mediaSourceFilter}
-                      onChange={(e) => setMediaSourceFilter(e.target.value as any)}
-                      aria-label="Filter media by source"
-                      className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
+                      <List className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-black hidden sm:inline">List</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMediaViewMode('grid')}
+                      className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        mediaViewMode === 'grid'
+                          ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black shadow-sm'
+                          : 'text-[var(--muted)] hover:text-[var(--text)]'
+                      }`}
+                      title="Visual Grid View"
                     >
-                      <option value="all">Source: All</option>
-                      <option value="chat">💬 Chat Messages Only</option>
-                      <option value="post">📰 Posts & Reels Only</option>
-                    </select>
-
-                    {/* View Mode Toggle: List vs Grid vs Table */}
-                    <div className="flex items-center p-1 bg-[var(--input)] rounded-xl border border-[var(--line)]">
-                      <button
-                        type="button"
-                        onClick={() => setMediaViewMode('list')}
-                        className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                          mediaViewMode === 'list'
-                            ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-sm'
-                            : 'text-[var(--muted)] hover:text-[var(--text)]'
-                        }`}
-                        title="Phone-Friendly List View"
-                      >
-                        <List className="w-3.5 h-3.5" />
-                        <span className="text-[11px] font-black hidden sm:inline">List</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMediaViewMode('grid')}
-                        className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                          mediaViewMode === 'grid'
-                            ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-sm'
-                            : 'text-[var(--muted)] hover:text-[var(--text)]'
-                        }`}
-                        title="Visual Grid View"
-                      >
-                        <Layers className="w-3.5 h-3.5" />
-                        <span className="text-[11px] font-black hidden sm:inline">Grid</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMediaViewMode('table')}
-                        className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
-                          mediaViewMode === 'table'
-                            ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-sm'
-                            : 'text-[var(--muted)] hover:text-[var(--text)]'
-                        }`}
-                        title="Audit Table View"
-                      >
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                        <span className="text-[11px] font-black hidden sm:inline">Table</span>
-                      </button>
-                    </div>
+                      <Layers className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-black hidden sm:inline">Grid</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMediaViewMode('table')}
+                      className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        mediaViewMode === 'table'
+                          ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black shadow-sm'
+                          : 'text-[var(--muted)] hover:text-[var(--text)]'
+                      }`}
+                      title="Audit Table View"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-black hidden sm:inline">Table</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Quick-Filter Pills Strip */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-bold">
+                {/* Quick-Filter Pills Strip (Row 2 - Swipeable on mobile) */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-[11px] font-bold">
                   <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider mr-1 flex items-center gap-1">
                     <Sparkles className="w-3 h-3 text-[var(--accent-2)]" />
                     Filter:
@@ -3477,7 +3450,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 </div>
               ) : mediaViewMode === 'list' ? (
                 /* PHONE VIEW FRIENDLY LIST FORMAT */
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-2">
                   {adminMedia.map((item) => {
                     const isVideo = item.media_type === 'video';
                     const isAudio = item.media_type === 'audio';
@@ -3489,18 +3462,18 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       <div
                         key={item.id}
                         onClick={() => setActiveMediaPreview(item)}
-                        className={`group p-2.5 sm:p-3.5 rounded-2xl bg-[var(--card)] border transition-all flex items-center justify-between gap-3 cursor-pointer shadow-md hover:shadow-lg ${
+                        className={`group p-2.5 sm:p-3 rounded-2xl bg-[var(--card)] border transition-all flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer shadow-md hover:shadow-lg active:scale-[0.99] ${
                           isDeleted
-                            ? 'border-rose-500/30 hover:border-rose-500/60 bg-rose-950/5'
+                            ? 'border-rose-500/30 hover:border-rose-500/60 bg-rose-950/10'
                             : 'border-[var(--line)] hover:border-teal-500/40 hover:bg-[var(--hover)]/30'
                         }`}
                       >
-                        {/* Left: Thumbnail with Type Badge */}
-                        <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-950 border border-white/10 flex-shrink-0 relative flex items-center justify-center shadow-inner group-hover:scale-102 transition-transform">
+                        {/* Left: Thumbnail */}
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-950 border border-white/10 flex-shrink-0 relative flex items-center justify-center shadow-inner group-hover:scale-102 transition-transform">
                           {isVideo ? (
                             <div className="w-full h-full relative bg-black flex items-center justify-center">
                               <video src={fileUrl} className="w-full h-full object-cover" preload="none" />
-                              <div className="w-6 h-6 rounded-full bg-teal-500/80 text-slate-950 flex items-center justify-center absolute shadow-md">
+                              <div className="w-6 h-6 rounded-full bg-teal-500 text-slate-950 flex items-center justify-center absolute shadow-md">
                                 <Play className="w-3 h-3 fill-current ml-0.5" />
                               </div>
                             </div>
@@ -3530,56 +3503,48 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                         </div>
 
                         {/* Middle: Details & User */}
-                        <div className="min-w-0 flex-1 flex flex-col gap-1">
-                          {/* User & Origin Row */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="min-w-0 flex-1 flex flex-col gap-0.5 justify-center">
+                          {/* Row 1: Username & Live Status */}
+                          <div className="flex items-center justify-between gap-1">
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setMediaUserSearch(item.user.username);
                               }}
-                              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+                              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity min-w-0"
                               title={`Filter by @${item.user.username}`}
                             >
-                              <div className="w-4 h-4 rounded-full bg-[var(--input)] overflow-hidden flex items-center justify-center text-[8px] font-bold text-teal-400">
+                              <div className="w-3.5 h-3.5 rounded-full bg-[var(--input)] overflow-hidden flex items-center justify-center text-[7px] font-bold text-teal-400 flex-shrink-0">
                                 {item.user.avatar_url ? (
                                   <img src={`/api/media/file/${item.user.avatar_url}`} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                   item.user.username.substring(0, 1).toUpperCase()
                                 )}
                               </div>
-                              <span className="text-xs font-black text-[var(--text)] hover:text-teal-400 transition-colors truncate max-w-[110px] sm:max-w-[160px]">
+                              <span className="text-xs font-black text-teal-300 hover:underline truncate max-w-[120px] sm:max-w-[200px]">
                                 @{item.user.username}
                               </span>
                             </div>
 
-                            <span className="text-white/20">•</span>
-
-                            <span className="text-[10px] text-teal-300 font-semibold bg-teal-500/10 px-1.5 py-0.2 rounded border border-teal-500/20">
-                              {item.source === 'chat' ? '💬 Chat' : '📰 Post'}
-                            </span>
-
-                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${
                               isDeleted ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                             }`}>
                               {isDeleted ? 'Deleted' : 'Live'}
                             </span>
                           </div>
 
-                          {/* File Name */}
-                          <div className="text-xs sm:text-sm font-bold text-[var(--text)] truncate max-w-full" title={item.file_name}>
+                          {/* Row 2: File Name */}
+                          <div className="text-xs font-bold text-[var(--text)] truncate max-w-full leading-tight" title={item.file_name}>
                             {item.file_name}
                           </div>
 
-                          {/* Timestamp / Context */}
-                          <div className="flex items-center gap-2 text-[10px] text-[var(--muted)] font-mono">
+                          {/* Row 3: Source, Date */}
+                          <div className="flex items-center gap-1.5 text-[10px] text-[var(--muted)] font-mono">
+                            <span className="text-teal-400/90 font-sans font-semibold">
+                              {item.source === 'chat' ? '💬 Chat' : '📰 Post'}
+                            </span>
+                            <span>•</span>
                             <span>{new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                            {item.context && item.context !== item.file_name && (
-                              <>
-                                <span className="text-white/20 hidden sm:inline">•</span>
-                                <span className="truncate max-w-[140px] sm:max-w-xs hidden sm:inline text-slate-400">{item.context}</span>
-                              </>
-                            )}
                           </div>
                         </div>
 
@@ -3588,17 +3553,17 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                           <button
                             type="button"
                             onClick={() => setActiveMediaPreview(item)}
-                            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 font-bold text-xs border border-teal-500/30 flex items-center gap-1.5 active:scale-95 shadow-sm"
+                            className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 font-bold text-xs border border-teal-500/30 flex items-center gap-1 active:scale-95 shadow-sm"
                             title="View without downloading"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            <span className="hidden xs:inline">View</span>
+                            <span className="hidden sm:inline">View</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => handlePurgeMedia(item)}
-                            className="p-1.5 sm:p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 active:scale-95 transition-all"
+                            className="p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 active:scale-95 transition-all"
                             title="Purge Media"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -4611,13 +4576,13 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           >
             {/* Top Navigation & Action Controls Bar */}
             <div 
-              className="w-full max-w-5xl flex items-center justify-between gap-2 z-20 pb-2 border-b border-white/10" 
+              className="w-full max-w-5xl flex items-center justify-between gap-1.5 z-20 pb-2 border-b border-white/10" 
               onClick={(e) => e.stopPropagation()}
             >
               {/* Asset counter & Carousel arrows */}
-              <div className="flex items-center gap-2 text-white">
-                <span className="text-xs font-black text-teal-400 bg-teal-500/20 px-2.5 py-1 rounded-xl border border-teal-500/30">
-                  {currIdx >= 0 ? `${currIdx + 1} / ${adminMedia.length}` : 'Asset'}
+              <div className="flex items-center gap-1.5 text-white">
+                <span className="text-[11px] font-black text-teal-400 bg-teal-500/20 px-2 py-0.5 rounded-lg border border-teal-500/30 font-mono">
+                  {currIdx >= 0 ? `${currIdx + 1}/${adminMedia.length}` : 'Asset'}
                 </span>
 
                 {adminMedia.length > 1 && (
@@ -4625,46 +4590,46 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     <button
                       type="button"
                       onClick={handlePrevMedia}
-                      className="p-1.5 sm:p-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-xl border border-white/10 active:scale-90 transition-all"
-                      title="Previous Asset (Left Arrow)"
+                      className="p-1.5 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg border border-white/10 active:scale-90 transition-all"
+                      title="Previous Asset"
                     >
-                      <ChevronLeft className="w-4 h-4" />
+                      <ChevronLeft className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={handleNextMedia}
-                      className="p-1.5 sm:p-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-xl border border-white/10 active:scale-90 transition-all"
-                      title="Next Asset (Right Arrow)"
+                      className="p-1.5 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg border border-white/10 active:scale-90 transition-all"
+                      title="Next Asset"
                     >
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 )}
                 
-                <span className="text-xs text-slate-300 font-bold truncate max-w-[120px] sm:max-w-xs hidden xs:inline" title={activeMediaPreview.file_name}>
+                <span className="text-xs text-slate-300 font-bold truncate max-w-[100px] sm:max-w-xs hidden sm:inline" title={activeMediaPreview.file_name}>
                   {activeMediaPreview.file_name}
                 </span>
               </div>
 
               {/* Right Action buttons */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {/* Direct Open in new tab without downloading */}
                 <a
                   href={fileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 sm:px-3 py-1.5 bg-slate-900/80 hover:bg-slate-800 text-teal-300 rounded-xl transition-all border border-teal-500/30 active:scale-95 flex items-center gap-1.5 text-xs font-bold"
+                  className="p-1.5 sm:px-3 sm:py-1.5 bg-slate-900/90 hover:bg-slate-800 text-teal-300 rounded-lg sm:rounded-xl transition-all border border-teal-500/30 active:scale-95 flex items-center gap-1 text-xs font-bold"
                   title="Open in new browser tab"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Open in Tab</span>
+                  <span className="hidden sm:inline">Open</span>
                 </a>
 
                 {/* Optional Download */}
                 <a
                   href={`/api/media/file/${activeMediaPreview.url}`}
                   download={activeMediaPreview.file_name}
-                  className="p-2 sm:px-3 sm:py-1.5 bg-slate-900/80 hover:bg-slate-800 text-white rounded-xl transition-all border border-white/10 active:scale-95 flex items-center gap-1.5 text-xs font-semibold"
+                  className="p-1.5 sm:px-3 sm:py-1.5 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg sm:rounded-xl transition-all border border-white/10 active:scale-95 flex items-center gap-1 text-xs font-semibold"
                   title="Download File"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -4675,7 +4640,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => handlePurgeMedia(activeMediaPreview)}
-                  className="p-2 sm:px-3 sm:py-1.5 bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 rounded-xl transition-all border border-rose-500/40 active:scale-95 flex items-center gap-1.5 text-xs font-bold"
+                  className="p-1.5 sm:px-3 sm:py-1.5 bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 rounded-lg sm:rounded-xl transition-all border border-rose-500/40 active:scale-95 flex items-center gap-1 text-xs font-bold"
                   title="Purge Asset"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -4686,10 +4651,10 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setActiveMediaPreview(null)}
-                  className="p-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-xl transition-all border border-white/15 active:scale-95 flex items-center justify-center"
+                  className="p-1.5 sm:p-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg sm:rounded-xl transition-all border border-white/15 active:scale-95 flex items-center justify-center"
                   title="Close (Esc)"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
             </div>
