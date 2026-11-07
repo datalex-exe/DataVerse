@@ -95,9 +95,12 @@ conversationsApp.post('/', async (c) => {
 });
 
 
-// GET USER'S CONVERSATIONS
+// GET USER'S CONVERSATIONS (Paginated + Cached query)
 conversationsApp.get('/', async (c) => {
   const currentUserId = c.get('userId');
+  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50);
+  const offset = Math.max(0, parseInt(c.req.query('offset') || '0'));
+
   try {
     // 1. Fetch conversations this user is part of, sorted by last message time or creation time
     const { results: conversations } = await c.env.DB.prepare(`
@@ -130,12 +133,14 @@ conversationsApp.get('/', async (c) => {
           )
         )
       ORDER BY COALESCE(last_message_time, c.created_at) DESC
+      LIMIT ? OFFSET ?
     `)
-      .bind(currentUserId, currentUserId, currentUserId)
+      .bind(currentUserId, currentUserId, currentUserId, limit, offset)
       .all<any>();
 
     if (!conversations || conversations.length === 0) {
-      return c.json({ conversations: [] });
+      c.header('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
+      return c.json({ conversations: [], nextOffset: null });
     }
 
     // 2. Fetch member details for all retrieved conversations in a single batch
@@ -153,7 +158,7 @@ conversationsApp.get('/', async (c) => {
 
     // 3. Assemble conversations and member details
     const result = conversations.map(convo => {
-      const convoMembers = members
+      const convoMembers = (members || [])
         .filter(m => m.conversation_id === convo.id)
         .map(m => ({
           id: m.user_id,
@@ -180,7 +185,11 @@ conversationsApp.get('/', async (c) => {
       };
     });
 
-    return c.json({ conversations: result });
+    c.header('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
+    return c.json({ 
+      conversations: result, 
+      nextOffset: result.length === limit ? offset + limit : null 
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -400,7 +409,10 @@ conversationsApp.get('/:id/messages', async (c) => {
       return c.json({ error: 'Access denied: You are not a participant in this conversation' }, 403);
     }
 
-    // Retrieve all messages (use LEFT JOIN and COALESCE to allow system messages)
+    const limit = Math.min(parseInt(c.req.query('limit') || '40'), 100);
+    const before = c.req.query('before') ? parseInt(c.req.query('before')!) : null;
+
+    // Retrieve latest messages with cursor pagination (use LEFT JOIN and COALESCE to allow system messages)
     const query = `
       SELECT * FROM (
         SELECT m.id, m.conversation_id, m.sender_id, m.body, m.created_at, m.is_deleted,
@@ -413,11 +425,14 @@ conversationsApp.get('/:id/messages', async (c) => {
             (SELECT deleted_at FROM user_chat_deletions WHERE user_id = ? AND conversation_id = m.conversation_id),
             0
           )
+          ${before ? 'AND m.created_at < ?' : ''}
         ORDER BY m.created_at DESC
+        LIMIT ?
       ) ORDER BY created_at ASC
     `;
+    const bindParams = before ? [conversationId, currentUserId, before, limit] : [conversationId, currentUserId, limit];
     const { results: messages } = await c.env.DB.prepare(query)
-      .bind(conversationId, currentUserId)
+      .bind(...bindParams)
       .all<any>();
 
     // Mark as read asynchronously
@@ -461,7 +476,11 @@ conversationsApp.get('/:id/messages', async (c) => {
       }
     }
 
-    return c.json({ messages: formattedMessages });
+    return c.json({ 
+      messages: formattedMessages,
+      hasMore: (messages || []).length === limit,
+      oldestTimestamp: formattedMessages[0]?.created_at || null
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

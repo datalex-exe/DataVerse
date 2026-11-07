@@ -227,43 +227,139 @@ postsApp.post('/', async (c) => {
   }
 });
 
-// GET FEED (following + own posts, excludes muted users)
+// FNV-1a 32-bit deterministic hash algorithm for seeded pseudo-random feed ordering
+function fnv1a(str: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+interface FeedCandidateCacheEntry {
+  posts: any[];
+  expiresAt: number;
+}
+const feedCandidateCache = new Map<string, FeedCandidateCacheEntry>();
+
+// GET FEED (deterministic seeded pseudo-random order + cursor pagination + batched extras)
 postsApp.get('/feed', async (c) => {
   const userId = c.get('userId');
-  const limit = Math.min(parseInt(c.req.query('limit') || '10'), 30);
-  const offset = parseInt(c.req.query('offset') || '0');
+  const limit = Math.min(parseInt(c.req.query('limit') || '10'), 25);
+  const cursor = Math.max(0, parseInt(c.req.query('cursor') || '0'));
+  const feedSeed = c.req.query('feedSeed') || c.req.query('seed') || 'default_seed';
 
   try {
-    // 1. Fetch posts
-    const { results: posts } = await c.env.DB.prepare(`
-      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
-        u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
-        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
-        (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) AS is_liked,
-        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
-      FROM posts p
-      JOIN users u ON p.user_id = u.id
-      WHERE (u.is_private = 0 OR p.user_id = ? OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = ? AND is_accepted = 1))
-        AND p.user_id NOT IN (
-          SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
-          UNION
-          SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
-        )
-        AND p.user_id NOT IN (
-          SELECT muted_id FROM user_mutes WHERE muter_id = ?
-        )
-      ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
-    `)
-      .bind(userId, userId, userId, userId, userId, userId, limit, offset)
-      .all<any>();
+    const now = Date.now();
+    const cacheKey = `${userId}:${feedSeed}`;
+    let rankedPosts: any[] = [];
 
-    if (!posts || posts.length === 0) {
-      return c.json({ posts: [] });
+    const cachedEntry = feedCandidateCache.get(cacheKey);
+    if (cachedEntry && cachedEntry.expiresAt > now) {
+      rankedPosts = cachedEntry.posts;
+    } else {
+      // 1. Fetch candidate pool of eligible posts without correlated subqueries
+      const { results: rawCandidates } = await c.env.DB.prepare(`
+        SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+          u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        WHERE (u.is_private = 0 OR p.user_id = ? OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = ? AND is_accepted = 1))
+          AND p.user_id NOT IN (
+            SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
+            UNION
+            SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
+          )
+          AND p.user_id NOT IN (
+            SELECT muted_id FROM user_mutes WHERE muter_id = ?
+          )
+        ORDER BY p.created_at DESC
+        LIMIT 300
+      `)
+        .bind(userId, userId, userId, userId, userId)
+        .all<any>();
+
+      const candidates = rawCandidates || [];
+
+      // 2. Score deterministically using FNV-1a hash of (post_id + seed) + recency bonus
+      const scored = candidates.map(p => {
+        const hashNorm = fnv1a(p.id + feedSeed) / 4294967295;
+        const recencyHours = Math.max(0, (now - p.created_at) / (1000 * 3600));
+        const recencyWeight = Math.exp(-recencyHours / 48) * 0.25;
+        return { post: p, score: hashNorm + recencyWeight };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      rankedPosts = scored.map(s => s.post);
+
+      // 3. Author diversity: avoid same author back to back
+      for (let i = 0; i < rankedPosts.length - 1; i++) {
+        if (rankedPosts[i].user_id === rankedPosts[i + 1].user_id) {
+          for (let j = i + 2; j < rankedPosts.length; j++) {
+            if (rankedPosts[j].user_id !== rankedPosts[i].user_id) {
+              const tmp = rankedPosts[i + 1];
+              rankedPosts[i + 1] = rankedPosts[j];
+              rankedPosts[j] = tmp;
+              break;
+            }
+          }
+        }
+      }
+
+      // Cache candidate pool in worker memory for 45 seconds
+      feedCandidateCache.set(cacheKey, { posts: rankedPosts, expiresAt: now + 45000 });
+      // Clean up old entries if cache grows
+      if (feedCandidateCache.size > 200) {
+        for (const [k, v] of feedCandidateCache.entries()) {
+          if (v.expiresAt <= now) feedCandidateCache.delete(k);
+        }
+      }
     }
 
-    const feed = await attachPostExtras(posts, c.env.DB, userId);
-    return c.json({ posts: feed });
+    if (rankedPosts.length === 0 || cursor >= rankedPosts.length) {
+      c.header('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
+      return c.json({ posts: [], nextCursor: null, feedSeed });
+    }
+
+    // 4. Slice requested batch
+    const pagePosts = rankedPosts.slice(cursor, cursor + limit);
+    const nextCursor = (cursor + limit < rankedPosts.length) ? String(cursor + limit) : null;
+
+    // 5. Batched extras: query counts, likes, media, and polls ONLY for the requested page
+    const postIds = pagePosts.map(p => p.id);
+    const placeholders = postIds.map(() => '?').join(',');
+
+    const [likesRes, userLikesRes, commentsRes] = await Promise.all([
+      c.env.DB.prepare(`
+        SELECT post_id, COUNT(*) as count FROM likes WHERE post_id IN (${placeholders}) GROUP BY post_id
+      `).bind(...postIds).all<any>(),
+      c.env.DB.prepare(`
+        SELECT post_id FROM likes WHERE user_id = ? AND post_id IN (${placeholders})
+      `).bind(userId, ...postIds).all<any>(),
+      c.env.DB.prepare(`
+        SELECT post_id, COUNT(*) as count FROM comments WHERE post_id IN (${placeholders}) GROUP BY post_id
+      `).bind(...postIds).all<any>()
+    ]);
+
+    const likesCountMap: Record<string, number> = {};
+    (likesRes.results || []).forEach(r => { likesCountMap[r.post_id] = r.count; });
+
+    const userLikesSet = new Set((userLikesRes.results || []).map(r => r.post_id));
+
+    const commentsCountMap: Record<string, number> = {};
+    (commentsRes.results || []).forEach(r => { commentsCountMap[r.post_id] = r.count; });
+
+    const postsWithCounts = pagePosts.map(p => ({
+      ...p,
+      likes_count: likesCountMap[p.id] || 0,
+      is_liked: userLikesSet.has(p.id) ? 1 : 0,
+      comments_count: commentsCountMap[p.id] || 0
+    }));
+
+    const feed = await attachPostExtras(postsWithCounts, c.env.DB, userId);
+    c.header('Cache-Control', 'private, max-age=15, stale-while-revalidate=60');
+    return c.json({ posts: feed, nextCursor, feedSeed });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

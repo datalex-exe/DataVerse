@@ -341,15 +341,22 @@ const ChatProfileModalComponent: React.FC<ChatProfileModalProps> = ({
     return partner?.username ? partner.username.substring(0, 2).toUpperCase() : 'DV';
   }, [partner?.username]);
 
-  // Background SWR revalidation
+  // Background SWR revalidation (Prefetched once and cached permanently in memory)
   useEffect(() => {
     if (!isOpen || !conversation.id) return;
 
+    // If already cached in memory, never refetch or lag on tab switches or modal re-opens
+    if (sharedDataCache.has(conversation.id)) {
+      setSharedData(sharedDataCache.get(conversation.id)!);
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
 
-    // Check if we already have local data
-    const hasExistingData = sharedDataCache.has(conversation.id) || (messages && messages.length > 0);
-    if (!hasExistingData) {
+    // Check if we already have local message data
+    const hasLocalData = messages && messages.length > 0;
+    if (!hasLocalData) {
       setLoading(true);
     }
 
@@ -660,231 +667,223 @@ const ChatProfileModalComponent: React.FC<ChatProfileModalProps> = ({
                 </button>
               </div>
 
-              {/* Tab Content Display with GPU-accelerated transition */}
+              {/* Tab Content Display with permanent mounted panels (zero teardown lag) */}
               {loading ? (
-                <div className="py-16 flex flex-col items-center justify-center text-[var(--muted)] gap-2 animate-fade-in">
+                <div className="py-16 flex flex-col items-center justify-center text-[var(--muted)] gap-2 animate-fade-in min-h-[380px]">
                   <Loader2 className="w-7 h-7 animate-spin text-[var(--accent-2)]" />
                   <span className="text-xs font-medium">Loading shared media...</span>
                 </div>
               ) : (
-                <div key={activeTab} className="animate-tab-slide will-change-transform min-h-[220px]">
+                <div className="relative min-h-[380px] w-full">
                   {/* MEDIA TAB */}
-                  {activeTab === 'media' && (
-                    <div>
-                      {sharedData.media.length === 0 ? (
-                        <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
-                          <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
-                            <ImageIcon className="w-6 h-6 opacity-60" />
-                          </div>
-                          <p className="text-xs font-semibold text-[var(--text)]">No media shared yet</p>
-                          <p className="text-[11px] text-[var(--muted)] mt-0.5">Photos and videos sent in this chat will appear here</p>
+                  <div className={`transition-opacity duration-150 ${activeTab === 'media' ? 'block opacity-100' : 'hidden opacity-0'}`}>
+                    {sharedData.media.length === 0 ? (
+                      <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
+                        <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
+                          <ImageIcon className="w-6 h-6 opacity-60" />
                         </div>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-2">
-                          {sharedData.media.map((item) => {
-                            const isVideo = item.media_type === 'video';
-                            const mediaUrl = `/api/media/file/${item.url}`;
-
-                            return (
-                              <div
-                                key={item.id}
-                                onClick={() => {
-                                  if (isVideo) {
-                                    if (onOpenFullscreenVideo) {
-                                      onOpenFullscreenVideo(mediaUrl, !!item.allow_save);
-                                    }
-                                  } else {
-                                    setFullscreenImage(mediaUrl);
-                                  }
-                                }}
-                                className="group relative aspect-square rounded-xl overflow-hidden bg-[var(--input)] border border-[var(--line)] cursor-pointer hover:border-[var(--accent-2)] transition-colors shadow-sm"
-                              >
-                                {isVideo ? (
-                                  <div className="w-full h-full relative bg-black/60 flex items-center justify-center">
-                                    <video 
-                                      src={mediaUrl} 
-                                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none"
-                                      preload="none"
-                                    />
-                                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                                      <div className="w-8 h-8 rounded-full bg-black/70 border border-white/20 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
-                                        <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                                      </div>
-                                    </div>
-                                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-sm text-[9px] font-bold text-white flex items-center gap-1">
-                                      <Film className="w-2.5 h-2.5" />
-                                      <span>Video</span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <img 
-                                    src={mediaUrl} 
-                                    alt="Shared media" 
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
-                                  />
-                                )}
-                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between text-[9px] text-white/90">
-                                  <span className="truncate max-w-[70%]">@{item.sender.username}</span>
-                                  <span>{formatDate(item.created_at)}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* LINKS TAB */}
-                  {activeTab === 'links' && (
-                    <div className="space-y-2">
-                      {sharedData.links.length === 0 ? (
-                        <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
-                          <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
-                            <LinkIcon className="w-6 h-6 opacity-60" />
-                          </div>
-                          <p className="text-xs font-semibold text-[var(--text)]">No links shared yet</p>
-                          <p className="text-[11px] text-[var(--muted)] mt-0.5">URLs and web links sent in this chat will appear here</p>
-                        </div>
-                      ) : (
-                        sharedData.links.map((link) => (
-                          <div
-                            key={link.id}
-                            className="p-3 rounded-2xl bg-[var(--input)]/60 hover:bg-[var(--input)] border border-[var(--line)] hover:border-[var(--line-strong)] transition-colors flex items-start gap-3 group"
-                          >
-                            <div className="w-9 h-9 rounded-xl bg-[var(--accent)]/15 border border-[var(--accent)]/20 flex items-center justify-center text-[var(--accent-2)] flex-shrink-0 mt-0.5">
-                              <LinkIcon className="w-4 h-4" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent-2)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded">
-                                  {link.domain}
-                                </span>
-                                <span className="text-[10px] text-[var(--muted)]">•</span>
-                                <span className="text-[10px] text-[var(--muted)]">@{link.sender.username}</span>
-                                <span className="text-[10px] text-[var(--muted)] ml-auto">{formatDate(link.created_at)}</span>
-                              </div>
-                              <a
-                                href={link.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs font-semibold text-[var(--text)] hover:text-[var(--accent-2)] hover:underline truncate block"
-                                title={link.url}
-                              >
-                                {link.url}
-                              </a>
-                              {link.snippet && link.snippet !== link.url && (
-                                <p className="text-[11px] text-[var(--muted)] line-clamp-1 mt-0.5">
-                                  {link.snippet}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 flex-shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(link.url, link.id)}
-                                className="p-1.5 rounded-lg bg-[var(--card)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
-                                title="Copy link"
-                              >
-                                {copiedLink === link.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                              </button>
-                              <a
-                                href={link.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1.5 rounded-lg bg-[var(--card)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
-                                title="Open link"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-
-                  {/* FILES TAB */}
-                  {activeTab === 'files' && (
-                    <div className="space-y-2">
-                      {sharedData.files.length === 0 ? (
-                        <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
-                          <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
-                            <FolderIcon className="w-6 h-6 opacity-60" />
-                          </div>
-                          <p className="text-xs font-semibold text-[var(--text)]">No files shared yet</p>
-                          <p className="text-[11px] text-[var(--muted)] mt-0.5">Documents, archives, and attachments will appear here</p>
-                        </div>
-                      ) : (
-                        sharedData.files.map((file) => {
-                          const extColorClass = getFileExtensionColor(file.file_name);
-                          const downloadUrl = `/api/media/file/${file.url}`;
+                        <p className="text-xs font-semibold text-[var(--text)]">No media shared yet</p>
+                        <p className="text-[11px] text-[var(--muted)] mt-0.5">Photos and videos sent in this chat will appear here</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2">
+                        {sharedData.media.map((item) => {
+                          const isVideo = item.media_type === 'video';
+                          const mediaUrl = `/api/media/file/${item.url}`;
 
                           return (
                             <div
-                              key={file.id}
-                              className="p-3 rounded-2xl bg-[var(--input)]/60 hover:bg-[var(--input)] border border-[var(--line)] hover:border-[var(--line-strong)] transition-colors flex items-center gap-3"
+                              key={item.id}
+                              onClick={() => {
+                                if (isVideo) {
+                                  if (onOpenFullscreenVideo) {
+                                    onOpenFullscreenVideo(mediaUrl, !!item.allow_save);
+                                  }
+                                } else {
+                                  setFullscreenImage(mediaUrl);
+                                }
+                              }}
+                              className="group relative aspect-square rounded-xl overflow-hidden bg-[var(--input)] border border-[var(--line)] cursor-pointer hover:border-[var(--accent-2)] transition-colors shadow-sm"
                             >
-                              <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${extColorClass}`}>
-                                <FileText className="w-5 h-5" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-[var(--text)] truncate" title={file.file_name || 'Shared Document'}>
-                                  {file.file_name || 'Shared Document'}
-                                </p>
-                                <div className="flex items-center gap-2 text-[10px] text-[var(--muted)] mt-0.5">
-                                  <span>@{file.sender.username}</span>
-                                  <span>•</span>
-                                  <span>{formatDate(file.created_at)}</span>
+                              {isVideo ? (
+                                <div className="w-full h-full relative bg-black/60 flex items-center justify-center">
+                                  <video 
+                                    src={mediaUrl} 
+                                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none"
+                                    preload="none"
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                    <div className="w-8 h-8 rounded-full bg-black/70 border border-white/20 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
+                                      <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                                    </div>
+                                  </div>
+                                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-sm text-[9px] font-bold text-white flex items-center gap-1">
+                                    <Film className="w-2.5 h-2.5" />
+                                    <span>Video</span>
+                                  </div>
                                 </div>
+                              ) : (
+                                <img 
+                                  src={mediaUrl} 
+                                  alt="Shared media" 
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
+                                />
+                              )}
+                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between text-[9px] text-white/90">
+                                <span className="truncate max-w-[70%]">@{item.sender.username}</span>
+                                <span>{formatDate(item.created_at)}</span>
                               </div>
-                              <a
-                                href={downloadUrl}
-                                download={file.file_name || 'download'}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-2)] text-white text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all shadow-sm flex-shrink-0"
-                                title="Download file"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Download</span>
-                              </a>
                             </div>
                           );
-                        })
-                      )}
-                    </div>
-                  )}
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* LINKS TAB */}
+                  <div className={`space-y-2 transition-opacity duration-150 ${activeTab === 'links' ? 'block opacity-100' : 'hidden opacity-0'}`}>
+                    {sharedData.links.length === 0 ? (
+                      <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
+                        <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
+                          <LinkIcon className="w-6 h-6 opacity-60" />
+                        </div>
+                        <p className="text-xs font-semibold text-[var(--text)]">No links shared yet</p>
+                        <p className="text-[11px] text-[var(--muted)] mt-0.5">URLs and web links sent in this chat will appear here</p>
+                      </div>
+                    ) : (
+                      sharedData.links.map((link) => (
+                        <div
+                          key={link.id}
+                          className="p-3 rounded-2xl bg-[var(--input)]/60 hover:bg-[var(--input)] border border-[var(--line)] hover:border-[var(--line-strong)] transition-colors flex items-start gap-3 group"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-[var(--accent)]/15 border border-[var(--accent)]/20 flex items-center justify-center text-[var(--accent-2)] flex-shrink-0 mt-0.5">
+                            <LinkIcon className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--accent-2)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded">
+                                {link.domain}
+                              </span>
+                              <span className="text-[10px] text-[var(--muted)]">•</span>
+                              <span className="text-[10px] text-[var(--muted)]">@{link.sender.username}</span>
+                              <span className="text-[10px] text-[var(--muted)] ml-auto">{formatDate(link.created_at)}</span>
+                            </div>
+                            <a
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-semibold text-[var(--text)] hover:text-[var(--accent-2)] hover:underline truncate block"
+                              title={link.url}
+                            >
+                              {link.url}
+                            </a>
+                            {link.snippet && link.snippet !== link.url && (
+                              <p className="text-[11px] text-[var(--muted)] line-clamp-1 mt-0.5">
+                                {link.snippet}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(link.url, link.id)}
+                              className="p-1.5 rounded-lg bg-[var(--card)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+                              title="Copy link"
+                            >
+                              {copiedLink === link.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                            <a
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-[var(--card)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+                              title="Open link"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* FILES TAB */}
+                  <div className={`space-y-2 transition-opacity duration-150 ${activeTab === 'files' ? 'block opacity-100' : 'hidden opacity-0'}`}>
+                    {sharedData.files.length === 0 ? (
+                      <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
+                        <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
+                          <FolderIcon className="w-6 h-6 opacity-60" />
+                        </div>
+                        <p className="text-xs font-semibold text-[var(--text)]">No files shared yet</p>
+                        <p className="text-[11px] text-[var(--muted)] mt-0.5">Documents, archives, and attachments will appear here</p>
+                      </div>
+                    ) : (
+                      sharedData.files.map((file) => {
+                        const extColorClass = getFileExtensionColor(file.file_name);
+                        const downloadUrl = `/api/media/file/${file.url}`;
+
+                        return (
+                          <div
+                            key={file.id}
+                            className="p-3 rounded-2xl bg-[var(--input)]/60 hover:bg-[var(--input)] border border-[var(--line)] hover:border-[var(--line-strong)] transition-colors flex items-center gap-3"
+                          >
+                            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${extColorClass}`}>
+                              <FileText className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-[var(--text)] truncate" title={file.file_name || 'Shared Document'}>
+                                {file.file_name || 'Shared Document'}
+                              </p>
+                              <div className="flex items-center gap-2 text-[10px] text-[var(--muted)] mt-0.5">
+                                <span>@{file.sender.username}</span>
+                                <span>•</span>
+                                <span>{formatDate(file.created_at)}</span>
+                              </div>
+                            </div>
+                            <a
+                              href={downloadUrl}
+                              download={file.file_name || 'download'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-2)] text-white text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all shadow-sm flex-shrink-0"
+                              title="Download file"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Download</span>
+                            </a>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
 
                   {/* AUDIO TAB */}
-                  {activeTab === 'audio' && (
-                    <div className="space-y-2.5">
-                      {sharedData.audio.length === 0 ? (
-                        <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
-                          <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
-                            <Mic className="w-6 h-6 opacity-60" />
-                          </div>
-                          <p className="text-xs font-semibold text-[var(--text)]">No voice messages shared yet</p>
-                          <p className="text-[11px] text-[var(--muted)] mt-0.5">Voice notes and audio clips sent in this chat will appear here</p>
+                  <div className={`space-y-2.5 transition-opacity duration-150 ${activeTab === 'audio' ? 'block opacity-100' : 'hidden opacity-0'}`}>
+                    {sharedData.audio.length === 0 ? (
+                      <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
+                        <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
+                          <Mic className="w-6 h-6 opacity-60" />
                         </div>
-                      ) : (
-                        sharedData.audio.map((audioItem) => (
-                          <div
-                            key={audioItem.id}
-                            className="p-3 rounded-2xl bg-[var(--input)]/60 border border-[var(--line)] transition-colors flex flex-col gap-2"
-                          >
-                            <div className="flex items-center justify-between text-[11px] text-[var(--muted)]">
-                              <span className="font-semibold text-[var(--text)]">@{audioItem.sender.username}</span>
-                              <span>{formatDate(audioItem.created_at)}</span>
-                            </div>
-                            <InlineAudioPlayer url={audioItem.url} fileName={audioItem.file_name} />
+                        <p className="text-xs font-semibold text-[var(--text)]">No voice messages shared yet</p>
+                        <p className="text-[11px] text-[var(--muted)] mt-0.5">Voice notes and audio clips sent in this chat will appear here</p>
+                      </div>
+                    ) : (
+                      sharedData.audio.map((audioItem) => (
+                        <div
+                          key={audioItem.id}
+                          className="p-3 rounded-2xl bg-[var(--input)]/60 border border-[var(--line)] transition-colors flex flex-col gap-2"
+                        >
+                          <div className="flex items-center justify-between text-[11px] text-[var(--muted)]">
+                            <span className="font-semibold text-[var(--text)]">@{audioItem.sender.username}</span>
+                            <span>{formatDate(audioItem.created_at)}</span>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  )}
+                          <InlineAudioPlayer url={audioItem.url} fileName={audioItem.file_name} />
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </div>

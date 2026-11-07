@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -204,8 +204,26 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
   }, []);
   /* UI UPDATE END */
 
-  // Fetch feed posts with explicit 10-state lifecycle
-  const fetchFeed = async (showLoading = false) => {
+  // Session feed seed for deterministic pseudo-random ordering (same seed = same order across pages)
+  const [feedSeed, setFeedSeed] = useState<string>(() => {
+    try {
+      const stored = sessionStorage.getItem('dv_feed_seed');
+      if (stored) return stored;
+      const gen = 'seed_' + Math.random().toString(36).substring(2, 9);
+      sessionStorage.setItem('dv_feed_seed', gen);
+      return gen;
+    } catch {
+      return 'seed_' + Math.random().toString(36).substring(2, 9);
+    }
+  });
+
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  // Fetch feed posts with deterministic seed & cursor pagination
+  const fetchFeed = async (showLoading = false, freshSeed?: string) => {
     if (!token) {
       setStatus('session_expired');
       return;
@@ -228,8 +246,16 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
       if (posts.length === 0) setStatus('slow');
     }, 3500);
 
+    const activeSeed = freshSeed || feedSeed;
+    if (freshSeed) {
+      setFeedSeed(freshSeed);
+      try {
+        sessionStorage.setItem('dv_feed_seed', freshSeed);
+      } catch {}
+    }
+
     try {
-      const res = await fetch('/api/posts/feed', {
+      const res = await fetch(`/api/posts/feed?limit=10&cursor=0&feedSeed=${encodeURIComponent(activeSeed)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -252,6 +278,8 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
       const data = await res.json();
       const incoming: Post[] = data.posts || [];
       setPosts(incoming);
+      setNextCursor(data.nextCursor || null);
+      setHasMore(Boolean(data.nextCursor));
       try {
         sessionStorage.setItem('dv_cached_feed', JSON.stringify(incoming.slice(0, 25)));
       } catch {}
@@ -270,6 +298,54 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
       }
     }
   };
+
+  // Cursor-based infinite scroll prefetching
+  const loadMorePosts = useCallback(async () => {
+    if (!token || loadingMore || !hasMore || !nextCursor || isOffline) return;
+    setLoadingMore(true);
+
+    try {
+      const res = await fetch(`/api/posts/feed?limit=10&cursor=${nextCursor}&feedSeed=${encodeURIComponent(feedSeed)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const incoming: Post[] = data.posts || [];
+        if (incoming.length > 0) {
+          setPosts(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const fresh = incoming.filter(p => !existingIds.has(p.id));
+            return [...prev, ...fresh];
+          });
+          setNextCursor(data.nextCursor || null);
+          setHasMore(Boolean(data.nextCursor));
+        } else {
+          setHasMore(false);
+          setNextCursor(null);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more posts:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [token, loadingMore, hasMore, nextCursor, isOffline, feedSeed]);
+
+  // IntersectionObserver for infinite scroll trigger (prefetches 300px before reaching bottom)
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore || loadingMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMorePosts();
+        }
+      },
+      { rootMargin: '300px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loadMorePosts]);
 
   // Delete Post API
   const handleDeletePost = async (postId: string) => {
@@ -1031,7 +1107,11 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                 key={post.id} 
                 aria-labelledby={`post-${post.id}-title`}
                 className="post-card sm:bg-[var(--card)] sm:border sm:border-[var(--card-border)] sm:rounded-[20px] bg-transparent border-b border-[var(--card-border)] px-4 sm:p-5 py-4 sm:mb-4 sm:shadow-lg sm:shadow-[var(--shadow-card)] transition-all duration-200 relative lazy-content gpu post-enter"
-                style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}
+                style={{ 
+                  animationDelay: `${Math.min(index * 50, 300)}ms`,
+                  contentVisibility: 'auto',
+                  containIntrinsicSize: '520px'
+                }}
               >
                 {/* Header Line: 40px avatar, name + verified badge, time + visibility, 3-dots menu on right */}
                 <div className="flex items-center justify-between mb-3">
@@ -1427,13 +1507,24 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           })
         )}
 
-        {/* End of Feed Catch-up */}
+        {/* Infinite Scroll Sentinel & Catch-up Status */}
         {posts.length > 0 && (
           <div className="py-8 text-center flex flex-col items-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card)] border border-[var(--line)] text-xs font-semibold text-[var(--muted)] shadow-sm">
-              <Check className="w-4 h-4 text-emerald-400" aria-hidden="true" />
-              <span>You're all caught up!</span>
-            </div>
+            {hasMore ? (
+              <div ref={loadMoreRef} className="py-4 flex flex-col items-center justify-center gap-2">
+                {loadingMore && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card)] border border-[var(--line)] text-xs font-semibold text-[var(--accent-2)] shadow-md animate-fade-in">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Loading more stories...</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card)] border border-[var(--line)] text-xs font-semibold text-[var(--muted)] shadow-sm">
+                <Check className="w-4 h-4 text-emerald-400" aria-hidden="true" />
+                <span>You're all caught up!</span>
+              </div>
+            )}
           </div>
         )}
       </div>

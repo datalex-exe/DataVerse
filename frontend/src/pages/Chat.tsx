@@ -1414,14 +1414,74 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     };
   }, [activeConvo?.id, token, user]);
 
-  // ─── Scroll & Viewport Management ──────────────────────────────────────
+  // ─── Older Messages Pagination & Viewport Management ───────────────────
+  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState<boolean>(true);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState<boolean>(false);
+  const loadingOlderRef = useRef<boolean>(false);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeConvo?.id || loadingOlderRef.current || !token) return;
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    const currentMsgs = messagesCacheRef.current[activeConvo.id] || messages;
+    if (!currentMsgs || currentMsgs.length === 0) return;
+    const oldestTimestamp = currentMsgs[0]?.created_at;
+    if (!oldestTimestamp) return;
+
+    loadingOlderRef.current = true;
+    setLoadingOlderMessages(true);
+
+    try {
+      const res = await fetch(`/api/conversations/${activeConvo.id}/messages?limit=40&before=${oldestTimestamp}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const older = data.messages || [];
+        if (older.length > 0) {
+          const prevScrollHeight = el.scrollHeight;
+          const prevScrollTop = el.scrollTop;
+
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const fresh = older.filter((m: any) => !existingIds.has(m.id));
+            const merged = [...fresh, ...prev];
+            messagesCacheRef.current[activeConvo.id] = merged;
+            return merged;
+          });
+
+          // Stable scroll anchor: preserve exact viewport position
+          requestAnimationFrame(() => {
+            if (messagesContainerRef.current) {
+              const delta = messagesContainerRef.current.scrollHeight - prevScrollHeight;
+              messagesContainerRef.current.scrollTop = prevScrollTop + delta;
+            }
+          });
+
+          setHasMoreOlderMessages(data.hasMore ?? (older.length === 40));
+        } else {
+          setHasMoreOlderMessages(false);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlderMessages(false);
+    }
+  }, [activeConvo?.id, messages, token]);
+
   const handleMessagesScroll = useCallback(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
+    if (el.scrollTop <= 60 && !loadingOlderRef.current && hasMoreOlderMessages) {
+      loadOlderMessages();
+    }
     const threshold = 120; // px threshold from bottom
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     isNearBottomRef.current = distFromBottom <= threshold;
-  }, []);
+  }, [loadOlderMessages, hasMoreOlderMessages]);
 
   const handleInputFocus = useCallback(() => {
     if (isNearBottomRef.current) {
@@ -5064,6 +5124,14 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 touchAction: 'pan-y' 
               }}
             >
+              {loadingOlderMessages && (
+                <div className="flex justify-center py-2 animate-fade-in">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--input)] text-[var(--accent-2)] text-[10px] font-bold shadow-sm">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Loading older messages...</span>
+                  </div>
+                </div>
+              )}
               {loadingMessages && activeMessages.length === 0 ? (
                 /* State 2: Message Bubbles Skeleton */
                 <div role="status" aria-label="Loading message history" className="space-y-4 py-4 px-2 animate-pulse select-none">

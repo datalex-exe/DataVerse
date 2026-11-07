@@ -715,6 +715,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
     return (
       <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center select-none">
+        {/* Static Ambient Glow Layer */}
+        <div className="absolute inset-2 rounded-full bg-teal-500/15 blur-xl pointer-events-none" />
         {/* Top Fixed Needle Pointer (Fixed at 12 o'clock, OUTSIDE rotating wheel) */}
         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center pointer-events-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
           <div className="w-4 h-5 bg-gradient-to-b from-amber-300 via-amber-400 to-amber-600 rounded-t-md shadow-md border-t border-x border-amber-200/50" />
@@ -723,7 +725,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
         {/* Rotating Wheel Body: Continuous cumulative rotation, never resets */}
         <div 
-          className="w-full h-full rounded-full"
+          className="w-full h-full rounded-full will-change-transform"
           style={{ 
             transform: `rotate(${rotationDeg}deg)`,
             transition: 'transform 4.5s cubic-bezier(0.17, 0.67, 0.12, 0.99)'
@@ -731,7 +733,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         >
           <svg 
             viewBox={`0 0 ${size} ${size}`} 
-            className="w-full h-full drop-shadow-[0_0_40px_rgba(45,212,191,0.25)]"
+            className="w-full h-full"
           >
             <defs>
               <radialGradient id="wheelCenterHub" cx="50%" cy="50%" r="50%">
@@ -1346,7 +1348,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 type="button"
                 disabled={wheelSpinning}
                 onClick={handleSpinWheel}
-                className="py-3 px-8 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-teal-500/25 active:scale-95 disabled:opacity-50"
+                className={`py-3.5 px-8 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all ${
+                  wheelSpinning || wheelSegments.length < 2
+                    ? 'bg-slate-800 text-slate-500 opacity-60 cursor-not-allowed border border-white/5 shadow-none'
+                    : 'bg-gradient-to-b from-teal-400 to-emerald-500 hover:from-teal-300 hover:to-emerald-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-2px_0_rgba(0,0,0,0.35),0_4px_6px_-1px_rgba(0,0,0,0.4),0_0_20px_rgba(45,212,191,0.25)] active:translate-y-0.5 active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
+                }`}
               >
                 {wheelSpinning ? 'Spinning...' : 'Spin The Wheel 🎡'}
               </button>

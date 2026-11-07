@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_user_created ON posts(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_pinned ON posts(user_id, is_pinned);
 
 -- Post Media Table (Support carousel/multiple images per post)
@@ -170,6 +171,7 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_messages_convo_created ON messages(conversation_id, created_at DESC);
 
 -- Notifications Table
 CREATE TABLE IF NOT EXISTS notifications (

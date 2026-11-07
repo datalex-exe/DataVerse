@@ -26,18 +26,33 @@ import { DataVerseLogo } from './components/DataVerseLogo';
 
 import { Auth } from './pages/Auth';
 import { Feed } from './pages/Feed';
-import { Explore } from './pages/Explore';
-import { Profile } from './pages/Profile';
-import { Chat } from './pages/Chat';
-import { Create } from './pages/Create';
-import { Activity } from './pages/Activity';
 
-// Secondary views loaded on demand
+// On-demand code-split routes with automatic prefetching
+const Explore = React.lazy(() => import('./pages/Explore').then(m => ({ default: m.Explore })));
+const Profile = React.lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const Chat = React.lazy(() => import('./pages/Chat').then(m => ({ default: m.Chat })));
+const Create = React.lazy(() => import('./pages/Create').then(m => ({ default: m.Create })));
+const Activity = React.lazy(() => import('./pages/Activity').then(m => ({ default: m.Activity })));
 const Arcade = React.lazy(() => import('./pages/Arcade').then(m => ({ default: m.Arcade })));
 const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const NotFound = React.lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 const Legal = React.lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
 const Contact = React.lazy(() => import('./pages/Contact').then(m => ({ default: m.Contact })));
+
+// Prefetch route modules on navigation hover
+const prefetchRoute = (view: string) => {
+  try {
+    switch (view) {
+      case 'search': import('./pages/Explore'); break;
+      case 'profile': import('./pages/Profile'); break;
+      case 'messages': import('./pages/Chat'); break;
+      case 'create': import('./pages/Create'); break;
+      case 'activity': import('./pages/Activity'); break;
+      case 'arcade': import('./pages/Arcade'); break;
+      case 'admin': import('./pages/Admin'); break;
+    }
+  } catch (_) {}
+};
 
 const ViewFallback = () => (
   <div className="flex-1 flex items-center justify-center min-h-[30vh] text-[var(--muted)] animate-in fade-in duration-150">
@@ -740,6 +755,7 @@ const AppContent: React.FC = () => {
 
             {/* Messages */}
             <button
+              onMouseEnter={() => prefetchRoute('messages')}
               onClick={() => { navigate('messages'); }}
               title="Messages"
               className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
@@ -769,6 +785,7 @@ const AppContent: React.FC = () => {
 
             {/* Search */}
             <button
+              onMouseEnter={() => prefetchRoute('search')}
               onClick={() => { navigate('search'); }}
               title="Search"
               className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
@@ -793,6 +810,7 @@ const AppContent: React.FC = () => {
 
             {/* Notifications */}
             <button
+              onMouseEnter={() => prefetchRoute('activity')}
               onClick={() => { navigate('notifications'); }}
               title="Notifications"
               className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
@@ -820,6 +838,7 @@ const AppContent: React.FC = () => {
 
             {/* Create */}
             <button
+              onMouseEnter={() => prefetchRoute('create')}
               onClick={() => { navigate('create'); }}
               title="Create"
               className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
@@ -844,6 +863,7 @@ const AppContent: React.FC = () => {
 
             {/* Profile */}
             <button
+              onMouseEnter={() => prefetchRoute('profile')}
               onClick={() => { navigate('profile'); }}
               title="Profile"
               className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
@@ -872,6 +892,7 @@ const AppContent: React.FC = () => {
 
             {/* Arcade Mini-Games */}
             <button
+              onMouseEnter={() => prefetchRoute('arcade')}
               onClick={() => { navigate('arcade'); }}
               title="Arcade Mini-Games"
               className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
