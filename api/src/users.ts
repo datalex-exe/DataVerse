@@ -1727,13 +1727,13 @@ usersApp.delete('/admin/reports/:id', authMiddleware, async (c) => {
 usersApp.get('/admin/media', authMiddleware, async (c) => {
   const callerId = c.get('userId');
 
-  // Verify caller is Admin or Top Admin
+  // Verify caller is Super Admin (is_top_admin only)
   const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
     .bind(callerId)
     .first<any>();
 
-  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
-    return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
+  if (!caller || !caller.is_top_admin) {
+    return c.json({ error: 'Unauthorized: Super Admin privileges required' }, 403);
   }
 
   const queryUser = c.req.query('user') || '';
@@ -1905,13 +1905,13 @@ usersApp.delete('/admin/media/:id', authMiddleware, async (c) => {
     return c.json({ error: 'Missing media ID' }, 400);
   } // e.g. "chat-<msgId>" or "post-<mediaId>"
 
-  // Verify caller is Admin or Top Admin
+  // Verify caller is Super Admin (is_top_admin only)
   const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
     .bind(callerId)
     .first<any>();
 
-  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
-    return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
+  if (!caller || !caller.is_top_admin) {
+    return c.json({ error: 'Unauthorized: Super Admin privileges required' }, 403);
   }
 
   try {

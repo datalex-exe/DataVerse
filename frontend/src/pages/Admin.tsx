@@ -474,7 +474,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   };
 
   const fetchAdminMedia = async () => {
-    if (!token) return;
+    if (!token || !currentUser?.is_top_admin) return;
     setMediaLoading(true);
     try {
       const params = new URLSearchParams();
@@ -1342,7 +1342,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               )}
             </button>
           )}
-          {(currentUser?.is_admin || currentUser?.is_top_admin) && (
+          {currentUser?.is_top_admin && (
             <button
               type="button"
               role="tab"
@@ -2946,7 +2946,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           )}
 
           {/* TAB: MEDIA PLATFORM (ALL MEDIA ACCESS: SENT TO DELETED, BY USER) */}
-          {activeTab === 'media' && (currentUser?.is_admin || currentUser?.is_top_admin) && (
+          {activeTab === 'media' && currentUser?.is_top_admin && (
             <div className="space-y-6 animate-fade-in select-none pb-36 sm:pb-16">
               
               {/* Header Card */}
@@ -2962,6 +2962,9 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       <h3 className="text-base sm:text-lg font-black text-[var(--text)] tracking-wide uppercase">System Media Platform</h3>
                       <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--accent-2)_15%,transparent)] text-[var(--accent-2)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)]">
                         Full Audit Access
+                      </span>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        Super Admin Only
                       </span>
                     </div>
                     <p className="text-xs text-[var(--muted)] mt-1 max-w-2xl leading-relaxed">
