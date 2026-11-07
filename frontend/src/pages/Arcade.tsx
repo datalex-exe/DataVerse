@@ -686,8 +686,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     '#8b5cf6', // Purple
     '#06b6d4', // Cyan
     '#f97316', // Orange
-    '#3b82f6', // Blue
-    '#ef4444', // Rose
+    '#3b82f6', // Sky Blue
+    '#ef4444', // Red
+    '#84cc16', // Lime
+    '#d946ef', // Fuchsia
+    '#14b8a6', // Light Teal
+    '#eab308', // Yellow
+    '#a855f7', // Violet
+    '#22c55e', // Green
   ];
 
   // Reusable SVG Wheel renderer with visible slice labels & glowing rim
@@ -695,8 +701,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     const size = 320;
     const center = size / 2; // 160
     const radius = 138;
-    const n = Math.max(segments.length, 2);
-    const anglePerSegment = (2 * Math.PI) / n;
+    const n = segments.length;
 
     return (
       <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center select-none">
@@ -728,8 +733,68 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               </linearGradient>
             </defs>
 
-            {/* Slices with clear labels */}
-            {segments.map((opt, i) => {
+            {/* Empty State when 0 options */}
+            {n === 0 && (
+              <g>
+                <circle
+                  cx={center}
+                  cy={center}
+                  r={radius}
+                  fill="#081e22"
+                  stroke="#2dd4bf"
+                  strokeWidth="2"
+                  strokeDasharray="6 6"
+                />
+                <text
+                  x={center}
+                  y={center - 8}
+                  fill="#5eead4"
+                  fontSize="13"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  Empty Wheel (0)
+                </text>
+                <text
+                  x={center}
+                  y={center + 14}
+                  fill="#94a3b8"
+                  fontSize="10"
+                  textAnchor="middle"
+                >
+                  Add choices below to spin
+                </text>
+              </g>
+            )}
+
+            {/* Single Option (1 Slice = Full Disc) */}
+            {n === 1 && (
+              <g>
+                <circle
+                  cx={center}
+                  cy={center}
+                  r={radius}
+                  fill={WHEEL_COLORS[0]}
+                  stroke="#040b0d"
+                  strokeWidth="2.5"
+                />
+                <text
+                  x={center}
+                  y={center - 38}
+                  fill="#ffffff"
+                  fontSize="13"
+                  fontWeight="900"
+                  textAnchor="middle"
+                  style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}
+                >
+                  {segments[0].length > 15 ? segments[0].substring(0, 14) + '…' : segments[0]}
+                </text>
+              </g>
+            )}
+
+            {/* Multiple Slices (2+ segments) */}
+            {n >= 2 && segments.map((opt, i) => {
+              const anglePerSegment = (2 * Math.PI) / n;
               const startAngle = i * anglePerSegment;
               const endAngle = (i + 1) * anglePerSegment;
               const x1 = center + radius * Math.cos(startAngle);
@@ -740,6 +805,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               const pathData = `M ${center} ${center} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
               const sliceColor = WHEEL_COLORS[i % WHEEL_COLORS.length];
               const midAngleDeg = (i + 0.5) * (360 / n);
+              const fontSize = n > 16 ? "8" : n > 12 ? "9" : n > 8 ? "10" : "11";
+              const maxChars = n > 16 ? 9 : n > 12 ? 11 : 14;
 
               return (
                 <g key={i}>
@@ -747,7 +814,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                     d={pathData}
                     fill={sliceColor}
                     stroke="#040b0d"
-                    strokeWidth="2.5"
+                    strokeWidth="2"
                   />
                   {/* Text along slice radius */}
                   <g transform={`rotate(${midAngleDeg}, ${center}, ${center})`}>
@@ -755,7 +822,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                       x={center + radius * 0.65}
                       y={center + 4}
                       fill="#ffffff"
-                      fontSize={n > 8 ? "10" : "11"}
+                      fontSize={fontSize}
                       fontWeight="900"
                       textAnchor="middle"
                       className="select-none font-sans tracking-wide"
@@ -763,7 +830,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                         textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.8)'
                       }}
                     >
-                      {opt.length > 13 ? opt.substring(0, 12) + '…' : opt}
+                      {opt.length > maxChars ? opt.substring(0, maxChars - 1) + '…' : opt}
                     </text>
                   </g>
                 </g>
@@ -789,8 +856,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             />
 
             {/* Golden studs around the rim */}
-            {segments.map((_, i) => {
-              const studAngle = i * anglePerSegment;
+            {Array.from({ length: Math.max(n, 8) }).map((_, i) => {
+              const studAngle = i * ((2 * Math.PI) / Math.max(n, 8));
               const sx = center + (radius + 3) * Math.cos(studAngle);
               const sy = center + (radius + 3) * Math.sin(studAngle);
               return (
@@ -842,7 +909,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
   // Solo Offline Spin Wheel Handlers
   const handleSpinWheel = () => {
-    if (wheelSpinning || wheelSegments.length < 2) return;
+    if (wheelSegments.length < 2) {
+      showToast('Add at least 2 choices to spin the wheel!', 'error');
+      return;
+    }
+    if (wheelSpinning) return;
     setWheelSpinning(true);
     setWheelWinner(null);
 
@@ -868,22 +939,33 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
   const handleAddWheelOption = () => {
     if (!wheelNewOption.trim()) return;
+    if (wheelSegments.length >= 30) {
+      showToast('Maximum 30 choices supported', 'error');
+      return;
+    }
     setWheelSegments(prev => [...prev, wheelNewOption.trim()]);
     setWheelNewOption('');
   };
 
+  const handleClearWheelOptions = () => {
+    setWheelSegments([]);
+    setWheelWinner(null);
+    showToast('Wheel cleared to 0 options. Add your custom choices!', 'info');
+  };
+
   const handleRemoveWheelOption = (idx: number) => {
-    if (wheelSegments.length <= 2) {
-      showToast('Minimum 2 options required', 'error');
-      return;
-    }
     setWheelSegments(prev => prev.filter((_, i) => i !== idx));
+    setWheelWinner(null);
   };
 
   // Multiplayer Spin Wheel Handlers
   const handleMultiplayerSpinWheel = () => {
-    const opts = (gameState?.wheelOptions && gameState.wheelOptions.length >= 2) ? gameState.wheelOptions : wheelSegments;
-    if (gameState?.wheelSpinning || opts.length < 2 || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    const opts = (gameState?.wheelOptions !== undefined) ? gameState.wheelOptions : wheelSegments;
+    if (opts.length < 2) {
+      showToast('Add at least 2 choices to spin the wheel!', 'error');
+      return;
+    }
+    if (gameState?.wheelSpinning || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     const winIdx = Math.floor(Math.random() * opts.length);
     const winOpt = opts[winIdx];
@@ -939,7 +1021,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
   const handleAddMultiplayerOption = () => {
     if (!wheelNewOption.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    const opts = (gameState?.wheelOptions && gameState.wheelOptions.length > 0) ? gameState.wheelOptions : wheelSegments;
+    const opts = (gameState?.wheelOptions !== undefined) ? gameState.wheelOptions : wheelSegments;
+    if (opts.length >= 30) {
+      showToast('Maximum 30 choices supported', 'error');
+      return;
+    }
     const updated = [...opts, wheelNewOption.trim()];
     setWheelNewOption('');
     wsRef.current.send(JSON.stringify({
@@ -952,12 +1038,21 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }));
   };
 
+  const handleClearMultiplayerOptions = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'game_update',
+      game: {
+        ...gameState,
+        wheelOptions: [],
+        wheelWinner: null
+      }
+    }));
+    showToast('Multiplayer wheel cleared to 0 options for both players!', 'info');
+  };
+
   const handleRemoveMultiplayerOption = (idx: number) => {
-    const opts = (gameState?.wheelOptions && gameState.wheelOptions.length > 0) ? gameState.wheelOptions : wheelSegments;
-    if (opts.length <= 2) {
-      showToast('Minimum 2 choices required', 'error');
-      return;
-    }
+    const opts = (gameState?.wheelOptions !== undefined) ? gameState.wheelOptions : wheelSegments;
     const updated = opts.filter((_: any, i: number) => i !== idx);
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -1218,8 +1313,19 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             {/* Custom Options Config */}
             <div className="w-full max-w-xs space-y-3 p-4 bg-slate-900/60 rounded-2xl border border-white/10 text-left">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Wheel Choices</h4>
-                <span className="text-[10px] text-teal-400 font-mono font-bold">{wheelSegments.length} Options</span>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Wheel Choices</h4>
+                  <span className="text-[10px] text-teal-400 font-mono font-bold">({wheelSegments.length})</span>
+                </div>
+                {wheelSegments.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearWheelOptions}
+                    className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline transition-colors"
+                  >
+                    Clear to 0
+                  </button>
+                )}
               </div>
               <div className="flex gap-2">
                 <input
@@ -1227,7 +1333,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                   value={wheelNewOption}
                   onChange={(e) => setWheelNewOption(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddWheelOption()}
-                  placeholder="Add custom option..."
+                  placeholder="Add custom option (up to 30)..."
                   className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-400"
                 />
                 <button
@@ -1239,22 +1345,30 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 </button>
               </div>
 
-              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
-                {wheelSegments.map((seg, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-white/5 text-xs text-slate-300">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: WHEEL_COLORS[idx % WHEEL_COLORS.length] }} />
-                      <span className="truncate">{seg}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveWheelOption(idx)}
-                      className="text-slate-500 hover:text-rose-400 p-0.5"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+              <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                {wheelSegments.length === 0 ? (
+                  <div className="p-3 text-center rounded-xl bg-slate-950/40 border border-dashed border-white/10">
+                    <p className="text-[11px] text-slate-400 font-medium">0 choices active.</p>
+                    <p className="text-[10px] text-teal-400/80 mt-0.5">Type an option above and click Add!</p>
                   </div>
-                ))}
+                ) : (
+                  wheelSegments.map((seg, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-white/5 text-xs text-slate-300 hover:border-white/10 transition-colors">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: WHEEL_COLORS[idx % WHEEL_COLORS.length] }} />
+                        <span className="truncate">{seg}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveWheelOption(idx)}
+                        title="Remove choice"
+                        className="text-slate-500 hover:text-rose-400 p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -1517,7 +1631,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         );
 
       case 'spin-wheel': {
-        const currentSegments = (gameState?.wheelOptions && gameState.wheelOptions.length >= 2) ? gameState.wheelOptions : wheelSegments;
+        const currentSegments = (gameState?.wheelOptions !== undefined) ? gameState.wheelOptions : wheelSegments;
         const currentRotation = gameState?.wheelRotation || 0;
         const isSpinning = !!gameState?.wheelSpinning;
         const currentWinner = gameState?.wheelWinner || null;
@@ -1560,8 +1674,19 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             {/* Synchronized Options Config */}
             <div className="w-full max-w-xs space-y-3 p-4 bg-slate-900/60 rounded-2xl border border-white/10 text-left">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Live Wheel Choices</h4>
-                <span className="text-[10px] text-teal-400 font-mono font-bold">{currentSegments.length} Options</span>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Live Choices</h4>
+                  <span className="text-[10px] text-teal-400 font-mono font-bold">({currentSegments.length})</span>
+                </div>
+                {currentSegments.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearMultiplayerOptions}
+                    className="text-[10px] font-bold text-rose-400 hover:text-rose-300 hover:underline transition-colors"
+                  >
+                    Clear to 0
+                  </button>
+                )}
               </div>
               <div className="flex gap-2">
                 <input
@@ -1569,7 +1694,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                   value={wheelNewOption}
                   onChange={(e) => setWheelNewOption(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddMultiplayerOption()}
-                  placeholder="Add choice for both..."
+                  placeholder="Add choice for both (up to 30)..."
                   className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-400"
                 />
                 <button
@@ -1581,22 +1706,30 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 </button>
               </div>
 
-              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
-                {currentSegments.map((seg: string, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-white/5 text-xs text-slate-300">
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: WHEEL_COLORS[idx % WHEEL_COLORS.length] }} />
-                      <span className="truncate">{seg}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMultiplayerOption(idx)}
-                      className="text-slate-500 hover:text-rose-400 p-0.5"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+              <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                {currentSegments.length === 0 ? (
+                  <div className="p-3 text-center rounded-xl bg-slate-950/40 border border-dashed border-white/10">
+                    <p className="text-[11px] text-slate-400 font-medium">0 choices active.</p>
+                    <p className="text-[10px] text-teal-400/80 mt-0.5">Type an option above to build live choices!</p>
                   </div>
-                ))}
+                ) : (
+                  currentSegments.map((seg: string, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-white/5 text-xs text-slate-300 hover:border-white/10 transition-colors">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: WHEEL_COLORS[idx % WHEEL_COLORS.length] }} />
+                        <span className="truncate">{seg}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMultiplayerOption(idx)}
+                        title="Remove choice"
+                        className="text-slate-500 hover:text-rose-400 p-1 rounded-lg hover:bg-rose-500/10 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
