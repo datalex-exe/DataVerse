@@ -345,7 +345,7 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
     const prevIdx = (currIdx - 1 + adminMedia.length) % adminMedia.length;
 
     const preloadItem = (m: AdminMediaItem) => {
-      if (!m || m.status === 'deleted') return;
+      if (!m) return;
       const isImg = m.media_type === 'image' || (!m.media_type && m.file_name?.match(/\.(jpe?g|png|gif|webp|svg)$/i));
       if (isImg) {
         const u = m.url.startsWith('http') || m.url.startsWith('/') ? m.url : `/api/media/file/${m.url}?inline=1`;
@@ -424,30 +424,26 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
 
         {/* Right: Actions (Open in tab, Download, Purge, Close) */}
         <div className="flex items-center gap-2">
-          {!isDeleted && (
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={btnStyle}
-              title="Open full resolution in new browser tab"
-              aria-label="Open in new tab"
-            >
-              <ExternalLink className="w-4 h-4 text-teal-400" />
-            </a>
-          )}
+          <a
+            href={fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={btnStyle}
+            title="Open full resolution in new browser tab"
+            aria-label="Open in new tab"
+          >
+            <ExternalLink className="w-4 h-4 text-teal-400" />
+          </a>
 
-          {!isDeleted && (
-            <a
-              href={fileUrl}
-              download={item.file_name}
-              className={btnStyle}
-              title="Download file"
-              aria-label="Download media"
-            >
-              <Download className="w-4 h-4 text-emerald-400" />
-            </a>
-          )}
+          <a
+            href={fileUrl}
+            download={item.file_name}
+            className={btnStyle}
+            title="Download file"
+            aria-label="Download media"
+          >
+            <Download className="w-4 h-4 text-emerald-400" />
+          </a>
 
           <button
             type="button"
@@ -489,37 +485,15 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
         )}
 
         {/* Content Switcher */}
-        {isDeleted ? (
-          /* Purged / Deleted Asset Card */
-          <div className="bg-slate-950/90 border border-rose-500/30 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-4 text-center backdrop-blur-xl animate-fade-in mx-4">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-xl">
-              <Trash2 className="w-8 h-8 sm:w-10 sm:h-10" />
-            </div>
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 font-mono text-[11px] font-bold tracking-wider mb-2 border border-rose-500/30">
-                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-                <span>ASSET FILE PURGED</span>
-              </div>
-              <h4 className="text-base font-black text-white truncate max-w-xs">{item.file_name || 'Purged File'}</h4>
-              <p className="text-xs text-slate-400 mt-1">Uploader: @{item.user.username}</p>
-            </div>
-            <p className="text-xs text-slate-300 max-w-xs leading-relaxed bg-black/40 p-3 rounded-xl border border-white/5 font-mono text-[11px]">
-              The binary file for this asset was permanently purged from storage or unsent. The metadata record is retained for audit logging.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center gap-2 w-full pt-1">
-              <button
-                type="button"
-                onClick={() => onPurge(item)}
-                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs border border-rose-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>Purge Metadata Record</span>
-              </button>
-            </div>
-          </div>
-        ) : isVideo ? (
+        {isVideo ? (
           /* Video Viewer */
           <div className="relative flex items-center justify-center w-full h-full max-h-[calc(100dvh-180px)]">
+            {isDeleted && (
+              <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-950/85 border border-rose-500/40 text-rose-300 text-[11px] font-mono font-bold shadow-lg backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                <span>DELETED BY SENDER (AUDIT VAULT)</span>
+              </div>
+            )}
             {videoLoading && !videoError && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-teal-400 gap-2">
                 <Loader2 className="w-8 h-8 animate-spin" />
@@ -527,25 +501,40 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
               </div>
             )}
             {videoError ? (
-              <div className="bg-slate-900/90 border border-white/10 p-6 rounded-2xl flex flex-col items-center gap-3 text-center max-w-sm">
-                <AlertTriangle className="w-8 h-8 text-amber-400" />
-                <p className="text-xs text-slate-300">Unable to stream video preview directly.</p>
-                <div className="flex gap-2">
+              <div className="bg-slate-950/90 border border-rose-500/30 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-4 text-center backdrop-blur-xl animate-fade-in mx-4">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-xl">
+                  <Trash2 className="w-8 h-8 sm:w-10 sm:h-10" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 font-mono text-[11px] font-bold tracking-wider mb-2 border border-rose-500/30">
+                    <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                    <span>{isDeleted ? 'VIDEO BLOB PURGED' : 'STREAM UNAVAILABLE'}</span>
+                  </div>
+                  <h4 className="text-base font-black text-white truncate max-w-xs">{item.file_name || 'Purged Video'}</h4>
+                  <p className="text-xs text-slate-400 mt-1">Uploader: @{item.user.username}</p>
+                </div>
+                <p className="text-xs text-slate-300 max-w-xs leading-relaxed bg-black/40 p-3 rounded-xl border border-white/5 font-mono text-[11px]">
+                  {isDeleted
+                    ? 'The video payload was purged from storage or unsent. The metadata record is retained for audit logging.'
+                    : 'The video stream could not be loaded.'}
+                </p>
+                <div className="flex flex-col sm:flex-row items-center gap-2 w-full pt-1">
                   <button
                     type="button"
                     onClick={() => setRetryCount((c) => c + 1)}
-                    className="px-3 py-1.5 rounded-xl bg-teal-500/20 text-teal-300 text-xs font-bold border border-teal-500/30"
+                    className="w-full min-h-[44px] px-4 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-xs font-bold border border-teal-500/30 flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                   >
-                    Retry
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Retry</span>
                   </button>
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold border border-white/10"
+                  <button
+                    type="button"
+                    onClick={() => onPurge(item)}
+                    className="w-full min-h-[44px] px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs border border-rose-500/30 flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                   >
-                    Open in Tab
-                  </a>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Purge Record</span>
+                  </button>
                 </div>
               </div>
             ) : (
@@ -568,7 +557,13 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
           </div>
         ) : isAudio ? (
           /* Audio Viewer */
-          <div className="bg-slate-950/90 border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-5 text-center backdrop-blur-xl">
+          <div className="bg-slate-950/90 border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-5 text-center backdrop-blur-xl relative">
+            {isDeleted && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-950/85 border border-rose-500/40 text-rose-300 text-[11px] font-mono font-bold shadow-lg">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                <span>DELETED AUDIO (AUDIT VAULT)</span>
+              </div>
+            )}
             <div className="w-20 h-20 rounded-3xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-400 shadow-xl">
               <Mic className="w-10 h-10" />
             </div>
@@ -580,7 +575,13 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
           </div>
         ) : isText ? (
           /* Text / Code File Inspector */
-          <div className="bg-slate-950/90 border border-white/15 rounded-2xl shadow-2xl w-full max-w-3xl max-h-full flex flex-col overflow-hidden">
+          <div className="bg-slate-950/90 border border-white/15 rounded-2xl shadow-2xl w-full max-w-3xl max-h-full flex flex-col overflow-hidden relative">
+            {isDeleted && (
+              <div className="bg-rose-950/85 border-b border-rose-500/30 px-4 py-1.5 flex items-center gap-2 text-rose-300 text-[11px] font-mono font-bold">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                <span>DELETED FILE (AUDIT VAULT)</span>
+              </div>
+            )}
             <div className="px-4 py-2.5 bg-slate-900 border-b border-white/10 flex items-center justify-between text-xs font-mono text-slate-300">
               <div className="flex items-center gap-2">
                 <FileCode className="w-4 h-4 text-teal-400" />
@@ -604,6 +605,12 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
         ) : isImage ? (
           /* Image Viewer with Skeleton, Retry & Dimension Resilience */
           <div className="relative flex items-center justify-center w-full h-full max-h-[calc(100dvh-180px)]">
+            {isDeleted && (
+              <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-950/85 border border-rose-500/40 text-rose-300 text-[11px] font-mono font-bold shadow-lg backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                <span>DELETED BY SENDER (AUDIT VAULT)</span>
+              </div>
+            )}
             {imgLoading && !imgError && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-teal-400 gap-2">
                 <Loader2 className="w-8 h-8 animate-spin" />
@@ -611,30 +618,40 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
               </div>
             )}
             {imgError ? (
-              <div className="bg-slate-900/90 border border-white/10 p-6 rounded-2xl flex flex-col items-center gap-3 text-center max-w-sm animate-fade-in">
-                <AlertTriangle className="w-8 h-8 text-amber-400" />
-                <div>
-                  <h4 className="text-sm font-bold text-white">Unable to load image</h4>
-                  <p className="text-xs text-slate-400 mt-1">The image file could not be rendered.</p>
+              <div className="bg-slate-950/90 border border-rose-500/30 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-4 text-center backdrop-blur-xl animate-fade-in mx-4">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-xl">
+                  <Trash2 className="w-8 h-8 sm:w-10 sm:h-10" />
                 </div>
-                <div className="flex gap-2 mt-1">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 font-mono text-[11px] font-bold tracking-wider mb-2 border border-rose-500/30">
+                    <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                    <span>{isDeleted ? 'ASSET FILE PURGED' : 'UNABLE TO LOAD IMAGE'}</span>
+                  </div>
+                  <h4 className="text-base font-black text-white truncate max-w-xs">{item.file_name || 'Purged File'}</h4>
+                  <p className="text-xs text-slate-400 mt-1">Uploader: @{item.user.username}</p>
+                </div>
+                <p className="text-xs text-slate-300 max-w-xs leading-relaxed bg-black/40 p-3 rounded-xl border border-white/5 font-mono text-[11px]">
+                  {isDeleted
+                    ? 'The binary payload for this asset was permanently purged from the storage vault. Metadata is preserved for audit logs.'
+                    : 'The image file could not be rendered from the storage server.'}
+                </p>
+                <div className="flex flex-col sm:flex-row items-center gap-2 w-full pt-1">
                   <button
                     type="button"
                     onClick={() => setRetryCount((c) => c + 1)}
-                    className="min-h-[44px] px-4 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-xs font-bold border border-teal-500/30 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                    className="w-full min-h-[44px] px-4 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-xs font-bold border border-teal-500/30 flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>Retry</span>
                   </button>
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="min-h-[44px] px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-all active:scale-95"
+                  <button
+                    type="button"
+                    onClick={() => onPurge(item)}
+                    className="w-full min-h-[44px] px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs border border-rose-500/30 flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Open in Tab</span>
-                  </a>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Purge Record</span>
+                  </button>
                 </div>
               </div>
             ) : (
@@ -726,7 +743,7 @@ export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
               isDeleted ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
             }`}
           >
-            {isDeleted ? 'Purged' : 'Live'}
+            {isDeleted ? 'Deleted by User' : 'Live'}
           </span>
           <span className="text-white/20 hidden sm:inline">•</span>
           <span className="hidden sm:inline text-slate-400">
@@ -3980,12 +3997,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       >
                         {/* Left: Thumbnail */}
                         <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-950 border border-white/10 flex-shrink-0 relative flex items-center justify-center shadow-inner group-hover:scale-102 transition-transform">
-                          {isDeleted ? (
-                            <div className="w-full h-full bg-rose-950/40 flex flex-col items-center justify-center text-rose-400">
-                              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6 opacity-80" />
-                              <span className="text-[7px] font-mono font-black mt-0.5 tracking-wider">PURGED</span>
-                            </div>
-                          ) : isVideo ? (
+                          {isVideo ? (
                             <div className="w-full h-full relative bg-black flex items-center justify-center">
                               <video src={fileUrl} className="w-full h-full object-cover" preload="none" />
                               <div className="w-6 h-6 rounded-full bg-teal-500 text-slate-950 flex items-center justify-center absolute shadow-md">
@@ -4013,10 +4025,15 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                             />
                           )}
 
-                          {/* Mini Status Dot */}
-                          <div className={`absolute top-1 left-1 w-2 h-2 rounded-full border border-black/40 shadow-sm ${
-                            isDeleted ? 'bg-rose-500' : 'bg-emerald-400'
+                          {/* Mini Status Dot / Deleted Ribbon */}
+                          <div className={`absolute top-1 left-1 w-2.5 h-2.5 rounded-full border border-black/40 shadow-sm ${
+                            isDeleted ? 'bg-rose-500 ring-2 ring-rose-500/30' : 'bg-emerald-400'
                           }`} />
+                          {isDeleted && (
+                            <div className="absolute bottom-0 inset-x-0 bg-rose-950/90 text-rose-300 text-[7px] font-mono font-black text-center py-0.5 tracking-wider border-t border-rose-500/30">
+                              DELETED
+                            </div>
+                          )}
                         </div>
 
                         {/* Middle: Details & User */}
@@ -4139,12 +4156,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                             }
                           }}
                         >
-                          {isDeleted ? (
-                            <div className="w-full h-full bg-rose-950/40 flex flex-col items-center justify-center text-rose-400 p-4 text-center">
-                              <Trash2 className="w-10 h-10 opacity-70 mb-1" />
-                              <span className="text-[9px] font-mono font-black tracking-wider">PURGED ASSET</span>
-                            </div>
-                          ) : isVideo ? (
+                          {isVideo ? (
                             <div className="w-full h-full relative bg-black flex items-center justify-center">
                               <video src={fileUrl} className="w-full h-full object-cover opacity-80" preload="none" />
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/20 transition-colors">
@@ -4184,7 +4196,14 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                               loading="lazy"
                               decoding="async"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
                             />
+                          )}
+
+                          {isDeleted && (
+                            <div className="absolute bottom-0 inset-x-0 bg-rose-950/85 text-rose-300 text-[8px] font-mono font-black text-center py-0.5 tracking-wider border-t border-rose-500/30 backdrop-blur-xs">
+                              DELETED BY SENDER
+                            </div>
                           )}
 
                           {/* Quick Action Overlay on Hover */}
@@ -4289,12 +4308,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                 onClick={(e) => { e.stopPropagation(); setActiveMediaPreview(item); }}
                                 className="w-12 h-12 rounded-xl bg-[var(--input)] border border-[var(--line)] overflow-hidden cursor-pointer flex items-center justify-center relative flex-shrink-0 group shadow-sm"
                               >
-                                {isDeleted ? (
-                                  <div className="w-full h-full bg-rose-950/40 flex flex-col items-center justify-center text-rose-400">
-                                    <Trash2 className="w-4 h-4 opacity-80" />
-                                    <span className="text-[6px] font-mono font-black mt-0.5">PURGED</span>
-                                  </div>
-                                ) : item.media_type === 'video' ? (
+                                {item.media_type === 'video' ? (
                                   <div className="w-full h-full relative bg-black flex items-center justify-center">
                                     <video src={fileUrl} className="w-full h-full object-cover" preload="none" />
                                     <Play className="w-3.5 h-3.5 text-teal-400 absolute fill-current" />
@@ -4304,7 +4318,15 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                 ) : item.media_type === 'file' ? (
                                   <FileText className="w-5 h-5 text-amber-400" />
                                 ) : (
-                                  <img src={fileUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                  <img
+                                    src={fileUrl}
+                                    alt=""
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                    onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                                  />
+                                )}
+                                {isDeleted && (
+                                  <div className="absolute top-1 left-1 w-2.5 h-2.5 rounded-full bg-rose-500 ring-1 ring-black shadow" title="Deleted by Sender" />
                                 )}
                               </div>
                             </td>
