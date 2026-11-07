@@ -664,6 +664,19 @@ const AppContent: React.FC = () => {
             </span>
           </div>
           <div className="flex items-center gap-1">
+            {/* Admin Console Icon in Top Bar */}
+            {(user.is_admin || user.is_top_admin) && (
+              <button
+                onClick={() => navigate('admin')}
+                className={`p-2 text-[var(--muted)] hover:text-[var(--accent-2)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)] min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer ${
+                  activeView === 'admin' ? 'text-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]' : ''
+                }`}
+                aria-label="Admin Console"
+                title="Admin Console 🛡️"
+              >
+                <Shield className="w-5 h-5 stroke-[1.8]" />
+              </button>
+            )}
             <button
               onClick={() => navigate('arcade')}
               className={`p-2 text-[var(--muted)] hover:text-[var(--accent-2)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)] min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer relative ${
@@ -1116,7 +1129,7 @@ const AppContent: React.FC = () => {
           <button
             onClick={() => navigate('create')}
             aria-label="Create Post"
-            className="w-14 h-14 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center shadow-lg shadow-[var(--shadow-accent)] border-4 border-[var(--bg)] active:scale-95 hover:scale-105 transition-all flex-shrink-0 cursor-pointer"
+            className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center shadow-lg shadow-[var(--shadow-accent)] border-4 border-[var(--bg)] active:scale-95 hover:scale-105 transition-all flex-shrink-0 cursor-pointer"
           >
             <Plus className="w-6 h-6 stroke-[2.2]" />
           </button>
@@ -1167,21 +1180,7 @@ const AppContent: React.FC = () => {
           <span className="text-[11px] tracking-tight mt-0.5">Profile</span>
         </button>
 
-        {/* Admin Console (Admin & Top Admin) */}
-        {(user.is_admin || user.is_top_admin) && (
-          <button
-            onClick={() => navigate('admin')}
-            className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all ${
-              activeView === 'admin'
-                ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
-                : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
-            }`}
-            aria-label="Admin Panel"
-          >
-            <Shield className="w-5 h-5 stroke-[1.8]" />
-            <span className="text-[11px] tracking-tight mt-0.5">Admin</span>
-          </button>
-        )}
+
 
       </nav>
       )}

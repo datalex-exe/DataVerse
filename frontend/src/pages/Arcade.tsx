@@ -1559,7 +1559,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 key={idx}
                 type="button"
                 onClick={() => handleChessSquareClick(idx)}
-                className={`w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center text-2xl font-bold transition-all relative border border-transparent select-none ${
+                className={`w-[34px] h-[34px] min-[380px]:w-9 min-[380px]:h-9 sm:w-11 sm:h-11 flex items-center justify-center text-xl sm:text-2xl font-bold transition-all relative border border-transparent select-none ${
                   isSelected 
                     ? 'bg-teal-500/40 border-teal-400 z-10 scale-105 shadow-md shadow-teal-500/20' 
                     : isDark 
@@ -1568,7 +1568,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 }`}
               >
                 {piece && (
-                  <span className={`${piece === piece.toUpperCase() ? 'text-slate-100 drop-shadow' : 'text-slate-950 drop-shadow-[0_0.75px_0.75px_rgba(255,255,255,0.75)]'} text-3xl font-black select-none`}>
+                  <span className={`${piece === piece.toUpperCase() ? 'text-slate-100 drop-shadow' : 'text-slate-950 drop-shadow-[0_0.75px_0.75px_rgba(255,255,255,0.75)]'} text-2xl sm:text-3xl font-black select-none`}>
                     {pieceUnicode[piece]}
                   </span>
                 )}
@@ -1838,7 +1838,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   };
 
   return (
-    <div className="w-full flex-1 flex flex-col items-center bg-[var(--bg)] min-h-[calc(100vh-64px)] p-3 sm:p-6 animate-fade-in select-none">
+    <div className="w-full flex-1 flex flex-col items-center bg-[var(--bg)] min-h-[calc(100vh-64px)] p-3 sm:p-6 pb-28 sm:pb-8 animate-fade-in select-none">
       
       {/* Top Header Bar */}
       <div className="w-full max-w-4xl flex flex-wrap items-center justify-between gap-2.5 mb-3 sm:mb-6">
@@ -2002,21 +2002,21 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
         {/* TAB 2: Play with Friends (True 2-Player Multiplayer) */}
         {activeTab === 'multiplayer' && (
-          <div className="w-full flex-1 flex flex-col p-4 sm:p-6 bg-[#040b0d] overflow-y-auto">
+          <div className="w-full flex-1 flex flex-col p-3 sm:p-6 pb-28 sm:pb-8 bg-[#040b0d] overflow-y-auto">
             {activeSession ? (
               /* Active Multiplayer Game Room */
               <div className="w-full flex-1 flex flex-col items-center justify-between">
                 {/* Active Session Header Bar */}
-                <div className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 mb-6">
+                <div className="w-full flex flex-wrap items-center justify-between gap-2.5 p-2.5 sm:p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 mb-4 sm:mb-6">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-3">
-                      <ArcadeAvatar url={user?.avatar_url} name={user?.display_name || user?.username || 'You'} size="w-10 h-10" rounded="rounded-xl" />
+                      <ArcadeAvatar url={user?.avatar_url} name={user?.display_name || user?.username || 'You'} size="w-8 h-8 sm:w-10 sm:h-10" rounded="rounded-xl" />
                       <div className="hidden sm:block text-left">
                         <span className="text-xs font-bold text-white block truncate max-w-[110px]">{user?.display_name || user?.username}</span>
                         <span className="text-[9px] text-teal-400 font-semibold">You (P1)</span>
                       </div>
                       <span className="text-[10px] font-black text-teal-400 px-2 py-1 bg-teal-500/15 rounded-lg border border-teal-500/30">VS</span>
-                      <ArcadeAvatar url={activeSession.opponentAvatar} name={activeSession.opponentName || 'Friend'} size="w-10 h-10" rounded="rounded-xl" />
+                      <ArcadeAvatar url={activeSession.opponentAvatar} name={activeSession.opponentName || 'Friend'} size="w-8 h-8 sm:w-10 sm:h-10" rounded="rounded-xl" />
                       <div className="text-left">
                         <span className="text-xs font-bold text-white block truncate max-w-[110px]">{activeSession.opponentName || 'Friend'}</span>
                         <span className="text-[9px] text-slate-400 font-semibold">Opponent</span>
@@ -2024,7 +2024,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto">
                     <button
                       type="button"
                       onClick={handleResetGame}

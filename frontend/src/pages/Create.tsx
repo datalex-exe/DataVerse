@@ -338,7 +338,9 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-[20px] aspect-[4/3] md:aspect-square flex flex-col items-center justify-center relative overflow-hidden transition-all p-2.5 ${
+              className={`border-2 border-dashed rounded-[20px] ${
+                filePreviews.length > 0 ? 'aspect-[4/3] md:aspect-square' : 'min-h-[290px] sm:min-h-[340px] md:aspect-square'
+              } flex flex-col items-center justify-center relative overflow-hidden transition-all p-2.5 ${
                 isDragging 
                   ? 'border-brand-500 bg-brand-500/[0.08] shadow-lg shadow-brand-500/10' 
                   : 'border-[#2c2c4a] hover:border-brand-500 bg-[#050509]/60 hover:bg-brand-500/[0.03]'
@@ -421,14 +423,14 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center w-full h-full p-6 text-center">
-                  <label className="flex flex-col items-center justify-center cursor-pointer transition-all group mb-3 focus-within:ring-2 focus-within:ring-[var(--accent-2)] rounded-2xl p-2">
-                    <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-[var(--accent-2)] flex items-center justify-center mb-3 group-hover:-translate-y-1 transition-transform duration-200 shadow-md shadow-brand-500/5">
-                      <ImageIcon className="w-7 h-7" aria-hidden="true" />
-                      <Video className="w-7 h-7 -ml-2" aria-hidden="true" />
+                <div className="flex flex-col items-center justify-center w-full h-full p-4 sm:p-6 text-center">
+                  <label className="flex flex-col items-center justify-center cursor-pointer transition-all group mb-2 focus-within:ring-2 focus-within:ring-[var(--accent-2)] rounded-2xl p-2">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-[var(--accent-2)] flex items-center justify-center mb-2.5 group-hover:-translate-y-1 transition-transform duration-200 shadow-md shadow-brand-500/5">
+                      <ImageIcon className="w-6 h-6 sm:w-7 sm:h-7" aria-hidden="true" />
+                      <Video className="w-6 h-6 sm:w-7 sm:h-7 -ml-2" aria-hidden="true" />
                     </div>
-                    <span className="text-base font-semibold text-[var(--text)] tracking-wide">Select photos or videos</span>
-                    <span className="text-xs text-[var(--muted)] mt-1 font-normal">Multiple selection allowed · Max 2 GB per file</span>
+                    <span className="text-sm sm:text-base font-semibold text-[var(--text)] tracking-wide">Select photos or videos</span>
+                    <span className="text-[11px] sm:text-xs text-[var(--muted)] mt-1 font-normal">Multiple selection allowed · Max 2 GB per file</span>
                     <input 
                       type="file" 
                       accept="image/*,video/*" 
@@ -439,17 +441,17 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                     />
                   </label>
 
-                  <div className="flex items-center gap-2 my-2 text-[11px] text-[var(--muted)] font-medium">
-                    <span className="w-10 h-px bg-[var(--line)]" />
+                  <div className="flex items-center gap-2 my-1.5 text-[10px] sm:text-[11px] text-[var(--muted)] font-medium">
+                    <span className="w-8 sm:w-10 h-px bg-[var(--line)]" />
                     <span>OR</span>
-                    <span className="w-10 h-px bg-[var(--line)]" />
+                    <span className="w-8 sm:w-10 h-px bg-[var(--line)]" />
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setShowCameraModal(true)}
                     aria-label="Open Camera to capture photo or video"
-                    className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400"
+                    className="mt-1.5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400"
                   >
                     <Camera className="w-4 h-4" aria-hidden="true" />
                     <span>Open Camera</span>
