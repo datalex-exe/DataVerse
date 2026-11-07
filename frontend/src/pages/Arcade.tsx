@@ -65,6 +65,57 @@ const pieceUnicode: Record<string, string> = {
   K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
 };
 
+
+// Helper to safely format media and avatar URLs
+const getAvatarSrc = (url?: string | null) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/')) {
+    return url;
+  }
+  return `/api/media/file/${url}`;
+};
+
+interface ArcadeAvatarProps {
+  url?: string | null;
+  name: string;
+  size?: string;
+  rounded?: string;
+  className?: string;
+}
+
+const ArcadeAvatar: React.FC<ArcadeAvatarProps> = ({
+  url,
+  name,
+  size = 'w-9 h-9',
+  rounded = 'rounded-xl',
+  className = ''
+}) => {
+  const [hasError, setHasError] = useState(false);
+  const src = getAvatarSrc(url);
+
+  if (!src || hasError) {
+    const initial = (name || 'P').trim().substring(0, 2).toUpperCase();
+    return (
+      <div 
+        className={`${size} ${rounded} bg-gradient-to-br from-teal-500/20 to-emerald-500/20 border border-teal-500/30 text-teal-300 flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm select-none ${className}`}
+      >
+        {initial}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${size} ${rounded} overflow-hidden bg-slate-900 border border-white/10 flex-shrink-0 shadow-sm relative ${className}`}>
+      <img
+        src={src}
+        alt=""
+        onError={() => setHasError(true)}
+        className="w-full h-full object-cover"
+      />
+    </div>
+  );
+};
+
 export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
@@ -1862,15 +1913,41 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       >
         {/* Retro Header Strip */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-gradient-to-r from-slate-950 via-[#06181b] to-slate-950 border-b border-white/[0.08]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-400">
-              <Gamepad2 className="w-4 h-4" />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-400">
+                <Gamepad2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h1 className="text-sm sm:text-base font-extrabold text-white tracking-wider flex items-center gap-2">
+                  Arcade 🎮
+                </h1>
+              </div>
             </div>
-            <div>
-              <h1 className="text-sm sm:text-base font-extrabold text-white tracking-wider flex items-center gap-2">
-                Arcade 🎮
-              </h1>
-            </div>
+
+            {/* Current User Profile Badge in Arcade Header */}
+            {user && (
+              <button
+                type="button"
+                onClick={() => onNavigate('profile')}
+                className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-teal-500/40 transition-all text-left active:scale-95 group shadow-sm"
+                title="Your Profile (Tap to view)"
+              >
+                <ArcadeAvatar url={user.avatar_url} name={user.display_name || user.username} size="w-7 h-7" rounded="rounded-lg" />
+                <div className="hidden min-[480px]:flex flex-col min-w-0">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-bold text-white group-hover:text-teal-300 transition-colors truncate max-w-[110px]">
+                      {user.display_name || user.username}
+                    </span>
+                    {user.is_verified && <span className="text-[10px] text-teal-400">✓</span>}
+                  </div>
+                  <span className="text-[9px] text-teal-400/80 font-mono font-medium flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Online
+                  </span>
+                </div>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -1932,16 +2009,18 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 {/* Active Session Header Bar */}
                 <div className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 mb-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300">
-                      <Gamepad2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-black text-white capitalize">
-                        {activeSession.gameType.replace('-', ' ')} Battle
-                      </h3>
-                      <p className="text-[10px] text-slate-400">
-                        Playing with <strong className="text-teal-400">{activeSession.opponentName || 'Friend'}</strong>
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <ArcadeAvatar url={user?.avatar_url} name={user?.display_name || user?.username || 'You'} size="w-10 h-10" rounded="rounded-xl" />
+                      <div className="hidden sm:block text-left">
+                        <span className="text-xs font-bold text-white block truncate max-w-[110px]">{user?.display_name || user?.username}</span>
+                        <span className="text-[9px] text-teal-400 font-semibold">You (P1)</span>
+                      </div>
+                      <span className="text-[10px] font-black text-teal-400 px-2 py-1 bg-teal-500/15 rounded-lg border border-teal-500/30">VS</span>
+                      <ArcadeAvatar url={activeSession.opponentAvatar} name={activeSession.opponentName || 'Friend'} size="w-10 h-10" rounded="rounded-xl" />
+                      <div className="text-left">
+                        <span className="text-xs font-bold text-white block truncate max-w-[110px]">{activeSession.opponentName || 'Friend'}</span>
+                        <span className="text-[9px] text-slate-400 font-semibold">Opponent</span>
+                      </div>
                     </div>
                   </div>
 
@@ -1972,6 +2051,48 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             ) : (
               /* Multiplayer Lobby */
               <div className="w-full flex flex-col gap-6">
+                
+                {/* Current User Player Profile Card */}
+                {user && (
+                  <div className="w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-[#061e1b] to-slate-900/90 border border-teal-500/30 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
+                      <div className="relative">
+                        <ArcadeAvatar url={user.avatar_url} name={user.display_name || user.username} size="w-12 h-12" rounded="rounded-2xl" />
+                        <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-950" title="Online" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-sm font-black text-white truncate">{user.display_name || user.username}</h4>
+                          {user.is_verified && <span className="text-teal-400 text-xs font-bold">✓</span>}
+                        </div>
+                        <p className="text-[11px] text-teal-300/80 font-mono">@{user.username}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                            🎮 Ready for 1v1 Battles
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setShowChallengeModal(true)}
+                        className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black transition-all shadow-md active:scale-95"
+                      >
+                        <Swords className="w-3.5 h-3.5" />
+                        <span>Challenge a Friend</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('profile')}
+                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold border border-white/10 transition-colors"
+                      >
+                        View Profile
+                      </button>
+                    </div>
+                  </div>
+                )}
                 
                 {/* Multiplayer 1v1 Games Grid */}
                 <div>
@@ -2029,13 +2150,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                           className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/50 border border-white/5 hover:border-teal-500/30 transition-all"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            {c.avatar_url ? (
-                              <img src={c.avatar_url} alt={c.display_name} className="w-9 h-9 rounded-xl object-cover" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-xs">
-                                {c.display_name?.[0]?.toUpperCase()}
-                              </div>
-                            )}
+                            <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-10 h-10" rounded="rounded-xl" />
                             <div className="min-w-0">
                               <h5 className="text-xs font-bold text-white truncate">{c.display_name}</h5>
                               <p className="text-[10px] text-slate-400 truncate">@{c.username}</p>
@@ -2109,13 +2224,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          {c.avatar_url ? (
-                            <img src={c.avatar_url} alt={c.display_name} className="w-7 h-7 rounded-lg object-cover" />
-                          ) : (
-                            <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold text-xs">
-                              {c.display_name?.[0]?.toUpperCase()}
-                            </div>
-                          )}
+                          <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-8 h-8" rounded="rounded-lg" />
                           <div className="min-w-0">
                             <span className="text-xs font-bold block truncate">{c.display_name}</span>
                             <span className="text-[9px] text-slate-400 block truncate">@{c.username}</span>
