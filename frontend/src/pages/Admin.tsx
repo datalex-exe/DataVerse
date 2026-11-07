@@ -2949,216 +2949,451 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
           {activeTab === 'media' && currentUser?.is_top_admin && (
             <div className="space-y-6 animate-fade-in select-none pb-36 sm:pb-16">
               
-              {/* Header Card */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle_at_top_right,var(--glow),transparent_70%)] pointer-events-none opacity-50" />
+              {/* Header Card: Cyber Command Vault */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 p-6 sm:p-7 rounded-3xl bg-gradient-to-br from-[var(--card)] via-[color-mix(in_srgb,var(--card)_95%,var(--accent-2))] to-[var(--card)] border border-[color-mix(in_srgb,var(--accent-2)_25%,var(--line))] shadow-2xl relative overflow-hidden">
+                {/* Background ambient lighting */}
+                <div className="absolute top-0 right-0 w-96 h-96 bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--accent-2)_18%,transparent),transparent_70%)] pointer-events-none" />
+                <div className="absolute -bottom-10 -left-10 w-72 h-72 bg-[radial-gradient(circle_at_bottom_left,color-mix(in_srgb,var(--accent)_12%,transparent),transparent_70%)] pointer-events-none" />
                 
-                <div className="flex items-start gap-3.5 relative z-10 min-w-0">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-2)] flex items-center justify-center text-[var(--on-accent)] shadow-lg shadow-[var(--shadow-accent)] flex-shrink-0">
-                    <Film className="w-6 h-6" />
+                <div className="flex items-start gap-4 relative z-10 min-w-0">
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[var(--accent)] via-[var(--accent-2)] to-emerald-400 flex items-center justify-center text-[var(--on-accent)] shadow-xl shadow-[var(--shadow-accent)] flex-shrink-0 ring-4 ring-white/10">
+                    <Film className="w-7 h-7" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-base sm:text-lg font-black text-[var(--text)] tracking-wide uppercase">System Media Platform</h3>
-                      <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--accent-2)_15%,transparent)] text-[var(--accent-2)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)]">
-                        Full Audit Access
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-sm">
+                        <Shield className="w-3.5 h-3.5 text-amber-400" />
+                        Super Admin Vault
                       </span>
-                      <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                        Super Admin Only
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Live & Purged Asset Sync
                       </span>
                     </div>
-                    <p className="text-xs text-[var(--muted)] mt-1 max-w-2xl leading-relaxed">
-                      Complete administrative media vault. Access all photos, videos, voice recordings, and files sent across direct messages, groups, feed posts, and reels — including deleted and unsent media, searchable by user name.
+
+                    <h3 className="text-lg sm:text-xl font-extrabold text-[var(--text)] tracking-tight">
+                      System Media Platform
+                    </h3>
+
+                    <p className="text-xs text-[var(--muted)] mt-1.5 max-w-2xl leading-relaxed">
+                      Central administrative media repository. Inspect, search, and manage all media assets sent across direct messages, group chats, feed posts, and reels — including deleted and unsent media, indexed by user.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto relative z-10">
+                {/* Top Controls */}
+                <div className="flex items-center gap-2.5 self-start lg:self-center relative z-10">
+                  {(mediaUserSearch || mediaStatusFilter !== 'all' || mediaTypeFilter !== 'all' || mediaSourceFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMediaUserSearch('');
+                        setMediaStatusFilter('all');
+                        setMediaTypeFilter('all');
+                        setMediaSourceFilter('all');
+                      }}
+                      className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-bold text-[var(--muted)] hover:text-[var(--text)] border border-[var(--line)] transition-all flex items-center gap-1.5 active:scale-95"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Reset Filters</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={fetchAdminMedia}
                     disabled={mediaLoading}
-                    className="px-3.5 py-2 rounded-xl bg-[var(--hover)] hover:bg-[var(--card-border)] text-xs font-bold text-[var(--text)] border border-[var(--line)] transition-all flex items-center gap-2 cursor-pointer"
-                    title="Refresh Media Vault"
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-black tracking-wide shadow-lg shadow-[var(--shadow-accent)] hover:opacity-90 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                    title="Refresh Vault"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${mediaLoading ? 'animate-spin text-[var(--accent-2)]' : ''}`} />
-                    <span>Refresh</span>
+                    <RefreshCw className={`w-3.5 h-3.5 ${mediaLoading ? 'animate-spin' : ''}`} />
+                    <span>Refresh Vault</span>
                   </button>
                 </div>
               </div>
 
-              {/* Metric Summary Counters */}
+              {/* Metric Summary Strip: Interactive Filtering Tiles */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
-                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">Total Assets</div>
-                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.total}</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-emerald-500/20 bg-emerald-500/5 shadow-sm">
-                  <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Sent / Live
+                {/* Total Assets */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMediaStatusFilter('all');
+                    setMediaTypeFilter('all');
+                  }}
+                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                    mediaStatusFilter === 'all' && mediaTypeFilter === 'all'
+                      ? 'bg-[var(--card)] border-2 border-[var(--accent-2)] shadow-lg shadow-[var(--shadow-accent)]'
+                      : 'bg-[var(--card)] border border-[var(--line)] hover:border-[var(--card-border)]'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center justify-between">
+                    <span>Total Assets</span>
+                    <Layers className="w-3.5 h-3.5 text-[var(--muted)] group-hover:text-[var(--text)] transition-colors" />
                   </div>
-                  <div className="text-xl font-black text-emerald-400 mt-1">{adminMediaCounts.active}</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-rose-500/20 bg-rose-500/5 shadow-sm">
-                  <div className="text-[10px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                    Deleted
+                  <div className="text-2xl font-black text-[var(--text)] mt-1.5">{adminMediaCounts.total}</div>
+                  <div className="text-[9px] text-[var(--muted)] mt-0.5">All platform media</div>
+                </button>
+
+                {/* Sent / Live */}
+                <button
+                  type="button"
+                  onClick={() => setMediaStatusFilter(mediaStatusFilter === 'active' ? 'all' : 'active')}
+                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                    mediaStatusFilter === 'active'
+                      ? 'bg-emerald-500/15 border-2 border-emerald-400 shadow-lg shadow-emerald-500/20'
+                      : 'bg-[var(--card)] border border-emerald-500/20 hover:border-emerald-500/40'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      Live / Sent
+                    </span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
-                  <div className="text-xl font-black text-rose-400 mt-1">{adminMediaCounts.deleted}</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
-                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
-                    <ImageIcon className="w-3 h-3 text-[var(--accent-2)]" />
-                    Photos
+                  <div className="text-2xl font-black text-emerald-400 mt-1.5">{adminMediaCounts.active}</div>
+                  <div className="text-[9px] text-emerald-400/80 mt-0.5">Visible to users</div>
+                </button>
+
+                {/* Deleted */}
+                <button
+                  type="button"
+                  onClick={() => setMediaStatusFilter(mediaStatusFilter === 'deleted' ? 'all' : 'deleted')}
+                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                    mediaStatusFilter === 'deleted'
+                      ? 'bg-rose-500/15 border-2 border-rose-400 shadow-lg shadow-rose-500/20'
+                      : 'bg-[var(--card)] border border-rose-500/20 hover:border-rose-500/40'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-rose-400 uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-400" />
+                      Deleted
+                    </span>
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                   </div>
-                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.images}</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
-                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
-                    <Film className="w-3 h-3 text-[var(--accent-2)]" />
-                    Videos
+                  <div className="text-2xl font-black text-rose-400 mt-1.5">{adminMediaCounts.deleted}</div>
+                  <div className="text-[9px] text-rose-400/80 mt-0.5">Removed or unsent</div>
+                </button>
+
+                {/* Photos */}
+                <button
+                  type="button"
+                  onClick={() => setMediaTypeFilter(mediaTypeFilter === 'image' ? 'all' : 'image')}
+                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                    mediaTypeFilter === 'image'
+                      ? 'bg-[var(--card)] border-2 border-cyan-400 shadow-lg shadow-cyan-500/20'
+                      : 'bg-[var(--card)] border border-[var(--line)] hover:border-cyan-500/40'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center justify-between">
+                    <span>Photos</span>
+                    <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
                   </div>
-                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.videos}</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
-                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
-                    <Mic className="w-3 h-3 text-[var(--accent-2)]" />
-                    Audio
+                  <div className="text-2xl font-black text-[var(--text)] mt-1.5">{adminMediaCounts.images}</div>
+                  <div className="text-[9px] text-[var(--muted)] mt-0.5">Images & screenshots</div>
+                </button>
+
+                {/* Videos */}
+                <button
+                  type="button"
+                  onClick={() => setMediaTypeFilter(mediaTypeFilter === 'video' ? 'all' : 'video')}
+                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                    mediaTypeFilter === 'video'
+                      ? 'bg-[var(--card)] border-2 border-indigo-400 shadow-lg shadow-indigo-500/20'
+                      : 'bg-[var(--card)] border border-[var(--line)] hover:border-indigo-500/40'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center justify-between">
+                    <span>Videos</span>
+                    <Film className="w-3.5 h-3.5 text-indigo-400" />
                   </div>
-                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.audio}</div>
-                </div>
-                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
-                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
-                    <Folder className="w-3 h-3 text-[var(--accent-2)]" />
-                    Files
+                  <div className="text-2xl font-black text-[var(--text)] mt-1.5">{adminMediaCounts.videos}</div>
+                  <div className="text-[9px] text-[var(--muted)] mt-0.5">Clips & video notes</div>
+                </button>
+
+                {/* Audio */}
+                <button
+                  type="button"
+                  onClick={() => setMediaTypeFilter(mediaTypeFilter === 'audio' ? 'all' : 'audio')}
+                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                    mediaTypeFilter === 'audio'
+                      ? 'bg-[var(--card)] border-2 border-purple-400 shadow-lg shadow-purple-500/20'
+                      : 'bg-[var(--card)] border border-[var(--line)] hover:border-purple-500/40'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center justify-between">
+                    <span>Voice</span>
+                    <Mic className="w-3.5 h-3.5 text-purple-400" />
                   </div>
-                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.files}</div>
-                </div>
+                  <div className="text-2xl font-black text-[var(--text)] mt-1.5">{adminMediaCounts.audio}</div>
+                  <div className="text-[9px] text-[var(--muted)] mt-0.5">Voice messages</div>
+                </button>
+
+                {/* Files */}
+                <button
+                  type="button"
+                  onClick={() => setMediaTypeFilter(mediaTypeFilter === 'file' ? 'all' : 'file')}
+                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                    mediaTypeFilter === 'file'
+                      ? 'bg-[var(--card)] border-2 border-amber-400 shadow-lg shadow-amber-500/20'
+                      : 'bg-[var(--card)] border border-[var(--line)] hover:border-amber-500/40'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center justify-between">
+                    <span>Files</span>
+                    <Folder className="w-3.5 h-3.5 text-amber-400" />
+                  </div>
+                  <div className="text-2xl font-black text-[var(--text)] mt-1.5">{adminMediaCounts.files}</div>
+                  <div className="text-[9px] text-[var(--muted)] mt-0.5">Docs & attachments</div>
+                </button>
               </div>
 
-              {/* Filters & Controls Toolbar */}
-              <div className="p-4 rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3 flex-wrap">
-                {/* Search by User name or filename */}
-                <div className="relative flex-1 min-w-[240px]">
-                  <Search className="w-4 h-4 text-[var(--muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={mediaUserSearch}
-                    onChange={(e) => setMediaUserSearch(e.target.value)}
-                    placeholder="Search by user name (@user), display name, or filename..."
-                    className="w-full bg-[var(--input)] border border-[var(--line)] rounded-2xl pl-10 pr-9 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-2)] transition-colors"
-                  />
-                  {mediaUserSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setMediaUserSearch('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] p-0.5 rounded-md"
-                      title="Clear search"
+              {/* Filters & Command Toolbar */}
+              <div className="p-4 sm:p-5 rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl flex flex-col gap-4">
+                
+                {/* Search Bar + View Toggle */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-[var(--muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={mediaUserSearch}
+                      onChange={(e) => setMediaUserSearch(e.target.value)}
+                      placeholder="Search media by username (@user), display name, or filename..."
+                      className="w-full bg-[var(--input)] border border-[var(--line)] rounded-2xl pl-10 pr-9 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)] transition-all"
+                    />
+                    {mediaUserSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setMediaUserSearch('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] p-0.5 rounded-md"
+                        title="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdowns + Layout View Controls */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Status Dropdown */}
+                    <select
+                      value={mediaStatusFilter}
+                      onChange={(e) => setMediaStatusFilter(e.target.value as any)}
+                      aria-label="Filter media by status"
+                      className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
                     >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                      <option value="all">Status: All (Sent & Deleted)</option>
+                      <option value="active">🟢 Live / Sent Only</option>
+                      <option value="deleted">🔴 Deleted / Purged Only</option>
+                    </select>
+
+                    {/* Source Dropdown */}
+                    <select
+                      value={mediaSourceFilter}
+                      onChange={(e) => setMediaSourceFilter(e.target.value as any)}
+                      aria-label="Filter media by source"
+                      className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
+                    >
+                      <option value="all">Source: All</option>
+                      <option value="chat">💬 Chat Messages Only</option>
+                      <option value="post">📰 Posts & Reels Only</option>
+                    </select>
+
+                    {/* View Mode Toggle: Grid vs Table */}
+                    <div className="flex items-center p-1 bg-[var(--input)] rounded-xl border border-[var(--line)]">
+                      <button
+                        type="button"
+                        onClick={() => setMediaViewMode('grid')}
+                        className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                          mediaViewMode === 'grid'
+                            ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-sm'
+                            : 'text-[var(--muted)] hover:text-[var(--text)]'
+                        }`}
+                        title="Visual Grid View"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMediaViewMode('table')}
+                        className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                          mediaViewMode === 'table'
+                            ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-sm'
+                            : 'text-[var(--muted)] hover:text-[var(--text)]'
+                        }`}
+                        title="Audit Table View"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Filter Controls Row */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Status Filter */}
-                  <select
-                    value={mediaStatusFilter}
-                    onChange={(e) => setMediaStatusFilter(e.target.value as any)}
-                    aria-label="Filter media by status"
-                    className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
-                  >
-                    <option value="all">All Status (Sent & Deleted)</option>
-                    <option value="active">🟢 Live / Sent Only</option>
-                    <option value="deleted">🔴 Deleted Only</option>
-                  </select>
+                {/* Quick-Filter Pills Strip */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-bold">
+                  <span className="text-[10px] text-[var(--muted)] uppercase tracking-wider mr-1 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-[var(--accent-2)]" />
+                    Filter:
+                  </span>
 
-                  {/* Type Filter */}
-                  <select
-                    value={mediaTypeFilter}
-                    onChange={(e) => setMediaTypeFilter(e.target.value as any)}
-                    aria-label="Filter media by type"
-                    className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMediaStatusFilter('all');
+                      setMediaTypeFilter('all');
+                      setMediaSourceFilter('all');
+                    }}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
+                      mediaStatusFilter === 'all' && mediaTypeFilter === 'all' && mediaSourceFilter === 'all'
+                        ? 'bg-[var(--text)] text-[var(--bg)] font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] border border-[var(--line)]'
+                    }`}
                   >
-                    <option value="all">All Types</option>
-                    <option value="image">📸 Photos & Images</option>
-                    <option value="video">🎬 Videos & Reels</option>
-                    <option value="audio">🎙️ Voice & Audio</option>
-                    <option value="file">📁 Files & Docs</option>
-                  </select>
+                    All Assets
+                  </button>
 
-                  {/* Source Filter */}
-                  <select
-                    value={mediaSourceFilter}
-                    onChange={(e) => setMediaSourceFilter(e.target.value as any)}
-                    aria-label="Filter media by source"
-                    className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
+                  <button
+                    type="button"
+                    onClick={() => setMediaStatusFilter(mediaStatusFilter === 'active' ? 'all' : 'active')}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap flex items-center gap-1 active:scale-95 ${
+                      mediaStatusFilter === 'active'
+                        ? 'bg-emerald-500 text-white font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-emerald-400 border border-[var(--line)]'
+                    }`}
                   >
-                    <option value="all">All Sources</option>
-                    <option value="chat">💬 Chat Messages</option>
-                    <option value="post">📰 Posts & Reels</option>
-                  </select>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span>Live Only</span>
+                  </button>
 
-                  {/* View Mode Toggle: Grid vs Table */}
-                  <div className="flex items-center p-1 bg-[var(--input)] rounded-xl border border-[var(--line)]">
-                    <button
-                      type="button"
-                      onClick={() => setMediaViewMode('grid')}
-                      className={`p-1.5 rounded-lg text-xs font-bold transition-colors ${
-                        mediaViewMode === 'grid'
-                          ? 'bg-[var(--card)] text-[var(--accent-2)] shadow-sm'
-                          : 'text-[var(--muted)] hover:text-[var(--text)]'
-                      }`}
-                      title="Visual Grid View"
-                    >
-                      <Layers className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMediaViewMode('table')}
-                      className={`p-1.5 rounded-lg text-xs font-bold transition-colors ${
-                        mediaViewMode === 'table'
-                          ? 'bg-[var(--card)] text-[var(--accent-2)] shadow-sm'
-                          : 'text-[var(--muted)] hover:text-[var(--text)]'
-                      }`}
-                      title="Detailed Table View"
-                    >
-                      <SlidersHorizontal className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMediaStatusFilter(mediaStatusFilter === 'deleted' ? 'all' : 'deleted')}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap flex items-center gap-1 active:scale-95 ${
+                      mediaStatusFilter === 'deleted'
+                        ? 'bg-rose-500 text-white font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-rose-400 border border-[var(--line)]'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                    <span>Deleted Only</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaTypeFilter(mediaTypeFilter === 'image' ? 'all' : 'image')}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
+                      mediaTypeFilter === 'image'
+                        ? 'bg-cyan-500 text-slate-950 font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-cyan-400 border border-[var(--line)]'
+                    }`}
+                  >
+                    📸 Photos
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaTypeFilter(mediaTypeFilter === 'video' ? 'all' : 'video')}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
+                      mediaTypeFilter === 'video'
+                        ? 'bg-indigo-500 text-white font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-indigo-400 border border-[var(--line)]'
+                    }`}
+                  >
+                    🎬 Videos
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaTypeFilter(mediaTypeFilter === 'audio' ? 'all' : 'audio')}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
+                      mediaTypeFilter === 'audio'
+                        ? 'bg-purple-500 text-white font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-purple-400 border border-[var(--line)]'
+                    }`}
+                  >
+                    🎙️ Voice
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaTypeFilter(mediaTypeFilter === 'file' ? 'all' : 'file')}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
+                      mediaTypeFilter === 'file'
+                        ? 'bg-amber-500 text-slate-950 font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-amber-400 border border-[var(--line)]'
+                    }`}
+                  >
+                    📁 Files
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaSourceFilter(mediaSourceFilter === 'chat' ? 'all' : 'chat')}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
+                      mediaSourceFilter === 'chat'
+                        ? 'bg-blue-600 text-white font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-blue-400 border border-[var(--line)]'
+                    }`}
+                  >
+                    💬 Chat Messages
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMediaSourceFilter(mediaSourceFilter === 'post' ? 'all' : 'post')}
+                    className={`px-3 py-1 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
+                      mediaSourceFilter === 'post'
+                        ? 'bg-pink-600 text-white font-black'
+                        : 'bg-[var(--input)] text-[var(--muted)] hover:text-pink-400 border border-[var(--line)]'
+                    }`}
+                  >
+                    📰 Posts & Reels
+                  </button>
                 </div>
               </div>
 
               {/* Media Content Display */}
               {mediaLoading ? (
-                <div className="py-24 flex flex-col items-center justify-center text-[var(--muted)] gap-3 bg-[var(--card)] border border-[var(--line)] rounded-3xl">
-                  <Loader2 className="w-8 h-8 animate-spin text-[var(--accent-2)]" />
-                  <span className="text-xs font-semibold">Querying system media vault...</span>
+                <div className="py-24 flex flex-col items-center justify-center text-[var(--muted)] gap-3 bg-[var(--card)] border border-[var(--line)] rounded-3xl shadow-xl">
+                  <div className="relative">
+                    <Loader2 className="w-10 h-10 animate-spin text-[var(--accent-2)]" />
+                    <Film className="w-4 h-4 text-[var(--accent-2)] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  <span className="text-xs font-bold text-[var(--text)]">Searching System Media Vault...</span>
+                  <span className="text-[10px] text-[var(--muted)]">Reading asset metadata across messages and posts</span>
                 </div>
               ) : adminMedia.length === 0 ? (
-                <div className="py-20 text-center text-[var(--muted)] bg-[var(--card)] border border-[var(--line)] rounded-3xl p-6 flex flex-col items-center justify-center space-y-2">
-                  <div className="w-14 h-14 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center text-[var(--muted)]">
-                    <Film className="w-7 h-7 opacity-60" />
+                <div className="py-20 text-center text-[var(--muted)] bg-[var(--card)] border border-[var(--line)] rounded-3xl p-8 flex flex-col items-center justify-center space-y-3 shadow-xl">
+                  <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-[var(--input)] to-slate-900 border border-[var(--line)] flex items-center justify-center text-[var(--muted)] shadow-inner">
+                    <Film className="w-8 h-8 opacity-40 text-[var(--accent-2)]" />
                   </div>
-                  <h4 className="text-sm font-bold text-[var(--text)]">No Media Assets Found</h4>
-                  <p className="text-xs text-[var(--muted)] max-w-sm">
-                    {mediaUserSearch ? `No media found matching "${mediaUserSearch}". Try adjusting your search or filters.` : 'No media items currently logged in the platform.'}
+                  <h4 className="text-base font-black text-[var(--text)]">No Media Assets Found</h4>
+                  <p className="text-xs text-[var(--muted)] max-w-sm leading-relaxed">
+                    {mediaUserSearch 
+                      ? `No media found matching query "${mediaUserSearch}". Check your spelling or try resetting filters.` 
+                      : 'No media items currently logged under the selected criteria.'}
                   </p>
-                  {mediaUserSearch && (
+                  {(mediaUserSearch || mediaStatusFilter !== 'all' || mediaTypeFilter !== 'all' || mediaSourceFilter !== 'all') && (
                     <button
                       type="button"
-                      onClick={() => { setMediaUserSearch(''); setMediaStatusFilter('all'); setMediaTypeFilter('all'); setMediaSourceFilter('all'); }}
-                      className="mt-2 text-xs font-bold text-[var(--accent-2)] hover:underline cursor-pointer"
+                      onClick={() => { 
+                        setMediaUserSearch(''); 
+                        setMediaStatusFilter('all'); 
+                        setMediaTypeFilter('all'); 
+                        setMediaSourceFilter('all'); 
+                      }}
+                      className="mt-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-black shadow-md hover:opacity-90 transition-all cursor-pointer"
                     >
-                      Clear all filters
+                      Clear All Filters
                     </button>
                   )}
                 </div>
               ) : mediaViewMode === 'grid' ? (
-                /* VISUAL GRID VIEW */
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+                /* VISUAL GRID VIEW: High-end Cyber Vault Cards */
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {adminMedia.map((item) => {
                     const isVideo = item.media_type === 'video';
                     const isAudio = item.media_type === 'audio';
@@ -3169,28 +3404,32 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     return (
                       <div
                         key={item.id}
-                        className={`group rounded-2xl bg-[var(--card)] border transition-all duration-200 overflow-hidden flex flex-col shadow-md relative ${
-                          isDeleted ? 'border-rose-500/30 hover:border-rose-500/60' : 'border-[var(--line)] hover:border-[var(--accent-2)]/60'
+                        className={`group rounded-3xl bg-[var(--card)] border transition-all duration-300 overflow-hidden flex flex-col shadow-lg hover:shadow-2xl hover:-translate-y-1 relative ${
+                          isDeleted 
+                            ? 'border-rose-500/30 hover:border-rose-500/70 hover:shadow-rose-500/10' 
+                            : 'border-[var(--line)] hover:border-[var(--accent-2)] hover:shadow-[var(--shadow-accent)]'
                         }`}
                       >
                         {/* Status Badges Overlay */}
-                        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 pointer-events-none">
-                          <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full backdrop-blur-md shadow ${
-                            isDeleted ? 'bg-rose-500/80 text-white' : 'bg-emerald-500/80 text-white'
+                        <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 pointer-events-none">
+                          <span className={`text-[8px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full backdrop-blur-md shadow-md border ${
+                            isDeleted 
+                              ? 'bg-rose-950/85 text-rose-300 border-rose-500/40' 
+                              : 'bg-emerald-950/85 text-emerald-300 border-emerald-500/40'
                           }`}>
-                            {isDeleted ? 'Deleted' : 'Sent'}
+                            {isDeleted ? 'Deleted' : 'Live'}
                           </span>
                         </div>
 
-                        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
-                          <span className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-white/90">
-                            {item.source === 'chat' ? 'Chat' : 'Post'}
+                        <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 pointer-events-none">
+                          <span className="text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-950/80 backdrop-blur-md text-white/90 border border-white/10 shadow-sm">
+                            {item.source === 'chat' ? '💬 Chat' : '📰 Post'}
                           </span>
                         </div>
 
                         {/* Thumbnail / Media Box */}
                         <div
-                          className="relative aspect-square w-full bg-[var(--input)] overflow-hidden cursor-pointer flex items-center justify-center"
+                          className="relative aspect-square w-full bg-[#03060a] overflow-hidden cursor-pointer flex items-center justify-center select-none"
                           onClick={() => {
                             if (isFile) {
                               window.open(fileUrl, '_blank');
@@ -3202,27 +3441,33 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                           {isVideo ? (
                             <div className="w-full h-full relative bg-black flex items-center justify-center">
                               <video src={fileUrl} className="w-full h-full object-cover opacity-80" preload="none" />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                                <div className="w-9 h-9 rounded-full bg-black/70 border border-white/20 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/20 transition-colors">
+                                <div className="w-11 h-11 rounded-2xl bg-black/75 border border-white/20 text-white flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+                                  <Play className="w-5 h-5 fill-current ml-0.5 text-teal-400" />
                                 </div>
                               </div>
                             </div>
                           ) : isAudio ? (
-                            <div className="w-full h-full bg-gradient-to-br from-purple-950/40 to-slate-950 flex flex-col items-center justify-center p-3 text-center gap-2">
-                              <div className="w-10 h-10 rounded-full bg-[var(--accent)]/20 border border-[var(--accent)]/30 text-[var(--accent-2)] flex items-center justify-center shadow-md">
-                                <Mic className="w-5 h-5" />
+                            <div className="w-full h-full bg-gradient-to-br from-[#12072b] via-[#090317] to-slate-950 flex flex-col items-center justify-center p-4 text-center gap-2">
+                              <div className="w-12 h-12 rounded-2xl bg-purple-500/20 border border-purple-500/30 text-purple-400 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                <Mic className="w-6 h-6" />
                               </div>
-                              <span className="text-[10px] font-bold text-white/80 truncate max-w-full">
+                              <span className="text-[10px] font-black text-purple-300 uppercase tracking-wider">
+                                Voice Note
+                              </span>
+                              <span className="text-[9px] font-bold text-white/70 truncate max-w-full font-mono">
                                 {item.file_name}
                               </span>
                             </div>
                           ) : isFile ? (
-                            <div className="w-full h-full bg-gradient-to-br from-blue-950/40 to-slate-950 flex flex-col items-center justify-center p-3 text-center gap-2">
-                              <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shadow-md">
-                                <FileText className="w-5 h-5" />
+                            <div className="w-full h-full bg-gradient-to-br from-[#061826] via-[#040e17] to-slate-950 flex flex-col items-center justify-center p-4 text-center gap-2">
+                              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                <FileText className="w-6 h-6" />
                               </div>
-                              <span className="text-[10px] font-bold text-white/80 truncate max-w-full">
+                              <span className="text-[10px] font-black text-amber-300 uppercase tracking-wider">
+                                Document
+                              </span>
+                              <span className="text-[9px] font-bold text-white/70 truncate max-w-full font-mono">
                                 {item.file_name}
                               </span>
                             </div>
@@ -3232,20 +3477,20 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                               alt={item.file_name}
                               loading="lazy"
                               decoding="async"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                           )}
 
                           {/* Quick Action Overlay on Hover */}
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setActiveMediaPreview(item);
                               }}
-                              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center shadow-lg transition-transform active:scale-95"
-                              title="Full Preview"
+                              className="w-9 h-9 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center shadow-lg transition-transform active:scale-90"
+                              title="Inspect Media"
                             >
                               <Eye className="w-4 h-4" />
                             </button>
@@ -3255,8 +3500,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                               onClick={(e) => e.stopPropagation()}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center shadow-lg transition-transform active:scale-95"
-                              title="Download File"
+                              className="w-9 h-9 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center shadow-lg transition-transform active:scale-90"
+                              title="Download Asset"
                             >
                               <Download className="w-4 h-4" />
                             </a>
@@ -3266,23 +3511,23 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                 e.stopPropagation();
                                 handlePurgeMedia(item);
                               }}
-                              className="w-8 h-8 rounded-full bg-rose-600/80 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg transition-transform active:scale-95"
+                              className="w-9 h-9 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90"
                               title="Purge Media Permanently"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
 
                         {/* Card Info Details */}
-                        <div className="p-2.5 flex flex-col justify-between flex-1 gap-1.5">
+                        <div className="p-3 flex flex-col justify-between flex-1 gap-2 bg-[var(--card)]">
                           {/* User info row with 1-click filter */}
                           <div 
-                            className="flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity"
+                            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity group/user"
                             onClick={() => setMediaUserSearch(item.user.username)}
                             title={`Filter media by @${item.user.username}`}
                           >
-                            <div className="w-5 h-5 rounded-full bg-[var(--input)] border border-[var(--line)] overflow-hidden flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-[var(--accent-2)]">
+                            <div className="w-6 h-6 rounded-full bg-[var(--input)] border border-[var(--line)] overflow-hidden flex-shrink-0 flex items-center justify-center text-[9px] font-black text-[var(--accent-2)]">
                               {item.user.avatar_url ? (
                                 <img src={`/api/media/file/${item.user.avatar_url}`} alt="" className="w-full h-full object-cover" />
                               ) : (
@@ -3290,19 +3535,19 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                               )}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-[11px] font-bold text-[var(--text)] truncate leading-tight">
+                              <p className="text-xs font-bold text-[var(--text)] truncate leading-tight group-hover/user:text-[var(--accent-2)] transition-colors">
                                 @{item.user.username}
                               </p>
                             </div>
                           </div>
 
                           {/* Filename & Timestamp */}
-                          <div className="flex items-center justify-between text-[9px] text-[var(--muted)] pt-1 border-t border-[var(--line)]">
-                            <span className="truncate max-w-[65%]" title={item.file_name}>
+                          <div className="flex items-center justify-between text-[10px] text-[var(--muted)] pt-1.5 border-t border-[var(--line)]">
+                            <span className="truncate max-w-[62%] font-medium" title={item.file_name}>
                               {item.file_name}
                             </span>
-                            <span className="font-mono flex-shrink-0 ml-1">
-                              {new Date(item.created_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}
+                            <span className="font-mono text-[9px] flex-shrink-0 ml-1 text-[var(--muted)]">
+                              {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </span>
                           </div>
                         </div>
@@ -3336,17 +3581,17 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                             <td className="py-2.5 px-4">
                               <div
                                 onClick={() => setActiveMediaPreview(item)}
-                                className="w-12 h-12 rounded-xl bg-[var(--input)] border border-[var(--line)] overflow-hidden cursor-pointer flex items-center justify-center relative flex-shrink-0 group"
+                                className="w-12 h-12 rounded-xl bg-[var(--input)] border border-[var(--line)] overflow-hidden cursor-pointer flex items-center justify-center relative flex-shrink-0 group shadow-sm"
                               >
                                 {item.media_type === 'video' ? (
                                   <div className="w-full h-full relative bg-black flex items-center justify-center">
                                     <video src={fileUrl} className="w-full h-full object-cover" preload="none" />
-                                    <Play className="w-3.5 h-3.5 text-white absolute fill-current" />
+                                    <Play className="w-3.5 h-3.5 text-teal-400 absolute fill-current" />
                                   </div>
                                 ) : item.media_type === 'audio' ? (
-                                  <Mic className="w-5 h-5 text-[var(--accent-2)]" />
+                                  <Mic className="w-5 h-5 text-purple-400" />
                                 ) : item.media_type === 'file' ? (
-                                  <FileText className="w-5 h-5 text-blue-400" />
+                                  <FileText className="w-5 h-5 text-amber-400" />
                                 ) : (
                                   <img src={fileUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                 )}
@@ -3356,7 +3601,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                             {/* User */}
                             <td className="py-2.5 px-4">
                               <div
-                                className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity"
+                                className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition-opacity"
                                 onClick={() => setMediaUserSearch(item.user.username)}
                                 title={`Filter by @${item.user.username}`}
                               >
@@ -3376,17 +3621,17 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
                             {/* Asset Details */}
                             <td className="py-2.5 px-4">
-                              <div className="font-semibold text-xs truncate max-w-xs" title={item.file_name}>
+                              <div className="font-bold text-xs truncate max-w-xs" title={item.file_name}>
                                 {item.file_name}
                               </div>
-                              <div className="text-[10px] text-[var(--muted)] uppercase font-mono mt-0.5">
+                              <div className="text-[9px] text-[var(--muted)] uppercase font-mono mt-0.5">
                                 {item.media_type}
                               </div>
                             </td>
 
                             {/* Origin */}
                             <td className="py-2.5 px-4">
-                              <span className="text-[11px] font-medium text-[var(--text)]">
+                              <span className="text-[11px] font-semibold text-[var(--text)]">
                                 {item.source_name}
                               </span>
                               {item.context && item.context !== item.file_name && (
@@ -3396,13 +3641,13 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
                             {/* Status */}
                             <td className="py-2.5 px-4">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 ${
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 ${
                                 isDeleted
                                   ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
                                   : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                               }`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${isDeleted ? 'bg-rose-400' : 'bg-emerald-400 animate-pulse'}`} />
-                                {isDeleted ? 'Deleted' : 'Sent'}
+                                {isDeleted ? 'Deleted' : 'Live'}
                               </span>
                             </td>
 
