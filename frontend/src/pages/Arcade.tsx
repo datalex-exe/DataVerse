@@ -463,17 +463,22 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   };
 
   const handleChessSquareClick = (squareIdx: number) => {
-    if (!gameState || !user) return;
-    const isWhiteTurn = gameState.turn === gameState.playerX || !gameState.turn;
-    const isMe = (isWhiteTurn && user.id === gameState.playerX) ||
-                 (!isWhiteTurn && user.id === gameState.playerO) ||
-                 (user.id === gameState.playerX && !gameState.playerO);
-    if (!isMe) return;
+    if (!gameState || !user || gameState.status !== 'playing') return;
 
+    const isPlayerWhite = user.id === gameState.playerX;
+    const isPlayerBlack = user.id === gameState.playerO;
+    const currentTurn = gameState.turn || gameState.playerX;
+    const isMyTurn = currentTurn === user.id || (isPlayerWhite && !gameState.playerO);
+
+    // Only allow moves when it is my turn
+    if (!isMyTurn) return;
+
+    // Only allow selecting/moving pieces belonging to player's assigned color
     const isMyPiece = (p: string | null) => {
       if (!p) return false;
-      const isUpper = p === p.toUpperCase();
-      return isWhiteTurn ? isUpper : !isUpper;
+      if (isPlayerWhite) return p === p.toUpperCase();
+      if (isPlayerBlack) return p === p.toLowerCase();
+      return p === p.toUpperCase();
     };
 
     const clickedPiece = gameState.chessBoard?.[squareIdx] || null;
@@ -496,7 +501,6 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       const movingPiece = nextBoard[selectedChessSquare];
       
       if (!movingPiece || !isValidChessMove(selectedChessSquare, squareIdx, movingPiece, nextBoard)) {
-        setSelectedChessSquare(isMyPiece(clickedPiece) ? squareIdx : null);
         return;
       }
       
@@ -511,7 +515,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         winner = user.id;
         turn = null;
       } else {
-        turn = isWhiteTurn ? gameState.playerO : gameState.playerX;
+        turn = isPlayerWhite ? gameState.playerO : gameState.playerX;
       }
 
       nextBoard[selectedChessSquare] = null;
@@ -520,6 +524,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       const updatedGame = {
         ...gameState,
         chessBoard: nextBoard,
+        lastChessMove: { from: selectedChessSquare, to: squareIdx },
         status,
         winner,
         turn
@@ -1542,33 +1547,79 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           </div>
         );
 
-      case 'chess': {
+            case 'chess': {
         const board = gameState?.chessBoard || Array(64).fill(null);
-        const shouldFlip = gameState?.turn === gameState?.playerO;
-        const squares = [];
+        const isPlayerWhite = user?.id === gameState?.playerX;
+        const isPlayerBlack = user?.id === gameState?.playerO;
 
+        // FIXED PROBLEM 1: Orientation decided ONCE from player's assigned color (never from currentTurn)
+        // White player: White at bottom (shouldFlip = false)
+        // Black player: Black at bottom (shouldFlip = true)
+        const shouldFlip = isPlayerBlack;
+
+        const currentTurn = gameState?.turn || gameState?.playerX;
+        const isMyTurn = gameState?.status === 'playing' && (currentTurn === user?.id || (isPlayerWhite && !gameState?.playerO));
+
+        // Compute legal moves for the selected piece
+        const legalMoveIndices = new Set<number>();
+        if (selectedChessSquare !== null && isMyTurn && board[selectedChessSquare]) {
+          for (let i = 0; i < 64; i++) {
+            if (isValidChessMove(selectedChessSquare, i, board[selectedChessSquare]!, board)) {
+              legalMoveIndices.add(i);
+            }
+          }
+        }
+
+        const lastMove = (gameState as any)?.lastChessMove as { from: number; to: number } | undefined;
+
+        const squares = [];
         for (let row = 0; row < 8; row++) {
           for (let col = 0; col < 8; col++) {
+            // Map grid coordinates through orientation transform
             const idx = shouldFlip ? (63 - (row * 8 + col)) : (row * 8 + col);
             const isDark = (row + col) % 2 === 1;
             const piece = board[idx];
             const isSelected = selectedChessSquare === idx;
+            const isLegal = legalMoveIndices.has(idx);
+            const isLastMoveSquare = lastMove && (lastMove.from === idx || lastMove.to === idx);
 
             squares.push(
               <button
                 key={idx}
                 type="button"
                 onClick={() => handleChessSquareClick(idx)}
-                className={`w-[34px] h-[34px] min-[380px]:w-9 min-[380px]:h-9 sm:w-11 sm:h-11 flex items-center justify-center text-xl sm:text-2xl font-bold transition-all relative border border-transparent select-none ${
+                className={`w-full h-full flex items-center justify-center relative border border-transparent select-none cursor-pointer p-0 m-0 transition-colors duration-150 ${
                   isSelected 
-                    ? 'bg-teal-500/40 border-teal-400 z-10 scale-105 shadow-md shadow-teal-500/20' 
+                    ? 'bg-teal-500/40 ring-2 ring-teal-400 z-10' 
+                    : isLastMoveSquare
+                    ? 'bg-amber-400/20'
                     : isDark 
-                    ? 'bg-slate-900/80 hover:bg-slate-800 text-slate-300' 
-                    : 'bg-slate-800/30 hover:bg-slate-700/40 text-white'
+                    ? 'bg-[#12282c] hover:bg-[#18353a]' 
+                    : 'bg-[#224f52] hover:bg-[#2b6064]'
                 }`}
               >
+                {/* Legal move indicators */}
+                {isLegal && !piece && (
+                  <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-teal-400/70 shadow-sm shadow-teal-400/50 pointer-events-none" />
+                )}
+                {isLegal && piece && (
+                  <span className="absolute inset-0.5 rounded-sm ring-2 ring-rose-400/80 bg-rose-500/20 pointer-events-none" />
+                )}
+
+                {/* PROBLEM 3 FIX: High-contrast pieces with white outline/stroke on dark pieces */}
                 {piece && (
-                  <span className={`${piece === piece.toUpperCase() ? 'text-slate-100 drop-shadow' : 'text-slate-950 drop-shadow-[0_0.75px_0.75px_rgba(255,255,255,0.75)]'} text-2xl sm:text-3xl font-black select-none`}>
+                  <span 
+                    className="transition-transform duration-150 ease-out select-none text-2xl sm:text-3xl font-black leading-none"
+                    style={{
+                      color: piece === piece.toUpperCase() ? '#f8fafc' : '#0c151c',
+                      WebkitTextStroke: piece === piece.toUpperCase() 
+                        ? '0.5px rgba(0, 0, 0, 0.4)' 
+                        : '1px rgba(255, 255, 255, 0.85)',
+                      filter: piece === piece.toUpperCase() 
+                        ? 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.8))' 
+                        : 'drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))',
+                    }}
+                  >
                     {pieceUnicode[piece]}
                   </span>
                 )}
@@ -1578,23 +1629,39 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         }
 
         return (
-          <div className="flex flex-col items-center gap-4 animate-zoom">
-            <div className="text-center space-y-1">
-              <h4 className="text-sm font-black text-white">♟️ Sandbox Chess</h4>
-              <p className="text-[11px] text-slate-400">
-                {gameState?.status === 'playing' ? (
-                  gameState?.turn === user?.id ? (
-                    <span className="text-emerald-400 font-extrabold">Your Turn! Click piece to select, click tile to move.</span>
+          <div className="w-full flex flex-col items-center gap-3 animate-zoom">
+            {/* PROBLEM 2 FIX: Reserved fixed height status header prevents layout shifts */}
+            <div className="w-full max-w-[480px] text-center flex flex-col items-center">
+              <h4 className="text-sm font-black text-white flex items-center justify-center gap-1.5 h-6">
+                <span>♟️ Sandbox Chess</span>
+                <span className="text-[10px] text-teal-400/80 font-mono font-medium">
+                  ({isPlayerWhite ? 'Playing as White' : isPlayerBlack ? 'Playing as Black' : 'Solo'})
+                </span>
+              </h4>
+              {/* Status text reserved min-height (1-line) so board never shifts */}
+              <div className="h-6 min-h-[24px] flex items-center justify-center w-full px-2">
+                <p className="text-[11px] truncate max-w-full m-0 p-0">
+                  {gameState?.status === 'playing' ? (
+                    isMyTurn ? (
+                      <span className="text-emerald-400 font-extrabold">Your Turn! Click piece to select, click tile to move.</span>
+                    ) : (
+                      <span className="text-slate-400">Waiting for {activeSession?.opponentName || 'opponent'} move…</span>
+                    )
                   ) : (
-                    <span className="text-slate-400">Waiting for {activeSession.opponentName || 'opponent'} move...</span>
-                  )
-                ) : (
-                  <span className="text-amber-400 font-extrabold">King Captured! Game Over</span>
-                )}
-              </p>
+                    <span className="text-amber-400 font-extrabold">King Captured! Game Over</span>
+                  )}
+                </p>
+              </div>
             </div>
 
-            <div className="grid grid-cols-8 border-2 border-teal-500/30 rounded-2xl overflow-hidden shadow-2xl bg-slate-950/80 p-1">
+            {/* PROBLEM 2 FIX: Board with fixed max width and 1:1 aspect-ratio */}
+            <div 
+              className="w-full max-w-[480px] aspect-square grid grid-cols-8 grid-rows-8 border-2 border-teal-500/40 rounded-2xl overflow-hidden shadow-2xl bg-[#091518] p-0.5"
+              style={{
+                width: 'min(100%, 480px)',
+                aspectRatio: '1 / 1',
+              }}
+            >
               {squares}
             </div>
           </div>
@@ -2007,7 +2074,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               /* Active Multiplayer Game Room */
               <div className="w-full flex-1 flex flex-col items-center justify-between">
                 {/* Active Session Header Bar */}
-                <div className="w-full flex flex-wrap items-center justify-between gap-2.5 p-2.5 sm:p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 mb-4 sm:mb-6">
+                <div className="w-full flex flex-wrap items-center justify-between gap-2.5 min-h-[64px] p-2.5 sm:p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 mb-3 sm:mb-4">
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-3">
                       <ArcadeAvatar url={user?.avatar_url} name={user?.display_name || user?.username || 'You'} size="w-8 h-8 sm:w-10 sm:h-10" rounded="rounded-xl" />
