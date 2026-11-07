@@ -47,6 +47,7 @@ const MULTIPLAYER_GAMES: GameItem[] = [
   { id: 'chess', name: 'Sandbox Chess', desc: 'Move pieces and capture kings', emoji: '♟️', multiplayer: true },
   { id: 'rps', name: 'Rock Paper Scissors', desc: 'Hidden choices, real-time reveal', emoji: '✊✋✌️', multiplayer: true },
   { id: 'memory-match', name: 'Memory Match', desc: 'Turn cards to find emoji pairs', emoji: '🃏', multiplayer: true },
+  { id: 'spin-wheel', name: 'Spin Wheel', desc: 'Spin & decide together in real-time', emoji: '🎡', multiplayer: true },
 ];
 
 // Offline solo games switched to "Solo Retro"
@@ -676,23 +677,193 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }, 1100);
   };
 
-  // Spin Wheel
+  const WHEEL_COLORS = [
+    '#0d9488', // Teal
+    '#6366f1', // Indigo
+    '#f59e0b', // Amber
+    '#ec4899', // Pink
+    '#10b981', // Emerald
+    '#8b5cf6', // Purple
+    '#06b6d4', // Cyan
+    '#f97316', // Orange
+    '#3b82f6', // Blue
+    '#ef4444', // Rose
+  ];
+
+  // Reusable SVG Wheel renderer with visible slice labels & glowing rim
+  const renderSvgWheel = (segments: string[], rotationDeg: number) => {
+    const size = 320;
+    const center = size / 2; // 160
+    const radius = 138;
+    const n = Math.max(segments.length, 2);
+    const anglePerSegment = (2 * Math.PI) / n;
+
+    return (
+      <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center select-none">
+        {/* Top Fixed Needle Pointer */}
+        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center pointer-events-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
+          <div className="w-4 h-5 bg-gradient-to-b from-amber-300 via-amber-400 to-amber-600 rounded-t-md shadow-md border-t border-x border-amber-200/50" />
+          <div className="w-0 h-0 border-l-[11px] border-l-transparent border-r-[11px] border-r-transparent border-t-[18px] border-t-amber-500" />
+        </div>
+
+        {/* Rotating Wheel Body */}
+        <div 
+          className="w-full h-full rounded-full transition-transform duration-[3500ms] ease-[cubic-bezier(0.15,0.9,0.2,1)]"
+          style={{ transform: `rotate(${rotationDeg}deg)` }}
+        >
+          <svg 
+            viewBox={`0 0 ${size} ${size}`} 
+            className="w-full h-full drop-shadow-[0_0_40px_rgba(45,212,191,0.25)]"
+          >
+            <defs>
+              <radialGradient id="wheelCenterHub" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#2dd4bf" />
+                <stop offset="60%" stopColor="#0f766e" />
+                <stop offset="100%" stopColor="#042f2e" />
+              </radialGradient>
+              <linearGradient id="wheelRimGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#2dd4bf" />
+                <stop offset="50%" stopColor="#38bdf8" />
+                <stop offset="100%" stopColor="#34d399" />
+              </linearGradient>
+            </defs>
+
+            {/* Slices with clear labels */}
+            {segments.map((opt, i) => {
+              const startAngle = i * anglePerSegment;
+              const endAngle = (i + 1) * anglePerSegment;
+              const x1 = center + radius * Math.cos(startAngle);
+              const y1 = center + radius * Math.sin(startAngle);
+              const x2 = center + radius * Math.cos(endAngle);
+              const y2 = center + radius * Math.sin(endAngle);
+              const largeArc = anglePerSegment > Math.PI ? 1 : 0;
+              const pathData = `M ${center} ${center} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
+              const sliceColor = WHEEL_COLORS[i % WHEEL_COLORS.length];
+              const midAngleDeg = (i + 0.5) * (360 / n);
+
+              return (
+                <g key={i}>
+                  <path
+                    d={pathData}
+                    fill={sliceColor}
+                    stroke="#040b0d"
+                    strokeWidth="2.5"
+                  />
+                  {/* Text along slice radius */}
+                  <g transform={`rotate(${midAngleDeg}, ${center}, ${center})`}>
+                    <text
+                      x={center + radius * 0.65}
+                      y={center + 4}
+                      fill="#ffffff"
+                      fontSize={n > 8 ? "10" : "11"}
+                      fontWeight="900"
+                      textAnchor="middle"
+                      className="select-none font-sans tracking-wide"
+                      style={{
+                        textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.8)'
+                      }}
+                    >
+                      {opt.length > 13 ? opt.substring(0, 12) + '…' : opt}
+                    </text>
+                  </g>
+                </g>
+              );
+            })}
+
+            {/* Outer glowing border ring */}
+            <circle 
+              cx={center} 
+              cy={center} 
+              r={radius + 3} 
+              fill="none" 
+              stroke="url(#wheelRimGlow)" 
+              strokeWidth="6" 
+            />
+            <circle 
+              cx={center} 
+              cy={center} 
+              r={radius + 6} 
+              fill="none" 
+              stroke="#040b0d" 
+              strokeWidth="2" 
+            />
+
+            {/* Golden studs around the rim */}
+            {segments.map((_, i) => {
+              const studAngle = i * anglePerSegment;
+              const sx = center + (radius + 3) * Math.cos(studAngle);
+              const sy = center + (radius + 3) * Math.sin(studAngle);
+              return (
+                <circle
+                  key={`stud-${i}`}
+                  cx={sx.toFixed(2)}
+                  cy={sy.toFixed(2)}
+                  r="3.5"
+                  fill="#fde047"
+                  stroke="#854d0e"
+                  strokeWidth="1"
+                />
+              );
+            })}
+
+            {/* Center Hub */}
+            <circle 
+              cx={center} 
+              cy={center} 
+              r="28" 
+              fill="url(#wheelCenterHub)" 
+              stroke="#ffffff" 
+              strokeWidth="2.5" 
+              className="drop-shadow-lg"
+            />
+            <circle 
+              cx={center} 
+              cy={center} 
+              r="12" 
+              fill="#040b0d" 
+              stroke="#2dd4bf" 
+              strokeWidth="2" 
+            />
+            <text 
+              x={center} 
+              y={center + 4} 
+              textAnchor="middle" 
+              fill="#2dd4bf" 
+              fontSize="12" 
+              fontWeight="bold"
+            >
+              ★
+            </text>
+          </svg>
+        </div>
+      </div>
+    );
+  };
+
+  // Solo Offline Spin Wheel Handlers
   const handleSpinWheel = () => {
     if (wheelSpinning || wheelSegments.length < 2) return;
     setWheelSpinning(true);
     setWheelWinner(null);
-    const spins = 5 + Math.floor(Math.random() * 5);
-    const randomDegrees = Math.floor(Math.random() * 360);
-    const totalRotation = wheelRotation + spins * 360 + randomDegrees;
-    setWheelRotation(totalRotation);
+
+    const winIdx = Math.floor(Math.random() * wheelSegments.length);
+    const winOpt = wheelSegments[winIdx];
+    const segAngle = 360 / wheelSegments.length;
+    const midAngle = (winIdx + 0.5) * segAngle;
+    const desiredOffset = (270 - midAngle + 3600) % 360;
+    const currentNorm = wheelRotation % 360;
+    let angleDiff = desiredOffset - currentNorm;
+    if (angleDiff < 0) angleDiff += 360;
+    const fullSpins = (5 + Math.floor(Math.random() * 4)) * 360;
+    const targetRotation = wheelRotation + fullSpins + angleDiff;
+
+    setWheelRotation(targetRotation);
 
     setTimeout(() => {
       setWheelSpinning(false);
-      const normalized = (360 - (totalRotation % 360)) % 360;
-      const segmentAngle = 360 / wheelSegments.length;
-      const winningIndex = Math.floor(normalized / segmentAngle);
-      setWheelWinner(wheelSegments[winningIndex] || wheelSegments[0]);
-    }, 3200);
+      setWheelWinner(winOpt);
+      showToast(`🎡 Landed on: ${winOpt}! 🎉`, 'success');
+    }, 3500);
   };
 
   const handleAddWheelOption = () => {
@@ -707,6 +878,97 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       return;
     }
     setWheelSegments(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // Multiplayer Spin Wheel Handlers
+  const handleMultiplayerSpinWheel = () => {
+    const opts = (gameState?.wheelOptions && gameState.wheelOptions.length >= 2) ? gameState.wheelOptions : wheelSegments;
+    if (gameState?.wheelSpinning || opts.length < 2 || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+    const winIdx = Math.floor(Math.random() * opts.length);
+    const winOpt = opts[winIdx];
+    const segAngle = 360 / opts.length;
+    const midAngle = (winIdx + 0.5) * segAngle;
+    const desiredOffset = (270 - midAngle + 3600) % 360;
+    const currRotation = gameState?.wheelRotation || 0;
+    const currentNorm = currRotation % 360;
+    let angleDiff = desiredOffset - currentNorm;
+    if (angleDiff < 0) angleDiff += 360;
+    const fullSpins = (5 + Math.floor(Math.random() * 4)) * 360;
+    const targetRotation = currRotation + fullSpins + angleDiff;
+
+    // Broadcast spin start to opponent
+    wsRef.current.send(JSON.stringify({
+      type: 'game_update',
+      game: {
+        ...gameState,
+        gameType: 'spin-wheel',
+        status: 'playing',
+        wheelSpinning: true,
+        wheelRotation: targetRotation,
+        wheelWinner: null,
+        wheelWinnerIndex: winIdx,
+        lastSpinnerId: user?.id,
+        lastSpinnerName: user?.display_name || user?.username,
+        wheelOptions: opts
+      }
+    }));
+
+    // After animation finishes, broadcast final winner
+    setTimeout(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'game_update',
+          game: {
+            ...gameState,
+            gameType: 'spin-wheel',
+            status: 'playing',
+            wheelSpinning: false,
+            wheelRotation: targetRotation,
+            wheelWinner: winOpt,
+            wheelWinnerIndex: winIdx,
+            lastSpinnerId: user?.id,
+            lastSpinnerName: user?.display_name || user?.username,
+            wheelOptions: opts,
+            turn: activeSession?.opponentId
+          }
+        }));
+      }
+    }, 3500);
+  };
+
+  const handleAddMultiplayerOption = () => {
+    if (!wheelNewOption.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    const opts = (gameState?.wheelOptions && gameState.wheelOptions.length > 0) ? gameState.wheelOptions : wheelSegments;
+    const updated = [...opts, wheelNewOption.trim()];
+    setWheelNewOption('');
+    wsRef.current.send(JSON.stringify({
+      type: 'game_update',
+      game: {
+        ...gameState,
+        wheelOptions: updated,
+        wheelWinner: null
+      }
+    }));
+  };
+
+  const handleRemoveMultiplayerOption = (idx: number) => {
+    const opts = (gameState?.wheelOptions && gameState.wheelOptions.length > 0) ? gameState.wheelOptions : wheelSegments;
+    if (opts.length <= 2) {
+      showToast('Minimum 2 choices required', 'error');
+      return;
+    }
+    const updated = opts.filter((_: any, i: number) => i !== idx);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'game_update',
+        game: {
+          ...gameState,
+          wheelOptions: updated,
+          wheelWinner: null
+        }
+      }));
+    }
   };
 
   // Render 100% Offline Solo Games
@@ -932,24 +1194,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
       case 'spin-wheel':
         return (
-          <div className="w-full flex-1 flex flex-col md:flex-row items-center justify-around p-6 gap-8 animate-zoom">
+          <div className="w-full flex-1 flex flex-col md:flex-row items-center justify-around p-4 sm:p-6 gap-6 sm:gap-8 animate-zoom">
             {/* Wheel Canvas Section */}
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center">
-                <div 
-                  className="w-full h-full rounded-full border-4 border-teal-400 overflow-hidden relative shadow-[0_0_50px_rgba(45,212,191,0.25)] flex items-center justify-center transition-all duration-[3200ms] ease-out"
-                  style={{ transform: `rotate(${wheelRotation}deg)` }}
-                >
-                  <div className="w-full h-full bg-gradient-to-tr from-teal-950 via-slate-900 to-emerald-950 flex items-center justify-center">
-                    <span className="text-4xl">🎡</span>
-                  </div>
-                </div>
-                <div className="absolute -top-3 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-[14px] border-t-amber-400 z-10 drop-shadow" />
-              </div>
+            <div className="flex flex-col items-center gap-5">
+              {renderSvgWheel(wheelSegments, wheelRotation)}
 
               {wheelWinner && (
-                <div className="text-center bg-teal-500/15 border border-teal-500/40 px-6 py-2 rounded-full text-xs font-extrabold text-teal-300 animate-bounce">
-                  Selected: {wheelWinner}! 🎉
+                <div className="text-center bg-teal-500/15 border border-teal-500/40 px-6 py-2 rounded-full text-xs font-black text-teal-300 animate-bounce shadow-lg">
+                  Landed on: <span className="text-amber-400">{wheelWinner}</span>! 🎉
                 </div>
               )}
 
@@ -965,7 +1217,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
             {/* Custom Options Config */}
             <div className="w-full max-w-xs space-y-3 p-4 bg-slate-900/60 rounded-2xl border border-white/10 text-left">
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Wheel Choices</h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Wheel Choices</h4>
+                <span className="text-[10px] text-teal-400 font-mono font-bold">{wheelSegments.length} Options</span>
+              </div>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -978,16 +1233,19 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 <button
                   type="button"
                   onClick={handleAddWheelOption}
-                  className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-xl text-xs font-bold"
+                  className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-xl text-xs font-bold active:scale-95 transition-all"
                 >
                   Add
                 </button>
               </div>
 
-              <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
                 {wheelSegments.map((seg, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-white/5 text-xs text-slate-300">
-                    <span className="truncate">{seg}</span>
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: WHEEL_COLORS[idx % WHEEL_COLORS.length] }} />
+                      <span className="truncate">{seg}</span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => handleRemoveWheelOption(idx)}
@@ -1257,6 +1515,93 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             </div>
           </div>
         );
+
+      case 'spin-wheel': {
+        const currentSegments = (gameState?.wheelOptions && gameState.wheelOptions.length >= 2) ? gameState.wheelOptions : wheelSegments;
+        const currentRotation = gameState?.wheelRotation || 0;
+        const isSpinning = !!gameState?.wheelSpinning;
+        const currentWinner = gameState?.wheelWinner || null;
+        const lastSpinnerName = gameState?.lastSpinnerName || null;
+        const isMyTurn = gameState?.turn ? gameState.turn === user?.id : true;
+
+        return (
+          <div className="w-full max-w-2xl flex flex-col md:flex-row items-center justify-around p-4 sm:p-6 gap-6 sm:gap-8 animate-zoom">
+            {/* Wheel Canvas Section */}
+            <div className="flex flex-col items-center gap-5">
+              {/* Turn indicator */}
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-black border ${
+                  isMyTurn
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 animate-pulse'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {isMyTurn ? "🎮 Your Turn to Spin!" : `⏳ Waiting for ${activeSession?.opponentName || 'Opponent'}...`}
+                </span>
+              </div>
+
+              {renderSvgWheel(currentSegments, currentRotation)}
+
+              {currentWinner && (
+                <div className="text-center bg-teal-500/15 border border-teal-500/40 px-6 py-2 rounded-full text-xs font-black text-teal-300 animate-bounce shadow-lg">
+                  {lastSpinnerName ? `@${lastSpinnerName} spun:` : 'Result:'} <span className="text-amber-400">{currentWinner}</span>! 🎉
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={isSpinning}
+                onClick={handleMultiplayerSpinWheel}
+                className="py-3 px-8 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-teal-500/25 active:scale-95 disabled:opacity-50"
+              >
+                {isSpinning ? 'Spinning Together...' : 'Spin The Wheel 🎡'}
+              </button>
+            </div>
+
+            {/* Synchronized Options Config */}
+            <div className="w-full max-w-xs space-y-3 p-4 bg-slate-900/60 rounded-2xl border border-white/10 text-left">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Live Wheel Choices</h4>
+                <span className="text-[10px] text-teal-400 font-mono font-bold">{currentSegments.length} Options</span>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={wheelNewOption}
+                  onChange={(e) => setWheelNewOption(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddMultiplayerOption()}
+                  placeholder="Add choice for both..."
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddMultiplayerOption}
+                  className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-xl text-xs font-bold active:scale-95 transition-all"
+                >
+                  Add
+                </button>
+              </div>
+
+              <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                {currentSegments.map((seg: string, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-white/5 text-xs text-slate-300">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: WHEEL_COLORS[idx % WHEEL_COLORS.length] }} />
+                      <span className="truncate">{seg}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMultiplayerOption(idx)}
+                      className="text-slate-500 hover:text-rose-400 p-0.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
 
       default:
         return (

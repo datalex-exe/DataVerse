@@ -506,6 +506,9 @@ export class ChatRoom {
           ];
           game.chessFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
           game.chessHistory = [];
+        } else if (gameType === 'spin-wheel') {
+          game.wheelOptions = ['Coffee ☕', 'Pizza 🍕', 'Gaming 🎮', 'Walk 🚶', 'Code 💻', 'Sleep 😴'];
+          game.wheelResultIndex = null;
         }
 
         await this.putGame(game);
@@ -597,6 +600,9 @@ export class ChatRoom {
           newGame.chessHistory = [];
         } else if (gameType === 'rps') {
           newGame.rpsPlayerMoves = {};
+        } else if (gameType === 'spin-wheel') {
+          newGame.wheelOptions = game.wheelOptions || ['Coffee ☕', 'Pizza 🍕', 'Gaming 🎮', 'Walk 🚶', 'Code 💻', 'Sleep 😴'];
+          newGame.wheelResultIndex = null;
         }
 
         await this.putGame(newGame);
