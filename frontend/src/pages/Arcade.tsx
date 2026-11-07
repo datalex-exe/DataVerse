@@ -2013,30 +2013,6 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 </h1>
               </div>
             </div>
-
-            {/* Current User Profile Badge in Arcade Header */}
-            {user && (
-              <button
-                type="button"
-                onClick={() => onNavigate('profile')}
-                className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-teal-500/40 transition-all text-left active:scale-95 group shadow-sm"
-                title="Your Profile (Tap to view)"
-              >
-                <ArcadeAvatar url={user.avatar_url} name={user.display_name || user.username} size="w-7 h-7" rounded="rounded-lg" />
-                <div className="hidden min-[480px]:flex flex-col min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-white group-hover:text-teal-300 transition-colors truncate max-w-[110px]">
-                      {user.display_name || user.username}
-                    </span>
-                    {user.is_verified && <span className="text-[10px] text-teal-400">✓</span>}
-                  </div>
-                  <span className="text-[9px] text-teal-400/80 font-mono font-medium flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Online
-                  </span>
-                </div>
-              </button>
-            )}
           </div>
 
           <div className="flex items-center gap-3">
