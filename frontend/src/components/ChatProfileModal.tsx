@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   X, 
   Phone, 
@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { VerifiedBadge } from './VerifiedBadge';
 
-interface SharedSender {
+export interface SharedSender {
   id: string;
   username: string;
   display_name: string | null;
@@ -30,7 +30,7 @@ interface SharedSender {
   is_verified?: boolean;
 }
 
-interface SharedMediaItem {
+export interface SharedMediaItem {
   id: string;
   message_id: string;
   url: string;
@@ -41,7 +41,7 @@ interface SharedMediaItem {
   sender: SharedSender;
 }
 
-interface SharedLinkItem {
+export interface SharedLinkItem {
   id: string;
   message_id: string;
   url: string;
@@ -51,7 +51,7 @@ interface SharedLinkItem {
   sender: SharedSender;
 }
 
-interface SharedFileItem {
+export interface SharedFileItem {
   id: string;
   message_id: string;
   url: string;
@@ -61,7 +61,7 @@ interface SharedFileItem {
   sender: SharedSender;
 }
 
-interface SharedAudioItem {
+export interface SharedAudioItem {
   id: string;
   message_id: string;
   url: string;
@@ -70,7 +70,7 @@ interface SharedAudioItem {
   sender: SharedSender;
 }
 
-interface SharedData {
+export interface SharedData {
   media: SharedMediaItem[];
   links: SharedLinkItem[];
   files: SharedFileItem[];
@@ -101,14 +101,120 @@ interface ChatProfileModalProps {
   };
   currentUserId: string;
   token: string;
+  messages?: any[];
   isOnline?: boolean;
   onStartCall?: () => void;
   onNavigate?: (tab: string, username?: string) => void;
   onOpenFullscreenVideo?: (url: string, allowSave: boolean) => void;
 }
 
-// Mini Audio Player for Audio Tab
-const InlineAudioPlayer: React.FC<{ url: string; fileName?: string }> = ({ url, fileName }) => {
+// Module-level in-memory cache to guarantee 0ms instant display on subsequent opens
+const sharedDataCache = new Map<string, SharedData>();
+
+// Fast pure function to synchronously extract shared assets from loaded messages
+export function extractSharedFromMessages(rawMessages: any[]): SharedData {
+  const media: SharedMediaItem[] = [];
+  const links: SharedLinkItem[] = [];
+  const files: SharedFileItem[] = [];
+  const audio: SharedAudioItem[] = [];
+
+  const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`]+)/gi;
+
+  for (let i = 0; i < rawMessages.length; i++) {
+    const msg = rawMessages[i];
+    if (!msg || !msg.body) continue;
+
+    const sender: SharedSender = {
+      id: msg.sender_id,
+      username: msg.username || 'user',
+      display_name: msg.display_name || null,
+      avatar_url: msg.avatar_url || null,
+      is_verified: !!msg.is_verified
+    };
+
+    let parsedMedia: any = null;
+    let textToScan = msg.body;
+
+    if (typeof msg.body === 'string' && msg.body.startsWith('{') && msg.body.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(msg.body);
+        if (parsed && parsed.type === 'secure_media') {
+          parsedMedia = parsed;
+        } else if (parsed && parsed.type === 'reply') {
+          textToScan = parsed.text || '';
+        }
+      } catch {}
+    }
+
+    if (parsedMedia) {
+      const item = {
+        id: msg.id,
+        message_id: msg.id,
+        created_at: msg.created_at || Date.now(),
+        sender,
+        url: parsedMedia.url,
+        media_type: parsedMedia.media_type,
+        file_name: parsedMedia.file_name,
+        allow_save: parsedMedia.allow_save !== false
+      };
+
+      if (parsedMedia.media_type === 'image' || parsedMedia.media_type === 'video') {
+        media.push(item);
+      } else if (parsedMedia.media_type === 'voice') {
+        audio.push(item);
+      } else {
+        files.push(item);
+      }
+    }
+
+    if (textToScan && typeof textToScan === 'string') {
+      const matches = textToScan.match(urlRegex);
+      if (matches && matches.length > 0) {
+        const uniqueUrls = Array.from(new Set(matches));
+        for (let j = 0; j < uniqueUrls.length; j++) {
+          const linkUrl = uniqueUrls[j];
+          let domain = '';
+          try {
+            domain = new URL(linkUrl).hostname.replace(/^www\./, '');
+          } catch {
+            domain = linkUrl;
+          }
+          links.push({
+            id: `${msg.id}-${j}`,
+            message_id: msg.id,
+            url: linkUrl,
+            domain,
+            snippet: textToScan,
+            created_at: msg.created_at || Date.now(),
+            sender
+          });
+        }
+      }
+    }
+  }
+
+  // Sort newest first
+  media.sort((a, b) => b.created_at - a.created_at);
+  links.sort((a, b) => b.created_at - a.created_at);
+  files.sort((a, b) => b.created_at - a.created_at);
+  audio.sort((a, b) => b.created_at - a.created_at);
+
+  return {
+    media,
+    links,
+    files,
+    audio,
+    counts: {
+      media: media.length,
+      links: links.length,
+      files: files.length,
+      audio: audio.length
+    }
+  };
+}
+
+// Ultra-lightweight inline audio player (preload="none" to prevent network/main-thread lock)
+const InlineAudioPlayer: React.FC<{ url: string; fileName?: string }> = React.memo(({ url, fileName }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -145,7 +251,7 @@ const InlineAudioPlayer: React.FC<{ url: string; fileName?: string }> = ({ url, 
             setProgress((aud.currentTime / aud.duration) * 100);
           }
         }}
-        preload="metadata"
+        preload="none"
       />
       <button
         type="button"
@@ -176,42 +282,76 @@ const InlineAudioPlayer: React.FC<{ url: string; fileName?: string }> = ({ url, 
       </div>
     </div>
   );
-};
+});
 
-export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
+const ChatProfileModalComponent: React.FC<ChatProfileModalProps> = ({
   isOpen,
   onClose,
   conversation,
   currentUserId,
   token,
+  messages,
   isOnline = false,
   onStartCall,
   onNavigate,
   onOpenFullscreenVideo
 }) => {
   const [activeTab, setActiveTab] = useState<'media' | 'links' | 'files' | 'audio'>('media');
-  const [loading, setLoading] = useState<boolean>(true);
-  const [sharedData, setSharedData] = useState<SharedData>({
-    media: [],
-    links: [],
-    files: [],
-    audio: [],
-    counts: { media: 0, links: 0, files: 0, audio: 0 }
+
+  // Synchronous cache / message hydration: zero blank screen, zero waiting
+  const [sharedData, setSharedData] = useState<SharedData>(() => {
+    if (sharedDataCache.has(conversation.id)) {
+      return sharedDataCache.get(conversation.id)!;
+    }
+    if (messages && messages.length > 0) {
+      const extracted = extractSharedFromMessages(messages);
+      sharedDataCache.set(conversation.id, extracted);
+      return extracted;
+    }
+    return {
+      media: [],
+      links: [],
+      files: [],
+      audio: [],
+      counts: { media: 0, links: 0, files: 0, audio: 0 }
+    };
   });
+
+  // Only show spinner on very first open if we have absolutely 0 cached or local data
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (sharedDataCache.has(conversation.id)) return false;
+    if (messages && messages.length > 0) return false;
+    return true;
+  });
+
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
-  // Identify partner for DM
-  const partner = conversation.is_group 
-    ? null 
-    : (conversation.members.find(m => m.id !== currentUserId) || conversation.members[0]);
+  // Stable memoized partner
+  const partner = useMemo(() => {
+    if (conversation.is_group) return null;
+    return conversation.members.find(m => m.id !== currentUserId) || conversation.members[0];
+  }, [conversation.is_group, conversation.members, currentUserId]);
 
-  // Fetch shared media
+  const avatarUrl = useMemo(() => {
+    return partner?.avatar_url ? `/api/media/file/${partner.avatar_url}` : null;
+  }, [partner?.avatar_url]);
+
+  const initials = useMemo(() => {
+    return partner?.username ? partner.username.substring(0, 2).toUpperCase() : 'DV';
+  }, [partner?.username]);
+
+  // Background SWR revalidation
   useEffect(() => {
     if (!isOpen || !conversation.id) return;
 
     let isMounted = true;
-    setLoading(true);
+
+    // Check if we already have local data
+    const hasExistingData = sharedDataCache.has(conversation.id) || (messages && messages.length > 0);
+    if (!hasExistingData) {
+      setLoading(true);
+    }
 
     fetch(`/api/conversations/${conversation.id}/shared`, {
       headers: {
@@ -222,7 +362,7 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
       .then(data => {
         if (!isMounted) return;
         if (data && !data.error) {
-          setSharedData({
+          const formatted: SharedData = {
             media: data.media || [],
             links: data.links || [],
             files: data.files || [],
@@ -233,7 +373,9 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
               files: data.files?.length || 0,
               audio: data.audio?.length || 0
             }
-          });
+          };
+          sharedDataCache.set(conversation.id, formatted);
+          setSharedData(formatted);
         }
       })
       .catch(err => {
@@ -246,23 +388,21 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, conversation.id, token]);
+  }, [isOpen, conversation.id, token, messages]);
 
-  if (!isOpen) return null;
-
-  const handleCopy = (text: string, id: string) => {
+  const handleCopy = useCallback((text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedLink(id);
     setTimeout(() => setCopiedLink(null), 2000);
-  };
+  }, []);
 
-  const formatDate = (timestamp: number) => {
+  const formatDate = useCallback((timestamp: number) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  }, []);
 
-  const getFileExtensionColor = (fileName?: string) => {
+  const getFileExtensionColor = useCallback((fileName?: string) => {
     const ext = fileName?.split('.').pop()?.toLowerCase();
     switch (ext) {
       case 'pdf': return 'bg-rose-500/15 text-rose-400 border-rose-500/30';
@@ -278,7 +418,9 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
       case 'pptx': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
       default: return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
     }
-  };
+  }, []);
+
+  if (!isOpen) return null;
 
   return (
     <>
@@ -311,33 +453,45 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
           <div className="flex-1 overflow-y-auto min-h-0">
             {/* Profile Overview Header Card */}
             <div className="flex flex-col items-center px-6 pt-6 pb-5 text-center border-b border-[var(--line)] bg-gradient-to-b from-[var(--input)]/40 to-transparent">
-              {/* Avatar with click to preview */}
-              <div className="relative mb-3 group cursor-pointer" onClick={() => {
-                if (partner?.avatar_url) {
-                  setFullscreenImage(`/api/media/file/${partner.avatar_url}`);
-                }
-              }}>
-                <div className="w-20 h-20 rounded-full bg-[var(--input)] border-2 border-[var(--line)] overflow-hidden shadow-lg flex items-center justify-center text-xl font-bold text-[var(--accent-2)] group-hover:border-[var(--accent-2)]/60 transition-all">
+              
+              {/* Avatar without dark hover dimming or layout shifts */}
+              <div 
+                className="relative mb-3 cursor-pointer select-none"
+                onClick={() => {
+                  if (avatarUrl) setFullscreenImage(avatarUrl);
+                }}
+                title={avatarUrl ? "View profile photo" : undefined}
+              >
+                <div className="w-20 h-20 rounded-full bg-[var(--input)] border-2 border-[var(--line)] hover:border-[var(--accent-2)] ring-0 hover:ring-2 hover:ring-[var(--accent-2)]/30 overflow-hidden shadow-lg flex items-center justify-center text-xl font-bold text-[var(--accent-2)] transition-[border-color,box-shadow] duration-200">
                   {conversation.is_group ? (
                     <Users className="w-9 h-9 text-[var(--accent-2)]" />
-                  ) : partner?.avatar_url ? (
+                  ) : avatarUrl ? (
                     <img 
-                      src={`/api/media/file/${partner.avatar_url}`} 
-                      alt="" 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                      src={avatarUrl} 
+                      alt={partner?.display_name || partner?.username || 'User avatar'} 
+                      width={80}
+                      height={80}
+                      loading="eager"
+                      decoding="async"
+                      draggable={false}
+                      className="w-full h-full object-cover" 
                     />
                   ) : (
-                    partner?.username.substring(0, 2).toUpperCase()
+                    initials
                   )}
                 </div>
-                {partner?.avatar_url && (
-                  <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
-                    <Eye className="w-5 h-5" />
+
+                {/* Corner zoom badge (clean and non-dimming) */}
+                {avatarUrl && (
+                  <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[var(--card)] border border-[var(--line)] shadow-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--accent-2)] transition-colors">
+                    <Eye className="w-3.5 h-3.5" />
                   </div>
                 )}
+
+                {/* Online Indicator */}
                 {!conversation.is_group && isOnline && (
                   <span 
-                    className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--card)] shadow" 
+                    className="absolute top-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[var(--card)] shadow" 
                     title="Active now" 
                   />
                 )}
@@ -420,11 +574,17 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
 
             {/* Separate Headings / Content Tabs */}
             <div className="p-4 sm:p-5">
-              <div className="flex items-center gap-1.5 p-1 bg-[var(--input)]/80 rounded-2xl border border-[var(--line)] mb-4">
+              <div 
+                role="tablist"
+                aria-label="Shared content categories"
+                className="flex items-center gap-1.5 p-1 bg-[var(--input)]/80 rounded-2xl border border-[var(--line)] mb-4"
+              >
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'media'}
                   onClick={() => setActiveTab('media')}
-                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
                     activeTab === 'media'
                       ? 'bg-[var(--card)] text-[var(--accent-2)] shadow border border-[var(--line)]'
                       : 'text-[var(--muted)] hover:text-[var(--text)]'
@@ -441,8 +601,10 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
 
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'links'}
                   onClick={() => setActiveTab('links')}
-                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
                     activeTab === 'links'
                       ? 'bg-[var(--card)] text-[var(--accent-2)] shadow border border-[var(--line)]'
                       : 'text-[var(--muted)] hover:text-[var(--text)]'
@@ -459,8 +621,10 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
 
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'files'}
                   onClick={() => setActiveTab('files')}
-                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
                     activeTab === 'files'
                       ? 'bg-[var(--card)] text-[var(--accent-2)] shadow border border-[var(--line)]'
                       : 'text-[var(--muted)] hover:text-[var(--text)]'
@@ -477,8 +641,10 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
 
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'audio'}
                   onClick={() => setActiveTab('audio')}
-                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`flex-1 py-2 px-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
                     activeTab === 'audio'
                       ? 'bg-[var(--card)] text-[var(--accent-2)] shadow border border-[var(--line)]'
                       : 'text-[var(--muted)] hover:text-[var(--text)]'
@@ -494,19 +660,19 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                 </button>
               </div>
 
-              {/* Tab Content Display */}
+              {/* Tab Content Display with GPU-accelerated transition */}
               {loading ? (
-                <div className="py-16 flex flex-col items-center justify-center text-[var(--muted)] gap-2">
+                <div className="py-16 flex flex-col items-center justify-center text-[var(--muted)] gap-2 animate-fade-in">
                   <Loader2 className="w-7 h-7 animate-spin text-[var(--accent-2)]" />
                   <span className="text-xs font-medium">Loading shared media...</span>
                 </div>
               ) : (
-                <>
+                <div key={activeTab} className="animate-tab-slide will-change-transform min-h-[220px]">
                   {/* MEDIA TAB */}
                   {activeTab === 'media' && (
                     <div>
                       {sharedData.media.length === 0 ? (
-                        <div className="py-14 text-center text-[var(--muted)] flex flex-col items-center justify-center">
+                        <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
                           <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
                             <ImageIcon className="w-6 h-6 opacity-60" />
                           </div>
@@ -531,14 +697,14 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                                     setFullscreenImage(mediaUrl);
                                   }
                                 }}
-                                className="group relative aspect-square rounded-xl overflow-hidden bg-[var(--input)] border border-[var(--line)] cursor-pointer hover:border-[var(--accent-2)] transition-all shadow-sm"
+                                className="group relative aspect-square rounded-xl overflow-hidden bg-[var(--input)] border border-[var(--line)] cursor-pointer hover:border-[var(--accent-2)] transition-colors shadow-sm"
                               >
                                 {isVideo ? (
                                   <div className="w-full h-full relative bg-black/60 flex items-center justify-center">
                                     <video 
                                       src={mediaUrl} 
-                                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300"
-                                      preload="metadata"
+                                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none"
+                                      preload="none"
                                     />
                                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
                                       <div className="w-8 h-8 rounded-full bg-black/70 border border-white/20 text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform">
@@ -555,7 +721,8 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                                     src={mediaUrl} 
                                     alt="Shared media" 
                                     loading="lazy"
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                                    decoding="async"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
                                   />
                                 )}
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between text-[9px] text-white/90">
@@ -574,7 +741,7 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                   {activeTab === 'links' && (
                     <div className="space-y-2">
                       {sharedData.links.length === 0 ? (
-                        <div className="py-14 text-center text-[var(--muted)] flex flex-col items-center justify-center">
+                        <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
                           <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
                             <LinkIcon className="w-6 h-6 opacity-60" />
                           </div>
@@ -585,7 +752,7 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                         sharedData.links.map((link) => (
                           <div
                             key={link.id}
-                            className="p-3 rounded-2xl bg-[var(--input)]/60 hover:bg-[var(--input)] border border-[var(--line)] hover:border-[var(--line-strong)] transition-all flex items-start gap-3 group"
+                            className="p-3 rounded-2xl bg-[var(--input)]/60 hover:bg-[var(--input)] border border-[var(--line)] hover:border-[var(--line-strong)] transition-colors flex items-start gap-3 group"
                           >
                             <div className="w-9 h-9 rounded-xl bg-[var(--accent)]/15 border border-[var(--accent)]/20 flex items-center justify-center text-[var(--accent-2)] flex-shrink-0 mt-0.5">
                               <LinkIcon className="w-4 h-4" />
@@ -643,7 +810,7 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                   {activeTab === 'files' && (
                     <div className="space-y-2">
                       {sharedData.files.length === 0 ? (
-                        <div className="py-14 text-center text-[var(--muted)] flex flex-col items-center justify-center">
+                        <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
                           <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
                             <FolderIcon className="w-6 h-6 opacity-60" />
                           </div>
@@ -658,7 +825,7 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                           return (
                             <div
                               key={file.id}
-                              className="p-3 rounded-2xl bg-[var(--input)]/60 hover:bg-[var(--input)] border border-[var(--line)] hover:border-[var(--line-strong)] transition-all flex items-center gap-3"
+                              className="p-3 rounded-2xl bg-[var(--input)]/60 hover:bg-[var(--input)] border border-[var(--line)] hover:border-[var(--line-strong)] transition-colors flex items-center gap-3"
                             >
                               <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${extColorClass}`}>
                                 <FileText className="w-5 h-5" />
@@ -695,7 +862,7 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                   {activeTab === 'audio' && (
                     <div className="space-y-2.5">
                       {sharedData.audio.length === 0 ? (
-                        <div className="py-14 text-center text-[var(--muted)] flex flex-col items-center justify-center">
+                        <div className="py-12 text-center text-[var(--muted)] flex flex-col items-center justify-center animate-fade-in">
                           <div className="w-12 h-12 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mb-2.5 text-[var(--muted)]">
                             <Mic className="w-6 h-6 opacity-60" />
                           </div>
@@ -706,7 +873,7 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                         sharedData.audio.map((audioItem) => (
                           <div
                             key={audioItem.id}
-                            className="p-3 rounded-2xl bg-[var(--input)]/60 border border-[var(--line)] transition-all flex flex-col gap-2"
+                            className="p-3 rounded-2xl bg-[var(--input)]/60 border border-[var(--line)] transition-colors flex flex-col gap-2"
                           >
                             <div className="flex items-center justify-between text-[11px] text-[var(--muted)]">
                               <span className="font-semibold text-[var(--text)]">@{audioItem.sender.username}</span>
@@ -718,7 +885,7 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
                       )}
                     </div>
                   )}
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -765,3 +932,5 @@ export const ChatProfileModal: React.FC<ChatProfileModalProps> = ({
     </>
   );
 };
+
+export const ChatProfileModal = React.memo(ChatProfileModalComponent);

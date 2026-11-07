@@ -6225,6 +6225,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
           conversation={activeConvo}
           currentUserId={user?.id || ''}
           token={token || ''}
+          messages={messages}
           isOnline={!activeConvo.is_group ? onlineUsers.has(getChatPartner(activeConvo).id) : false}
           onStartCall={handleStartAudioCall}
           onNavigate={onNavigate}
