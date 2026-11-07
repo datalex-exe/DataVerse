@@ -62,6 +62,17 @@ export async function authMiddleware(c: Context<{ Bindings: Bindings; Variables:
   c.set('userId', payload.userId);
   c.set('token', token);
 
+  // Refresh user presence non-blockingly
+  try {
+    const updatePromise = c.env.DB.prepare('UPDATE users SET last_active_at = ? WHERE id = ?')
+      .bind(Date.now(), payload.userId)
+      .run()
+      .catch(() => {});
+    if (c.executionCtx && typeof c.executionCtx.waitUntil === 'function') {
+      c.executionCtx.waitUntil(updatePromise);
+    }
+  } catch {}
+
   // Check if user is blocked or suspended in DB
   const user = await c.env.DB.prepare('SELECT is_blocked, suspended_until FROM users WHERE id = ?')
     .bind(payload.userId)

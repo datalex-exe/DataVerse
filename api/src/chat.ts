@@ -470,7 +470,8 @@ export class ChatRoom {
         ws.send(JSON.stringify({
           type: 'presence_state',
           conversationId,
-          onlineUsers: Array.from(onlineUsers)
+          onlineUsers: Array.from(onlineUsers),
+          userIds: Array.from(onlineUsers)
         }));
         return;
       }

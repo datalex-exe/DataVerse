@@ -32,6 +32,7 @@ interface ChatContact {
   username: string;
   display_name: string;
   avatar_url?: string | null;
+  is_online?: boolean;
 }
 
 interface GameItem {
@@ -232,7 +233,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               conversationId: c.id,
               username: other.username,
               display_name: other.display_name || other.username,
-              avatar_url: other.avatar_url
+              avatar_url: other.avatar_url,
+              is_online: Boolean(other.is_online)
             });
           }
         }
@@ -2217,10 +2219,26 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                           className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/50 border border-white/5 hover:border-teal-500/30 transition-all"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-10 h-10" rounded="rounded-xl" />
+                            <div className="relative flex-shrink-0">
+                              <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-10 h-10" rounded="rounded-xl" />
+                              {c.is_online && (
+                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900 shadow-sm" title="Online now" />
+                              )}
+                            </div>
                             <div className="min-w-0">
                               <h5 className="text-xs font-bold text-white truncate">{c.display_name}</h5>
-                              <p className="text-[10px] text-slate-400 truncate">@{c.username}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-slate-400 truncate">@{c.username}</span>
+                                <span className="text-[9px] text-slate-600">•</span>
+                                {c.is_online ? (
+                                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    Online
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 font-medium">Offline</span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -2291,9 +2309,17 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-8 h-8" rounded="rounded-lg" />
+                          <div className="relative flex-shrink-0">
+                            <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-8 h-8" rounded="rounded-lg" />
+                            {c.is_online && (
+                              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-900" />
+                            )}
+                          </div>
                           <div className="min-w-0">
-                            <span className="text-xs font-bold block truncate">{c.display_name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold block truncate">{c.display_name}</span>
+                              {c.is_online && <span className="text-[9px] text-emerald-400 font-bold">• Online</span>}
+                            </div>
                             <span className="text-[9px] text-slate-400 block truncate">@{c.username}</span>
                           </div>
                         </div>

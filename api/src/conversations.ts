@@ -148,7 +148,7 @@ conversationsApp.get('/', async (c) => {
     const placeholders = conversationIds.map(() => '?').join(',');
 
     const { results: members } = await c.env.DB.prepare(`
-      SELECT cm.conversation_id, cm.nickname, u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified
+      SELECT cm.conversation_id, cm.nickname, u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified, u.last_active_at
       FROM conversation_members cm
       JOIN users u ON cm.user_id = u.id
       WHERE cm.conversation_id IN (${placeholders})
@@ -157,6 +157,7 @@ conversationsApp.get('/', async (c) => {
       .all<any>();
 
     // 3. Assemble conversations and member details
+    const now = Date.now();
     const result = conversations.map(convo => {
       const convoMembers = (members || [])
         .filter(m => m.conversation_id === convo.id)
@@ -166,7 +167,9 @@ conversationsApp.get('/', async (c) => {
           display_name: m.display_name,
           avatar_url: m.avatar_url,
           is_verified: !!m.is_verified,
-          nickname: m.nickname || null
+          nickname: m.nickname || null,
+          last_active_at: m.last_active_at || 0,
+          is_online: Boolean(m.last_active_at && (now - m.last_active_at < 5 * 60 * 1000))
         }));
 
       return {

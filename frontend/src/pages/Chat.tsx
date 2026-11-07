@@ -1213,8 +1213,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
           // Presence state hydration
           if (data.type === 'presence_state') {
-            if (Array.isArray(data.userIds)) {
-              setOnlineUsers(new Set(data.userIds));
+            const userList = data.onlineUsers || data.userIds || [];
+            if (Array.isArray(userList)) {
+              setOnlineUsers(new Set(userList));
             }
             return;
           }
