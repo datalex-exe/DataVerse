@@ -696,6 +696,16 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     '#22c55e', // Green
   ];
 
+  // Pick cryptographically strong pseudo-random index
+  const getCryptoRandomIndex = (len: number): number => {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+      const arr = new Uint32Array(1);
+      window.crypto.getRandomValues(arr);
+      return arr[0] % len;
+    }
+    return Math.floor(Math.random() * len);
+  };
+
   // Reusable SVG Wheel renderer with visible slice labels & glowing rim
   const renderSvgWheel = (segments: string[], rotationDeg: number) => {
     const size = 320;
@@ -705,16 +715,19 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
     return (
       <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center select-none">
-        {/* Top Fixed Needle Pointer */}
+        {/* Top Fixed Needle Pointer (Fixed at 12 o'clock, OUTSIDE rotating wheel) */}
         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center pointer-events-none drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]">
           <div className="w-4 h-5 bg-gradient-to-b from-amber-300 via-amber-400 to-amber-600 rounded-t-md shadow-md border-t border-x border-amber-200/50" />
           <div className="w-0 h-0 border-l-[11px] border-l-transparent border-r-[11px] border-r-transparent border-t-[18px] border-t-amber-500" />
         </div>
 
-        {/* Rotating Wheel Body */}
+        {/* Rotating Wheel Body: Continuous cumulative rotation, never resets */}
         <div 
-          className="w-full h-full rounded-full transition-transform duration-[3500ms] ease-[cubic-bezier(0.15,0.9,0.2,1)]"
-          style={{ transform: `rotate(${rotationDeg}deg)` }}
+          className="w-full h-full rounded-full"
+          style={{ 
+            transform: `rotate(${rotationDeg}deg)`,
+            transition: 'transform 4.5s cubic-bezier(0.17, 0.67, 0.12, 0.99)'
+          }}
         >
           <svg 
             viewBox={`0 0 ${size} ${size}`} 
@@ -792,19 +805,20 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               </g>
             )}
 
-            {/* Multiple Slices (2+ segments) */}
+            {/* Multiple Slices: Slice i spans [i*sliceAngle, (i+1)*sliceAngle) measured clockwise from top (where pointer sits) */}
             {n >= 2 && segments.map((opt, i) => {
-              const anglePerSegment = (2 * Math.PI) / n;
-              const startAngle = i * anglePerSegment;
-              const endAngle = (i + 1) * anglePerSegment;
-              const x1 = center + radius * Math.cos(startAngle);
-              const y1 = center + radius * Math.sin(startAngle);
-              const x2 = center + radius * Math.cos(endAngle);
-              const y2 = center + radius * Math.sin(endAngle);
-              const largeArc = anglePerSegment > Math.PI ? 1 : 0;
+              const sliceAngle = 360 / n;
+              const angleRad1 = (i * sliceAngle) * (Math.PI / 180);
+              const angleRad2 = ((i + 1) * sliceAngle) * (Math.PI / 180);
+              // Clockwise from 12 o'clock (top): x = center + r*sin(θ), y = center - r*cos(θ)
+              const x1 = center + radius * Math.sin(angleRad1);
+              const y1 = center - radius * Math.cos(angleRad1);
+              const x2 = center + radius * Math.sin(angleRad2);
+              const y2 = center - radius * Math.cos(angleRad2);
+              const largeArc = sliceAngle > 180 ? 1 : 0;
               const pathData = `M ${center} ${center} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${radius} ${radius} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z`;
               const sliceColor = WHEEL_COLORS[i % WHEEL_COLORS.length];
-              const midAngleDeg = (i + 0.5) * (360 / n);
+              const midAngleDeg = (i + 0.5) * sliceAngle;
               const fontSize = n > 16 ? "8" : n > 12 ? "9" : n > 8 ? "10" : "11";
               const maxChars = n > 16 ? 9 : n > 12 ? 11 : 14;
 
@@ -816,11 +830,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                     stroke="#040b0d"
                     strokeWidth="2"
                   />
-                  {/* Text along slice radius */}
+                  {/* Text positioned along slice radial centerline */}
                   <g transform={`rotate(${midAngleDeg}, ${center}, ${center})`}>
                     <text
-                      x={center + radius * 0.65}
-                      y={center + 4}
+                      x={center}
+                      y={center - radius * 0.62}
                       fill="#ffffff"
                       fontSize={fontSize}
                       fontWeight="900"
@@ -855,11 +869,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               strokeWidth="2" 
             />
 
-            {/* Golden studs around the rim */}
+            {/* Golden studs around the rim aligned with top origin */}
             {Array.from({ length: Math.max(n, 8) }).map((_, i) => {
-              const studAngle = i * ((2 * Math.PI) / Math.max(n, 8));
-              const sx = center + (radius + 3) * Math.cos(studAngle);
-              const sy = center + (radius + 3) * Math.sin(studAngle);
+              const studAngleRad = i * ((2 * Math.PI) / Math.max(n, 8));
+              const sx = center + (radius + 3) * Math.sin(studAngleRad);
+              const sy = center - (radius + 3) * Math.cos(studAngleRad);
               return (
                 <circle
                   key={`stud-${i}`}
@@ -886,7 +900,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             <circle 
               cx={center} 
               cy={center} 
-              r="12" 
+              r={12} 
               fill="#040b0d" 
               stroke="#2dd4bf" 
               strokeWidth="2" 
@@ -907,7 +921,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     );
   };
 
-  // Solo Offline Spin Wheel Handlers
+  // Solo Offline Spin Wheel Handlers (Deterministic single source of truth)
   const handleSpinWheel = () => {
     if (wheelSegments.length < 2) {
       showToast('Add at least 2 choices to spin the wheel!', 'error');
@@ -917,24 +931,38 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     setWheelSpinning(true);
     setWheelWinner(null);
 
-    const winIdx = Math.floor(Math.random() * wheelSegments.length);
-    const winOpt = wheelSegments[winIdx];
-    const segAngle = 360 / wheelSegments.length;
-    const midAngle = (winIdx + 0.5) * segAngle;
-    const desiredOffset = (270 - midAngle + 3600) % 360;
-    const currentNorm = wheelRotation % 360;
-    let angleDiff = desiredOffset - currentNorm;
-    if (angleDiff < 0) angleDiff += 360;
-    const fullSpins = (5 + Math.floor(Math.random() * 4)) * 360;
-    const targetRotation = wheelRotation + fullSpins + angleDiff;
+    // 1. Pick winnerIndex FIRST via crypto.getRandomValues
+    const winnerIndex = getCryptoRandomIndex(wheelSegments.length);
+    const winnerOpt = wheelSegments[winnerIndex];
+
+    // 2. Slice i spans [i*sliceAngle, (i+1)*sliceAngle) measured clockwise from top
+    const sliceAngle = 360 / wheelSegments.length;
+
+    // 3. Angle needed to bring slice i's center under top pointer:
+    let target = (360 - (winnerIndex * sliceAngle + sliceAngle / 2)) % 360;
+    // Add jitter within the slice, strictly away from edges (±40% of slice half-width)
+    target += (Math.random() - 0.5) * sliceAngle * 0.8;
+    target = ((target % 360) + 360) % 360;
+
+    // 4. Cumulative persistent rotation from current wheel pose without resetting
+    const currentNorm = ((wheelRotation % 360) + 360) % 360;
+    const delta = ((target - currentNorm) + 360) % 360;
+    const fullTurns = 5 + Math.floor(Math.random() * 4); // 5 to 8 full revolutions
+    const targetRotation = wheelRotation + fullTurns * 360 + delta;
+
+    // Safety check assertion: compute slice directly from final angle
+    const checkIdx = Math.floor(((((360 - (targetRotation % 360)) % 360) + 360) % 360) / sliceAngle) % wheelSegments.length;
+    if (checkIdx !== winnerIndex) {
+      console.error(`[Wheel Align] Assertion failed: expected index ${winnerIndex} (${winnerOpt}), pointer computed ${checkIdx}`);
+    }
 
     setWheelRotation(targetRotation);
 
     setTimeout(() => {
       setWheelSpinning(false);
-      setWheelWinner(winOpt);
-      showToast(`🎡 Landed on: ${winOpt}! 🎉`, 'success');
-    }, 3500);
+      setWheelWinner(winnerOpt);
+      showToast(`🎡 Landed on: ${winnerOpt}! 🎉`, 'success');
+    }, 4500);
   };
 
   const handleAddWheelOption = () => {
@@ -959,6 +987,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   };
 
   // Multiplayer Spin Wheel Handlers
+  // Multiplayer Spin Wheel Handlers (Synchronized single source of truth)
   const handleMultiplayerSpinWheel = () => {
     const opts = (gameState?.wheelOptions !== undefined) ? gameState.wheelOptions : wheelSegments;
     if (opts.length < 2) {
@@ -967,17 +996,30 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }
     if (gameState?.wheelSpinning || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
-    const winIdx = Math.floor(Math.random() * opts.length);
-    const winOpt = opts[winIdx];
-    const segAngle = 360 / opts.length;
-    const midAngle = (winIdx + 0.5) * segAngle;
-    const desiredOffset = (270 - midAngle + 3600) % 360;
+    // 1. Pick winnerIndex FIRST via crypto.getRandomValues
+    const winnerIndex = getCryptoRandomIndex(opts.length);
+    const winnerOpt = opts[winnerIndex];
+
+    // 2. Slice geometry measured clockwise from top pointer
+    const sliceAngle = 360 / opts.length;
+
+    // 3. Target angle with safe interior jitter
+    let target = (360 - (winnerIndex * sliceAngle + sliceAngle / 2)) % 360;
+    target += (Math.random() - 0.5) * sliceAngle * 0.8;
+    target = ((target % 360) + 360) % 360;
+
+    // 4. Cumulative continuous rotation
     const currRotation = gameState?.wheelRotation || 0;
-    const currentNorm = currRotation % 360;
-    let angleDiff = desiredOffset - currentNorm;
-    if (angleDiff < 0) angleDiff += 360;
-    const fullSpins = (5 + Math.floor(Math.random() * 4)) * 360;
-    const targetRotation = currRotation + fullSpins + angleDiff;
+    const currentNorm = ((currRotation % 360) + 360) % 360;
+    const delta = ((target - currentNorm) + 360) % 360;
+    const fullTurns = 5 + Math.floor(Math.random() * 4);
+    const targetRotation = currRotation + fullTurns * 360 + delta;
+
+    // Verification assertion
+    const checkIdx = Math.floor(((((360 - (targetRotation % 360)) % 360) + 360) % 360) / sliceAngle) % opts.length;
+    if (checkIdx !== winnerIndex) {
+      console.error(`[Multiplayer Wheel Align] Assertion failed: expected ${winnerIndex}, got ${checkIdx}`);
+    }
 
     // Broadcast spin start to opponent
     wsRef.current.send(JSON.stringify({
@@ -989,14 +1031,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         wheelSpinning: true,
         wheelRotation: targetRotation,
         wheelWinner: null,
-        wheelWinnerIndex: winIdx,
+        wheelWinnerIndex: winnerIndex,
         lastSpinnerId: user?.id,
         lastSpinnerName: user?.display_name || user?.username,
         wheelOptions: opts
       }
     }));
 
-    // After animation finishes, broadcast final winner
+    // After 4.5s animation finishes, broadcast final winner
     setTimeout(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
@@ -1007,8 +1049,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             status: 'playing',
             wheelSpinning: false,
             wheelRotation: targetRotation,
-            wheelWinner: winOpt,
-            wheelWinnerIndex: winIdx,
+            wheelWinner: winnerOpt,
+            wheelWinnerIndex: winnerIndex,
             lastSpinnerId: user?.id,
             lastSpinnerName: user?.display_name || user?.username,
             wheelOptions: opts,
@@ -1016,7 +1058,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           }
         }));
       }
-    }, 3500);
+    }, 4500);
   };
 
   const handleAddMultiplayerOption = () => {
