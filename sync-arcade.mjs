@@ -159,8 +159,8 @@ console.log('✓ Wrote frontend/public/arcade.js with embedded offline arcade');
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. GENERATE FRONTEND/PUBLIC/ARCADE-SW.JS WITH EMBEDDED FALLBACK
 // ─────────────────────────────────────────────────────────────────────────────
-const arcadeSwContent = `// Offline Arcade service worker for DataVerse (v4)
-const VERSION = "v4";
+const arcadeSwContent = `// Offline Arcade service worker for DataVerse (v10)
+const VERSION = "v10";
 const SLOW_MS = 6000;
 const OFFLINE_URL = "/arcade-offline.html";
 const CACHE = \`offline-arcade-\${VERSION}\`;

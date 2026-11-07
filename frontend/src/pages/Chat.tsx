@@ -4858,6 +4858,26 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 {!activeConvo.is_group && (
                   <button
                     type="button"
+                    onClick={() => {
+                      const otherMember = activeConvo.members?.find((m: any) => m.id !== user?.id);
+                      onNavigate?.('arcade', JSON.stringify({
+                        conversationId: activeConvo.id,
+                        opponentId: otherMember?.id,
+                        opponentName: otherMember?.display_name || otherMember?.username,
+                        opponentAvatar: otherMember?.avatar_url
+                      }));
+                    }}
+                    className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-teal-500/40 text-teal-400 hover:text-teal-300 active:scale-95 shadow-sm"
+                    title="Play Game in Arcade 🎮"
+                    aria-label="Play Game in Arcade 🎮"
+                  >
+                    <Gamepad2 className="w-4 h-4" />
+                  </button>
+                )}
+
+                {!activeConvo.is_group && (
+                  <button
+                    type="button"
                     onClick={handleStartAudioCall}
                     className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--accent-2)] hover:text-white active:scale-95 shadow-sm"
                     title="Start Audio Call"

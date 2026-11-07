@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self';">
-<title>You're offline | DataVerse</title>
+<title>Arcade 🎮</title>
 <style>
   /* CUSTOMIZE: DataVerse theme palette matching dark and light mode */
   :root { 
@@ -56,13 +56,7 @@
 </head>
 <body>
 <main>
-  <header style="display: none !important;">
-    <a class="logo" href="/" style="display: none !important;"></a>
-    <div id="notice" role="status" style="display: none !important;"><span id="notice-text"></span><button id="go" hidden></button></div>
-  </header>
   <section id="menu">
-    <h1 id="title" style="display: none !important;"></h1>
-    <p id="sub" style="display: none !important;"></p>
     <div id="grid"></div>
   </section>
   <section id="play" hidden>
@@ -73,12 +67,11 @@
 <script>
 (() => {
   "use strict";
-  // CUSTOMIZE: [heading, sub-heading, status text, button label]
   const COPY = {
-    offline: ["NO INTERNET.", "Pick a game while you wait. We'll let you know when you're back online.", "Offline"],
-    slow: ["SLOW CONNECTION.", "Your page is still loading. Pick a game, we'll let you know when it's ready.", "Loading your page..."],
-    online: ["BACK ONLINE.", "Your connection is back.", "You're back online.", "Continue"],
-    ready: ["PAGE READY.", "Your page has finished loading.", "Your page is ready.", "Open page"],
+    offline: ["", "", "", ""],
+    slow: ["", "", "", ""],
+    online: ["", "", "", ""],
+    ready: ["", "", "", ""],
   };
   const SELF = "/arcade-offline.html";
 
@@ -578,53 +571,27 @@
 
   // ---- Connection status ----
   const isIframe = window.self !== window.top;
-  let poll = 0;
   function status(mode) {
-    const entry = COPY[mode] || COPY.offline;
-    const title = entry[0];
-    const sub = entry[1];
-    const note = entry[2];
-    const cta = entry[3];
-    $("#title").textContent = title;
-    $("#sub").textContent = sub;
-    $("#notice-text").textContent = note;
-    const logoEl = $(".logo");
-    if (logoEl) {
-      document.title = `${note} | ${logoEl.textContent}`;
-    }
-    $("#go").hidden = !cta;
-    $("#go").textContent = cta || "";
-    if (mode === "offline" && !poll) {
-      // onLine=false is reliable; onLine=true still needs a real request to confirm.
-      const check = () => {
-        try {
-          if (navigator.onLine) {
-            fetch(SELF, { method: "HEAD", cache: "no-store" }).then(() => status("online"), () => {});
-          }
-        } catch (_) {}
-      };
-      try { addEventListener("online", check); } catch (_) {}
-      poll = setInterval(check, 5000);
-    }
-    if (cta && poll) {
-      clearInterval(poll);
-      poll = 0;
-    }
+    // Keep UI clean: no banners or back-online text
   }
-  $("#go").onclick = () => {
-    if (isIframe) {
+  const goBtn = $("#go");
+  if (goBtn) {
+    goBtn.onclick = () => {
+      if (isIframe) {
+        try {
+          window.parent.postMessage("close_arcade", "*");
+        } catch (_) {}
+        return;
+      }
       try {
-        window.parent.postMessage("close_arcade", "*");
-      } catch (_) {}
-      return;
-    }
-    try {
-      if (location.pathname !== SELF) return location.reload();
-      const from = new URL(new URLSearchParams(location.search).get("from") || "/", location.origin);
-      location.assign(from.origin === location.origin ? from.pathname + from.search + from.hash : "/");
-    } catch (_) {
-      location.assign("/");
-    }
+        if (location.pathname !== SELF) return location.reload();
+        const from = new URL(new URLSearchParams(location.search).get("from") || "/", location.origin);
+        location.assign(from.origin === location.origin ? from.pathname + from.search + from.hash : "/");
+      } catch (_) {
+        location.assign("/");
+      }
+    };
+  }
   };
   const logoLink = $(".logo");
   if (logoLink && isIframe) {

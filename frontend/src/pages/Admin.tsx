@@ -712,7 +712,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
       addLog('Service Worker', 'info', 'Checking active service worker registration...');
       reg = await navigator.serviceWorker.getRegistration();
       if (!reg) {
-        reg = await navigator.serviceWorker.register('/arcade-sw.js?v=6', { scope: '/', updateViaCache: 'none' });
+        reg = await navigator.serviceWorker.register('/arcade-sw.js?v=10', { scope: '/', updateViaCache: 'none' });
       } else {
         await reg.update().catch(() => {});
       }

@@ -7,12 +7,15 @@ import {
   RefreshCw, 
   Swords, 
   Users, 
-  Sparkles, 
   Send, 
   X, 
   Check,
   Loader2,
-  Play
+  Play,
+  ShieldCheck,
+  Trophy,
+  Flame,
+  RotateCcw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -35,31 +38,42 @@ interface GameItem {
   name: string;
   desc: string;
   emoji: string;
-  icon?: React.ReactNode;
   multiplayer: boolean;
 }
 
+// ONLY true 2-player multiplayer games under "Play with Friends"
 const MULTIPLAYER_GAMES: GameItem[] = [
   { id: 'tic-tac-toe', name: 'Tic-Tac-Toe', desc: 'Classic 3x3 alignment battle', emoji: '❌⭕', multiplayer: true },
   { id: 'chess', name: 'Sandbox Chess', desc: 'Move pieces and capture kings', emoji: '♟️', multiplayer: true },
   { id: 'rps', name: 'Rock Paper Scissors', desc: 'Hidden choices, real-time reveal', emoji: '✊✋✌️', multiplayer: true },
   { id: 'memory-match', name: 'Memory Match', desc: 'Turn cards to find emoji pairs', emoji: '🃏', multiplayer: true },
-  { id: 'higher-lower', name: 'Higher or Lower', desc: 'Predict card values & build streaks', emoji: '🎴', multiplayer: true },
-  { id: 'whack-a-mole', name: 'Whack-a-Mole', desc: 'High-speed reaction tap game', emoji: '🐹', multiplayer: false },
-  { id: 'coin-toss', name: 'Coin Toss', desc: 'Decision flip with physics animation', emoji: '🪙', multiplayer: true },
-  { id: 'spin-wheel', name: 'Spin Wheel', desc: 'Random picker wheel for choices', emoji: '🎡', multiplayer: true },
 ];
+
+// Offline solo games switched to "Solo Retro"
+const SOLO_RETRO_GAMES = [
+  { id: '8bit-suite', name: '8-Bit Retro Suite', desc: 'Runner, Snake, Flappy & Breakout', emoji: '🕹️' },
+  { id: 'higher-lower', name: 'Higher or Lower', desc: 'Predict card values & build streaks', emoji: '🎴' },
+  { id: 'whack-a-mole', name: 'Whack-a-Mole', desc: '30s speed reaction tap challenge', emoji: '🐹' },
+  { id: 'coin-toss', name: 'Coin Toss', desc: '3D coin flip physics & decision picker', emoji: '🪙' },
+  { id: 'spin-wheel', name: 'Spin Wheel', desc: 'Customizable random picker wheel', emoji: '🎡' },
+];
+
+const pieceUnicode: Record<string, string> = {
+  k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟',
+  K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
+};
 
 export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'retro' | 'multiplayer'>('retro');
+  const [selectedSoloGame, setSelectedSoloGame] = useState<string>('8bit-suite');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Contacts from recent chats
+  // Contacts from recent chats for multiplayer challenges
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
 
@@ -81,27 +95,44 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   const [gameState, setGameState] = useState<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Local game states for solo/interactive games
+  // Chess square selection
+  const [selectedChessSquare, setSelectedChessSquare] = useState<number | null>(null);
+
+  // 100% OFFLINE SOLO GAMES STATE & LOCALSTORAGE PERSISTENCE
+  // Higher-Lower
   const [hlCard, setHlCard] = useState<{ suit: string; value: number; label: string } | null>(null);
   const [hlScore, setHlScore] = useState(0);
   const [hlStreak, setHlStreak] = useState(0);
+  const [hlBestScore, setHlBestScore] = useState(() => {
+    try { return parseInt(localStorage.getItem('arcade_offline_hl_best') || '0', 10); } catch { return 0; }
+  });
   const [hlGameOver, setHlGameOver] = useState(false);
 
+  // Whack-a-Mole
   const [moleScore, setMoleScore] = useState(0);
+  const [moleBestScore, setMoleBestScore] = useState(() => {
+    try { return parseInt(localStorage.getItem('arcade_offline_mole_best') || '0', 10); } catch { return 0; }
+  });
   const [moleTimeLeft, setMoleTimeLeft] = useState(30);
   const [moleActiveIndex, setMoleActiveIndex] = useState<number | null>(null);
   const [moleIsPlaying, setMoleIsPlaying] = useState(false);
   const moleTimerRef = useRef<any>(null);
 
+  // Coin Toss
   const [coinFlipping, setCoinFlipping] = useState(false);
   const [coinResult, setCoinResult] = useState<'heads' | 'tails' | null>(null);
+  const [coinHistory, setCoinHistory] = useState<Array<'heads' | 'tails'>>([]);
 
-  const [wheelSegments] = useState<string[]>(['Prize A', 'Bonus 50', 'Try Again', 'Jackpot 🏆', 'Wildcard', 'Double Points']);
+  // Spin Wheel
+  const [wheelSegments, setWheelSegments] = useState<string[]>([
+    'Coffee ☕', 'Pizza 🍕', 'Gaming 🎮', 'Walk 🚶', 'Code 💻', 'Sleep 😴'
+  ]);
+  const [wheelNewOption, setWheelNewOption] = useState('');
   const [wheelRotation, setWheelRotation] = useState(0);
   const [wheelSpinning, setWheelSpinning] = useState(false);
   const [wheelWinner, setWheelWinner] = useState<string | null>(null);
 
-  // Parse initial navigation parameters (e.g., from Chat or Game Pop-up)
+  // Parse initial navigation parameters (e.g. from Chat or Game Challenge Pop-up)
   useEffect(() => {
     if (initialParam) {
       try {
@@ -124,7 +155,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }
   }, [initialParam]);
 
-  // Fetch recent chat contacts
+  // Fetch recent chat contacts for multiplayer
   const fetchContacts = async () => {
     if (!token) return;
     setLoadingContacts(true);
@@ -167,7 +198,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }
   }, [activeTab]);
 
-  // Connect to active game session WebSocket
+  // Connect to active game session WebSocket for Multiplayer
   useEffect(() => {
     if (!activeSession || !user || !token) {
       if (wsRef.current) {
@@ -226,7 +257,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }
   };
 
-  // Challenge friend action
+  // Send multiplayer challenge to a friend
   const handleSendChallenge = async () => {
     if (!selectedContact || !token) return;
     setIsSendingChallenge(true);
@@ -249,7 +280,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         showToast(`🎮 Challenge sent to ${selectedContact.display_name}!`, 'success');
         setShowChallengeModal(false);
 
-        // Open multiplayer board in Arcade
+        // Open multiplayer room in Arcade
         setActiveSession({
           conversationId: data.conversationId,
           gameType: selectedGameType,
@@ -267,7 +298,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }
   };
 
-  // Game control helpers
+  // Multiplayer Game Control Helpers
   const handleMakeMove = (cellIndex: number) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'game_move', index: cellIndex }));
@@ -278,6 +309,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'game_reset' }));
     }
+    setSelectedChessSquare(null);
   };
 
   const handleCloseSession = () => {
@@ -286,8 +318,168 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }
     setActiveSession(null);
     setGameState(null);
+    setSelectedChessSquare(null);
   };
 
+  // Chess Move Validation
+  const isValidChessMove = (fromIdx: number, toIdx: number, piece: string, board: (string | null)[]) => {
+    const fromRow = Math.floor(fromIdx / 8);
+    const fromCol = fromIdx % 8;
+    const toRow = Math.floor(toIdx / 8);
+    const toCol = toIdx % 8;
+    
+    const rowDiff = toRow - fromRow;
+    const colDiff = toCol - fromCol;
+    
+    const targetPiece = board[toIdx];
+    if (targetPiece) {
+      const isPieceUpper = piece === piece.toUpperCase();
+      const isTargetUpper = targetPiece === targetPiece.toUpperCase();
+      if (isPieceUpper === isTargetUpper) return false;
+    }
+    
+    const pieceType = piece.toLowerCase();
+    
+    if (pieceType === 'p') {
+      const direction = piece === 'P' ? -1 : 1;
+      const startRow = piece === 'P' ? 6 : 1;
+      if (colDiff === 0 && rowDiff === direction) return targetPiece === null;
+      if (colDiff === 0 && rowDiff === 2 * direction && fromRow === startRow) {
+        const intermediateIdx = fromIdx + direction * 8;
+        return targetPiece === null && board[intermediateIdx] === null;
+      }
+      if (Math.abs(colDiff) === 1 && rowDiff === direction) return targetPiece !== null;
+      return false;
+    }
+    
+    if (pieceType === 'r') {
+      if (rowDiff !== 0 && colDiff !== 0) return false;
+      const rowStep = rowDiff === 0 ? 0 : (rowDiff > 0 ? 1 : -1);
+      const colStep = colDiff === 0 ? 0 : (colDiff > 0 ? 1 : -1);
+      let currRow = fromRow + rowStep;
+      let currCol = fromCol + colStep;
+      while (currRow !== toRow || currCol !== toCol) {
+        if (board[currRow * 8 + currCol] !== null) return false;
+        currRow += rowStep;
+        currCol += colStep;
+      }
+      return true;
+    }
+    
+    if (pieceType === 'b') {
+      if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
+      const rowStep = rowDiff > 0 ? 1 : -1;
+      const colStep = colDiff > 0 ? 1 : -1;
+      let currRow = fromRow + rowStep;
+      let currCol = fromCol + colStep;
+      while (currRow !== toRow || currCol !== toCol) {
+        if (board[currRow * 8 + currCol] !== null) return false;
+        currRow += rowStep;
+        currCol += colStep;
+      }
+      return true;
+    }
+    
+    if (pieceType === 'q') {
+      const isRook = rowDiff === 0 || colDiff === 0;
+      const isBishop = Math.abs(rowDiff) === Math.abs(colDiff);
+      if (!isRook && !isBishop) return false;
+      const rowStep = rowDiff === 0 ? 0 : (rowDiff > 0 ? 1 : -1);
+      const colStep = colDiff === 0 ? 0 : (colDiff > 0 ? 1 : -1);
+      let currRow = fromRow + rowStep;
+      let currCol = fromCol + colStep;
+      while (currRow !== toRow || currCol !== toCol) {
+        if (board[currRow * 8 + currCol] !== null) return false;
+        currRow += rowStep;
+        currCol += colStep;
+      }
+      return true;
+    }
+    
+    if (pieceType === 'n') {
+      const absR = Math.abs(rowDiff);
+      const absC = Math.abs(colDiff);
+      return (absR === 2 && absC === 1) || (absR === 1 && absC === 2);
+    }
+    
+    if (pieceType === 'k') {
+      return Math.abs(rowDiff) <= 1 && Math.abs(colDiff) <= 1;
+    }
+    
+    return false;
+  };
+
+  const handleChessSquareClick = (squareIdx: number) => {
+    if (!gameState || !user) return;
+    const isWhiteTurn = gameState.turn === gameState.playerX || !gameState.turn;
+    const isMe = (isWhiteTurn && user.id === gameState.playerX) ||
+                 (!isWhiteTurn && user.id === gameState.playerO) ||
+                 (user.id === gameState.playerX && !gameState.playerO);
+    if (!isMe) return;
+
+    const isMyPiece = (p: string | null) => {
+      if (!p) return false;
+      const isUpper = p === p.toUpperCase();
+      return isWhiteTurn ? isUpper : !isUpper;
+    };
+
+    const clickedPiece = gameState.chessBoard?.[squareIdx] || null;
+
+    if (selectedChessSquare === null) {
+      if (isMyPiece(clickedPiece)) {
+        setSelectedChessSquare(squareIdx);
+      }
+    } else {
+      if (selectedChessSquare === squareIdx) {
+        setSelectedChessSquare(null);
+        return;
+      }
+      if (isMyPiece(clickedPiece)) {
+        setSelectedChessSquare(squareIdx);
+        return;
+      }
+
+      const nextBoard = [...(gameState.chessBoard || Array(64).fill(null))];
+      const movingPiece = nextBoard[selectedChessSquare];
+      
+      if (!movingPiece || !isValidChessMove(selectedChessSquare, squareIdx, movingPiece, nextBoard)) {
+        setSelectedChessSquare(isMyPiece(clickedPiece) ? squareIdx : null);
+        return;
+      }
+      
+      let status = gameState.status;
+      let winner = gameState.winner;
+      const targetPiece = nextBoard[squareIdx];
+      let turn = gameState.turn;
+
+      // Capture King to win
+      if (targetPiece && targetPiece.toLowerCase() === 'k') {
+        status = 'won';
+        winner = user.id;
+        turn = null;
+      } else {
+        turn = isWhiteTurn ? gameState.playerO : gameState.playerX;
+      }
+
+      nextBoard[selectedChessSquare] = null;
+      nextBoard[squareIdx] = movingPiece;
+
+      const updatedGame = {
+        ...gameState,
+        chessBoard: nextBoard,
+        status,
+        winner,
+        turn
+      };
+
+      if (wsRef.current) {
+        wsRef.current.send(JSON.stringify({ type: 'game_update', game: updatedGame }));
+      }
+      setSelectedChessSquare(null);
+    }
+  };
+
+  // Rock Paper Scissors
   const handleRpsChoice = (choice: 'rock' | 'paper' | 'scissors') => {
     if (!gameState || !user || !wsRef.current) return;
     const moves = { ...(gameState.rpsPlayerMoves || {}) };
@@ -328,7 +520,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     wsRef.current.send(JSON.stringify({ type: 'game_update', game: updated }));
   };
 
-  // Memory card click
+  // Memory Match
   const handleMemoryCardClick = (idx: number) => {
     if (!gameState || !user || gameState.status !== 'playing' || gameState.turn !== user.id) return;
     const currentUserId = user.id;
@@ -399,7 +591,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }
   };
 
-  // Higher-Lower generator
+  // 100% OFFLINE SOLO GAME HANDLERS
+  // Higher-Lower
   const drawCard = () => {
     const suits = ['♥', '♦', '♣', '♠'];
     const suit = suits[Math.floor(Math.random() * suits.length)];
@@ -422,8 +615,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     const isCorrect = guess === 'higher' ? next.value >= hlCard.value : next.value <= hlCard.value;
     setHlCard(next);
     if (isCorrect) {
-      setHlScore(s => s + 10);
-      setHlStreak(st => st + 1);
+      const nextScore = hlScore + 10;
+      const nextStreak = hlStreak + 1;
+      setHlScore(nextScore);
+      setHlStreak(nextStreak);
+      if (nextScore > hlBestScore) {
+        setHlBestScore(nextScore);
+        try { localStorage.setItem('arcade_offline_hl_best', String(nextScore)); } catch {}
+      }
     } else {
       setHlGameOver(true);
     }
@@ -451,7 +650,12 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
   const handleWhackMole = (idx: number) => {
     if (idx === moleActiveIndex && moleIsPlaying) {
-      setMoleScore(s => s + 1);
+      const newScore = moleScore + 1;
+      setMoleScore(newScore);
+      if (newScore > moleBestScore) {
+        setMoleBestScore(newScore);
+        try { localStorage.setItem('arcade_offline_mole_best', String(newScore)); } catch {}
+      }
       setMoleActiveIndex(null);
     }
   };
@@ -464,11 +668,12 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     setTimeout(() => {
       const result = Math.random() < 0.5 ? 'heads' : 'tails';
       setCoinResult(result);
+      setCoinHistory(prev => [result, ...prev.slice(0, 9)]);
       setCoinFlipping(false);
       if (result === prediction) {
-        showToast(`You predicted ${prediction.toUpperCase()} correctly! 👑`, 'success');
+        showToast(`Correct prediction: ${prediction.toUpperCase()}! 👑`, 'success');
       }
-    }, 1200);
+    }, 1100);
   };
 
   // Spin Wheel
@@ -490,7 +695,319 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }, 3200);
   };
 
-  // Render Multiplayer Boards
+  const handleAddWheelOption = () => {
+    if (!wheelNewOption.trim()) return;
+    setWheelSegments(prev => [...prev, wheelNewOption.trim()]);
+    setWheelNewOption('');
+  };
+
+  const handleRemoveWheelOption = (idx: number) => {
+    if (wheelSegments.length <= 2) {
+      showToast('Minimum 2 options required', 'error');
+      return;
+    }
+    setWheelSegments(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // Render 100% Offline Solo Games
+  const renderSoloRetroGame = () => {
+    switch (selectedSoloGame) {
+      case '8bit-suite':
+        return (
+          <iframe
+            ref={iframeRef}
+            src="/arcade-offline.html"
+            title="Arcade 8-Bit Retro Games"
+            className="w-full flex-1 border-0 bg-[#040b0d] h-[520px] sm:h-[580px]"
+            sandbox="allow-scripts allow-same-origin allow-pointer-lock"
+          />
+        );
+
+      case 'higher-lower':
+        return (
+          <div className="w-full flex-1 flex flex-col items-center justify-center p-6 gap-6 animate-zoom">
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-black text-white flex items-center justify-center gap-2">
+                <span>🎴</span> Higher or Lower
+              </h3>
+              <p className="text-xs text-slate-400">Guess whether the next card will be higher or lower in value.</p>
+            </div>
+
+            {hlCard ? (
+              <div className="flex flex-col items-center gap-5 w-full max-w-sm">
+                {/* Score HUD */}
+                <div className="flex gap-8 text-center bg-slate-900/80 px-7 py-2.5 rounded-full border border-teal-500/20 shadow-lg">
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">Score</span>
+                    <span className="text-base font-black text-white">{hlScore}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">Streak</span>
+                    <span className="text-base font-black text-teal-400 flex items-center gap-0.5 justify-center">
+                      <Flame className="w-3.5 h-3.5 text-amber-400 fill-current" />
+                      {hlStreak}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider">Best</span>
+                    <span className="text-base font-black text-amber-400 flex items-center gap-0.5 justify-center">
+                      <Trophy className="w-3.5 h-3.5" />
+                      {hlBestScore}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card Container */}
+                <div className={`w-40 h-56 bg-slate-900 border-2 ${hlGameOver ? 'border-rose-500 shadow-rose-500/20' : 'border-teal-500/40 shadow-teal-500/20'} rounded-3xl flex flex-col justify-between p-4 shadow-2xl relative select-none`}>
+                  <div className="flex justify-between items-start">
+                    <span className={`text-lg font-black ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-200'}`}>
+                      {hlCard.label.split(' ')[0]}
+                    </span>
+                    <span className={`text-xl ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-200'}`}>
+                      {hlCard.suit}
+                    </span>
+                  </div>
+                  
+                  <span className={`text-6xl self-center ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-200'}`}>
+                    {hlCard.suit}
+                  </span>
+
+                  <div className="flex justify-between items-end rotate-180">
+                    <span className={`text-lg font-black ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-200'}`}>
+                      {hlCard.label.split(' ')[0]}
+                    </span>
+                    <span className={`text-xl ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-200'}`}>
+                      {hlCard.suit}
+                    </span>
+                  </div>
+                </div>
+
+                {!hlGameOver ? (
+                  <div className="flex gap-4 w-full justify-center">
+                    <button
+                      type="button"
+                      onClick={() => handleHlGuess('higher')}
+                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
+                    >
+                      Higher ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleHlGuess('lower')}
+                      className="flex-1 py-3 bg-teal-600 hover:bg-teal-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg shadow-teal-600/20 active:scale-95"
+                    >
+                      Lower ↓
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center space-y-3 bg-rose-500/10 border border-rose-500/25 p-5 rounded-2xl w-full">
+                    <h5 className="text-rose-400 font-extrabold text-sm">Game Over! Score: {hlScore}</h5>
+                    <button
+                      type="button"
+                      onClick={handleHlStart}
+                      className="py-2 px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black uppercase transition-all shadow active:scale-95"
+                    >
+                      Play Again
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleHlStart}
+                className="py-3.5 px-8 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-teal-500/25 active:scale-95"
+              >
+                Start Guessing Cards
+              </button>
+            )}
+          </div>
+        );
+
+      case 'whack-a-mole':
+        return (
+          <div className="w-full flex-1 flex flex-col items-center justify-center p-6 gap-6 animate-zoom">
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-black text-white flex items-center justify-center gap-2">
+                <span>🐹</span> Whack-a-Mole
+              </h3>
+              <p className="text-xs text-slate-400">Whack the mole as fast as possible when it pops up!</p>
+            </div>
+
+            <div className="flex justify-between items-center w-full max-w-sm px-5 py-2.5 bg-slate-900/80 border border-teal-500/20 rounded-2xl text-xs font-bold text-slate-300 shadow-md">
+              <span>Score: <strong className="text-teal-400 text-sm font-black">{moleScore}</strong></span>
+              <span>Best: <strong className="text-amber-400 text-sm font-black">{moleBestScore}</strong></span>
+              <span>Time: <strong className="text-rose-400 text-sm font-black">{moleTimeLeft}s</strong></span>
+            </div>
+
+            {moleIsPlaying ? (
+              <div className="grid grid-cols-3 gap-3.5 bg-slate-950/80 p-5 rounded-3xl border border-white/10 shadow-2xl">
+                {Array(9).fill(null).map((_, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleWhackMole(idx)}
+                    className="h-18 w-18 sm:h-20 sm:w-20 bg-slate-900 border-2 border-slate-750 hover:bg-slate-850 rounded-2xl flex items-center justify-center text-4xl select-none transition-all active:scale-90"
+                  >
+                    {moleActiveIndex === idx ? '🐹' : ''}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center space-y-3 bg-slate-900/60 border border-white/10 p-6 rounded-3xl max-w-sm w-full shadow-xl">
+                {moleScore > 0 ? (
+                  <p className="text-xs text-teal-300 font-extrabold">You whacked {moleScore} moles in 30s!</p>
+                ) : (
+                  <p className="text-xs text-slate-400">Test your reaction time in 30 seconds.</p>
+                )}
+                <button
+                  type="button"
+                  onClick={startWhackAMole}
+                  className="py-3 px-8 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-teal-500/25 active:scale-95"
+                >
+                  {moleScore > 0 ? 'Play Again' : 'Start 30s Game'}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'coin-toss':
+        return (
+          <div className="w-full flex-1 flex flex-col items-center justify-center p-6 gap-6 animate-zoom max-w-md mx-auto">
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-black text-white flex items-center justify-center gap-2">
+                <span>🪙</span> Coin Toss
+              </h3>
+              <p className="text-xs text-slate-400">Flip a coin to make a quick decision!</p>
+            </div>
+
+            <div className={`h-28 w-28 rounded-full border-4 border-amber-400 bg-gradient-to-tr from-amber-500 to-yellow-300 shadow-[0_0_40px_rgba(245,158,11,0.3)] flex items-center justify-center text-5xl select-none ${
+              coinFlipping ? 'animate-spin' : ''
+            }`}>
+              {coinResult === 'heads' ? '👑' : coinResult === 'tails' ? '🍂' : '🪙'}
+            </div>
+
+            {coinResult && (
+              <div className="text-center bg-slate-900/80 px-6 py-2 rounded-full border border-amber-500/30 text-xs font-extrabold text-white capitalize shadow-md">
+                Result: <strong className="text-amber-400 uppercase">{coinResult}</strong>!
+              </div>
+            )}
+
+            {!coinFlipping ? (
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => handleCoinToss('heads')}
+                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs uppercase rounded-xl transition-all shadow active:scale-95"
+                >
+                  Predict Heads 👑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCoinToss('tails')}
+                  className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase rounded-xl transition-all shadow border border-slate-700 active:scale-95"
+                >
+                  Predict Tails 🍂
+                </button>
+              </div>
+            ) : (
+              <span className="text-xs text-slate-400 animate-pulse font-mono font-bold">Flipping coin...</span>
+            )}
+
+            {coinHistory.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap justify-center mt-2">
+                <span className="text-[10px] text-slate-500 font-bold uppercase mr-1">History:</span>
+                {coinHistory.map((res, i) => (
+                  <span key={i} className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                    res === 'heads' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}>
+                    {res === 'heads' ? '👑 H' : '🍂 T'}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      case 'spin-wheel':
+        return (
+          <div className="w-full flex-1 flex flex-col md:flex-row items-center justify-around p-6 gap-8 animate-zoom">
+            {/* Wheel Canvas Section */}
+            <div className="flex flex-col items-center gap-4">
+              <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center">
+                <div 
+                  className="w-full h-full rounded-full border-4 border-teal-400 overflow-hidden relative shadow-[0_0_50px_rgba(45,212,191,0.25)] flex items-center justify-center transition-all duration-[3200ms] ease-out"
+                  style={{ transform: `rotate(${wheelRotation}deg)` }}
+                >
+                  <div className="w-full h-full bg-gradient-to-tr from-teal-950 via-slate-900 to-emerald-950 flex items-center justify-center">
+                    <span className="text-4xl">🎡</span>
+                  </div>
+                </div>
+                <div className="absolute -top-3 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-[14px] border-t-amber-400 z-10 drop-shadow" />
+              </div>
+
+              {wheelWinner && (
+                <div className="text-center bg-teal-500/15 border border-teal-500/40 px-6 py-2 rounded-full text-xs font-extrabold text-teal-300 animate-bounce">
+                  Selected: {wheelWinner}! 🎉
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={wheelSpinning}
+                onClick={handleSpinWheel}
+                className="py-3 px-8 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-teal-500/25 active:scale-95 disabled:opacity-50"
+              >
+                {wheelSpinning ? 'Spinning...' : 'Spin The Wheel 🎡'}
+              </button>
+            </div>
+
+            {/* Custom Options Config */}
+            <div className="w-full max-w-xs space-y-3 p-4 bg-slate-900/60 rounded-2xl border border-white/10 text-left">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Wheel Choices</h4>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={wheelNewOption}
+                  onChange={(e) => setWheelNewOption(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddWheelOption()}
+                  placeholder="Add custom option..."
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddWheelOption}
+                  className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 rounded-xl text-xs font-bold"
+                >
+                  Add
+                </button>
+              </div>
+
+              <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                {wheelSegments.map((seg, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/70 border border-white/5 text-xs text-slate-300">
+                    <span className="truncate">{seg}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWheelOption(idx)}
+                      className="text-slate-500 hover:text-rose-400 p-0.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Render True Versus Multiplayer Games
   const renderMultiplayerGame = () => {
     if (!activeSession) return null;
     const currentGameType = activeSession.gameType || 'tic-tac-toe';
@@ -560,6 +1077,65 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             )}
           </div>
         );
+
+      case 'chess': {
+        const board = gameState?.chessBoard || Array(64).fill(null);
+        const shouldFlip = gameState?.turn === gameState?.playerO;
+        const squares = [];
+
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const idx = shouldFlip ? (63 - (row * 8 + col)) : (row * 8 + col);
+            const isDark = (row + col) % 2 === 1;
+            const piece = board[idx];
+            const isSelected = selectedChessSquare === idx;
+
+            squares.push(
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleChessSquareClick(idx)}
+                className={`w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center text-2xl font-bold transition-all relative border border-transparent select-none ${
+                  isSelected 
+                    ? 'bg-teal-500/40 border-teal-400 z-10 scale-105 shadow-md shadow-teal-500/20' 
+                    : isDark 
+                    ? 'bg-slate-900/80 hover:bg-slate-800 text-slate-300' 
+                    : 'bg-slate-800/30 hover:bg-slate-700/40 text-white'
+                }`}
+              >
+                {piece && (
+                  <span className={`${piece === piece.toUpperCase() ? 'text-slate-100 drop-shadow' : 'text-slate-950 drop-shadow-[0_0.75px_0.75px_rgba(255,255,255,0.75)]'} text-3xl font-black select-none`}>
+                    {pieceUnicode[piece]}
+                  </span>
+                )}
+              </button>
+            );
+          }
+        }
+
+        return (
+          <div className="flex flex-col items-center gap-4 animate-zoom">
+            <div className="text-center space-y-1">
+              <h4 className="text-sm font-black text-white">♟️ Sandbox Chess</h4>
+              <p className="text-[11px] text-slate-400">
+                {gameState?.status === 'playing' ? (
+                  gameState?.turn === user?.id ? (
+                    <span className="text-emerald-400 font-extrabold">Your Turn! Click piece to select, click tile to move.</span>
+                  ) : (
+                    <span className="text-slate-400">Waiting for {activeSession.opponentName || 'opponent'} move...</span>
+                  )
+                ) : (
+                  <span className="text-amber-400 font-extrabold">King Captured! Game Over</span>
+                )}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-8 border-2 border-teal-500/30 rounded-2xl overflow-hidden shadow-2xl bg-slate-950/80 p-1">
+              {squares}
+            </div>
+          </div>
+        );
+      }
 
       case 'rps': {
         const myMove = gameState?.rpsPlayerMoves?.[user?.id || ''];
@@ -682,219 +1258,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           </div>
         );
 
-      case 'higher-lower':
-        return (
-          <div className="flex flex-col items-center gap-5 max-w-sm w-full animate-zoom">
-            <div className="text-center space-y-1">
-              <h4 className="text-sm font-black text-white">Higher or Lower</h4>
-              <p className="text-[11px] text-slate-400">Guess if the next card will be higher or lower!</p>
-            </div>
-
-            {hlCard ? (
-              <div className="flex flex-col items-center gap-5 w-full">
-                <div className="flex gap-8 text-center bg-slate-900/60 px-6 py-2 rounded-full border border-white/10">
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 block">Score</span>
-                    <span className="text-sm font-black text-white">{hlScore}</span>
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-slate-400 block">Streak</span>
-                    <span className="text-sm font-black text-teal-400">{hlStreak}</span>
-                  </div>
-                </div>
-
-                {/* Card Container */}
-                <div className={`w-36 h-52 bg-slate-900 border ${hlGameOver ? 'border-rose-500/60' : 'border-teal-500/40'} rounded-2xl flex flex-col justify-between p-4 shadow-2xl relative select-none`}>
-                  <div className="flex justify-between items-start">
-                    <span className={`text-base font-extrabold ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-300'}`}>
-                      {hlCard.label.split(' ')[0]}
-                    </span>
-                    <span className={`text-lg ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-300'}`}>
-                      {hlCard.suit}
-                    </span>
-                  </div>
-                  
-                  <span className={`text-5xl self-center ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-300'}`}>
-                    {hlCard.suit}
-                  </span>
-
-                  <div className="flex justify-between items-end rotate-180">
-                    <span className={`text-base font-extrabold ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-300'}`}>
-                      {hlCard.label.split(' ')[0]}
-                    </span>
-                    <span className={`text-lg ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-300'}`}>
-                      {hlCard.suit}
-                    </span>
-                  </div>
-                </div>
-
-                {!hlGameOver ? (
-                  <div className="flex gap-4">
-                    <button
-                      type="button"
-                      onClick={() => handleHlGuess('higher')}
-                      className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase rounded-xl transition-all shadow active:scale-95"
-                    >
-                      Higher ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleHlGuess('lower')}
-                      className="px-6 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-black text-xs uppercase rounded-xl transition-all shadow active:scale-95"
-                    >
-                      Lower ↓
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-center space-y-2 bg-rose-500/10 border border-rose-500/20 px-6 py-4 rounded-xl w-full">
-                    <h5 className="text-rose-400 font-extrabold text-xs">Game Over! Final Score: {hlScore}</h5>
-                    <button
-                      type="button"
-                      onClick={handleHlStart}
-                      className="py-1.5 px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold"
-                    >
-                      Play Again
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={handleHlStart}
-                className="py-3 px-8 bg-teal-600 hover:bg-teal-500 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow"
-              >
-                Start Guessing Cards
-              </button>
-            )}
-          </div>
-        );
-
-      case 'whack-a-mole':
-        return (
-          <div className="flex flex-col items-center gap-5 max-w-sm w-full animate-zoom">
-            <div className="text-center space-y-1">
-              <h4 className="text-sm font-black text-white">Whack-a-Mole</h4>
-              <p className="text-[11px] text-slate-400">Whack the mole as fast as possible when it pops up!</p>
-            </div>
-
-            <div className="flex justify-between items-center w-full px-4 py-2 bg-slate-900/60 border border-white/10 rounded-xl text-xs font-bold text-slate-300">
-              <span>Score: <strong className="text-teal-400 text-sm font-black">{moleScore}</strong></span>
-              <span>Time: <strong className="text-amber-400 text-sm font-black">{moleTimeLeft}s</strong></span>
-            </div>
-
-            {moleIsPlaying ? (
-              <div className="grid grid-cols-3 gap-3 bg-slate-950/60 p-4 rounded-2xl border border-white/10">
-                {Array(9).fill(null).map((_, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleWhackMole(idx)}
-                    className="h-16 w-16 bg-slate-900 border border-slate-750 hover:bg-slate-800 rounded-2xl flex items-center justify-center text-3xl select-none transition-all active:scale-90"
-                  >
-                    {moleActiveIndex === idx ? '🐹' : ''}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center space-y-3 bg-slate-900/60 border border-white/10 p-6 rounded-2xl w-full">
-                {moleScore > 0 && <p className="text-xs text-teal-300 font-bold">You whacked {moleScore} moles!</p>}
-                <button
-                  type="button"
-                  onClick={startWhackAMole}
-                  className="py-2.5 px-6 bg-teal-600 hover:bg-teal-500 text-white text-xs font-black uppercase rounded-xl transition-all shadow active:scale-95"
-                >
-                  {moleScore > 0 ? 'Play Again' : 'Start Game'}
-                </button>
-              </div>
-            )}
-          </div>
-        );
-
-      case 'coin-toss':
-        return (
-          <div className="flex flex-col items-center gap-6 max-w-sm w-full animate-zoom">
-            <div className="text-center space-y-1">
-              <h4 className="text-sm font-black text-white">Coin Toss</h4>
-              <p className="text-[11px] text-slate-400">Flip a coin with physics!</p>
-            </div>
-
-            <div className={`h-24 w-24 rounded-full border-4 border-amber-400 bg-gradient-to-tr from-amber-500 to-yellow-300 shadow-2xl flex items-center justify-center text-4xl select-none ${
-              coinFlipping ? 'animate-spin' : ''
-            }`}>
-              {coinResult === 'heads' ? '👑' : coinResult === 'tails' ? '🍂' : '🪙'}
-            </div>
-
-            {coinResult && (
-              <div className="text-center bg-slate-900/60 px-6 py-2 rounded-full border border-white/10 text-xs font-bold text-white capitalize">
-                Result: {coinResult}!
-              </div>
-            )}
-
-            {!coinFlipping ? (
-              <div className="flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => handleCoinToss('heads')}
-                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl active:scale-95"
-                >
-                  Predict Heads 👑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCoinToss('tails')}
-                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl active:scale-95"
-                >
-                  Predict Tails 🍂
-                </button>
-              </div>
-            ) : (
-              <span className="text-xs text-slate-400 animate-pulse">Flipping coin...</span>
-            )}
-          </div>
-        );
-
-      case 'spin-wheel':
-        return (
-          <div className="flex flex-col items-center gap-6 max-w-sm w-full animate-zoom">
-            <div className="text-center space-y-1">
-              <h4 className="text-sm font-black text-white">Spin Wheel</h4>
-              <p className="text-[11px] text-slate-400">Spin the wheel for random picks!</p>
-            </div>
-
-            <div className="relative w-56 h-56 flex items-center justify-center">
-              <div 
-                className="w-full h-full rounded-full border-4 border-teal-400 overflow-hidden relative shadow-2xl flex items-center justify-center transition-all duration-[3000ms] ease-out"
-                style={{ transform: `rotate(${wheelRotation}deg)` }}
-              >
-                <div className="w-full h-full bg-gradient-to-tr from-teal-900 via-slate-900 to-emerald-900 flex items-center justify-center">
-                  <span className="text-3xl">🎡</span>
-                </div>
-              </div>
-              <div className="absolute -top-3 w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-t-[14px] border-t-amber-400 z-10" />
-            </div>
-
-            {wheelWinner && (
-              <div className="text-center bg-teal-500/10 border border-teal-500/30 px-6 py-2 rounded-full text-xs font-bold text-teal-300">
-                Winner: {wheelWinner}!
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={wheelSpinning}
-              onClick={handleSpinWheel}
-              className="py-2.5 px-8 bg-teal-600 hover:bg-teal-500 text-white text-xs font-black uppercase rounded-xl transition-all shadow active:scale-95"
-            >
-              {wheelSpinning ? 'Spinning...' : 'Spin The Wheel'}
-            </button>
-          </div>
-        );
-
       default:
         return (
           <div className="text-center text-xs text-slate-400">
-            Game board for {currentGameType} active!
+            Multiplayer board for {currentGameType} active!
           </div>
         );
     }
@@ -914,8 +1281,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           <span>Back</span>
         </button>
 
-        {/* Tab Switcher: Solo Retro vs Multiplayer */}
-        <div className="flex items-center p-1 rounded-2xl bg-[var(--input)] border border-[var(--line)]">
+        {/* Tab Switcher: Solo Retro vs Play with Friends */}
+        <div className="flex items-center p-1 rounded-2xl bg-[var(--input)] border border-[var(--line)] shadow-inner">
           <button
             type="button"
             onClick={() => setActiveTab('retro')}
@@ -944,11 +1311,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
-          {activeTab === 'retro' && (
+          {activeTab === 'retro' && selectedSoloGame === '8bit-suite' && (
             <button
               type="button"
               onClick={reloadRetroGame}
-              title="Reset Game"
+              title="Reset Retro Games"
               className="p-2 rounded-xl bg-[var(--input)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] transition-colors active:scale-95"
             >
               <RefreshCw className="w-4 h-4" />
@@ -987,44 +1354,71 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             </div>
           </div>
 
-          {activeTab === 'multiplayer' && (
-            <button
-              type="button"
-              onClick={() => setShowChallengeModal(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/40 text-teal-300 text-xs font-black transition-all active:scale-95"
-            >
-              <Swords className="w-3.5 h-3.5" />
-              <span>Challenge a Friend</span>
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {activeTab === 'retro' && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>100% Offline Capable</span>
+              </span>
+            )}
+
+            {activeTab === 'multiplayer' && (
+              <button
+                type="button"
+                onClick={() => setShowChallengeModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/40 text-teal-300 text-xs font-black transition-all active:scale-95"
+              >
+                <Swords className="w-3.5 h-3.5" />
+                <span>Challenge a Friend</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* TAB 1: Solo Retro Games */}
+        {/* TAB 1: Solo Retro Games (100% Offline) */}
         {activeTab === 'retro' && (
-          <iframe
-            ref={iframeRef}
-            src="/arcade-offline.html"
-            title="Arcade Retro Games"
-            className="w-full flex-1 border-0 bg-[#040b0d] h-[520px] sm:h-[580px]"
-            sandbox="allow-scripts allow-same-origin allow-pointer-lock"
-          />
+          <div className="w-full flex-1 flex flex-col bg-[#040b0d]">
+            {/* Solo Offline Game Selector Strip */}
+            <div className="flex items-center gap-2 p-3 bg-slate-950/80 border-b border-white/5 overflow-x-auto scrollbar-none">
+              {SOLO_RETRO_GAMES.map(g => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setSelectedSoloGame(g.id)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 ${
+                    selectedSoloGame === g.id
+                      ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black shadow-md'
+                      : 'bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-white border border-white/5'
+                  }`}
+                >
+                  <span>{g.emoji}</span>
+                  <span>{g.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Offline Solo Game Canvas / Board */}
+            <div className="w-full flex-1 flex items-center justify-center">
+              {renderSoloRetroGame()}
+            </div>
+          </div>
         )}
 
-        {/* TAB 2: Multiplayer & Friends */}
+        {/* TAB 2: Play with Friends (True 2-Player Multiplayer) */}
         {activeTab === 'multiplayer' && (
           <div className="w-full flex-1 flex flex-col p-4 sm:p-6 bg-[#040b0d] overflow-y-auto">
             {activeSession ? (
-              /* Active Game Room View */
+              /* Active Multiplayer Game Room */
               <div className="w-full flex-1 flex flex-col items-center justify-between">
-                {/* Active Game Session Header */}
-                <div className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-900/60 border border-white/10 mb-6">
+                {/* Active Session Header Bar */}
+                <div className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 mb-6">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300">
                       <Gamepad2 className="w-5 h-5" />
                     </div>
                     <div>
                       <h3 className="text-xs font-black text-white capitalize">
-                        {activeSession.gameType.replace('-', ' ')} Game
+                        {activeSession.gameType.replace('-', ' ')} Battle
                       </h3>
                       <p className="text-[10px] text-slate-400">
                         Playing with <strong className="text-teal-400">{activeSession.opponentName || 'Friend'}</strong>
@@ -1033,21 +1427,20 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {['tic-tac-toe', 'rps', 'memory-match'].includes(activeSession.gameType) && (
-                      <button
-                        type="button"
-                        onClick={handleResetGame}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-black text-slate-200 border border-slate-700 active:scale-95"
-                      >
-                        Reset Game
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={handleResetGame}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-black text-slate-200 border border-slate-700 active:scale-95 flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Rematch</span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleCloseSession}
                       className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-[10px] font-black text-rose-300 border border-rose-500/30 active:scale-95"
                     >
-                      Exit Game
+                      Exit Battle
                     </button>
                   </div>
                 </div>
@@ -1058,14 +1451,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 </div>
               </div>
             ) : (
-              /* Lobby: Select Game or Friend */
+              /* Multiplayer Lobby */
               <div className="w-full flex flex-col gap-6">
                 
-                {/* Multiplayer Games Grid */}
+                {/* Multiplayer 1v1 Games Grid */}
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-                    <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-                    <span>Choose a Game to Play</span>
+                    <Swords className="w-3.5 h-3.5 text-teal-400" />
+                    <span>Multiplayer 1v1 Battles</span>
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {MULTIPLAYER_GAMES.map(g => (
@@ -1085,7 +1478,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                         </div>
                         <span className="mt-3 inline-flex items-center gap-1 text-[9px] font-extrabold uppercase text-teal-400">
                           <Play className="w-2.5 h-2.5 fill-current" />
-                          <span>Challenge</span>
+                          <span>Challenge 1v1</span>
                         </span>
                       </button>
                     ))}
@@ -1139,7 +1532,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                             className="px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-[10px] font-black border border-teal-500/30 active:scale-95 transition-all flex items-center gap-1"
                           >
                             <Swords className="w-3 h-3" />
-                            <span>Play</span>
+                            <span>Challenge</span>
                           </button>
                         </div>
                       ))}
@@ -1163,7 +1556,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                   <Swords className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">Send Game Challenge</h3>
+                  <h3 className="text-sm font-black text-white">Send 1v1 Battle Challenge</h3>
                   <p className="text-[10px] text-slate-400">They will get an instant in-app pop-up to play</p>
                 </div>
               </div>
@@ -1178,7 +1571,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
             {/* Select Friend */}
             <div>
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Select Friend</label>
+              <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Select Friend from Chats</label>
               {contacts.length === 0 ? (
                 <p className="text-xs text-slate-500">No recent chat contacts found.</p>
               ) : (
@@ -1217,9 +1610,9 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               )}
             </div>
 
-            {/* Select Game */}
+            {/* Select Multiplayer Game */}
             <div>
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Choose Game</label>
+              <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Choose 1v1 Battle Game</label>
               <div className="grid grid-cols-2 gap-2">
                 {MULTIPLAYER_GAMES.map(g => {
                   const isSelected = selectedGameType === g.id;
