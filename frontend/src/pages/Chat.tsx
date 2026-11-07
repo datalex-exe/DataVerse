@@ -62,6 +62,8 @@ interface Member {
   avatar_url: string | null;
   is_verified?: boolean;
   nickname: string | null;
+  last_active_at?: number;
+  is_online?: boolean;
 }
 
 interface LastMessage {
@@ -974,11 +976,26 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     if (!token) return;
     if (showLoading && conversations.length === 0) setLoadingConvos(true);
     try {
-      const res = await fetch('/api/conversations', { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch('/api/conversations?t=' + Date.now(), { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
         const convos = data.conversations || [];
         setConversations(convos);
+
+        const onlineIds = new Set<string>();
+        for (const c of convos) {
+          for (const m of (c.members || [])) {
+            if (m.is_online) {
+              onlineIds.add(m.id);
+            }
+          }
+        }
+        setOnlineUsers(prev => {
+          const next = new Set(prev);
+          onlineIds.forEach(id => next.add(id));
+          return next;
+        });
+
         try {
           try {
             sessionStorage.setItem('dv_cached_convos', JSON.stringify(convos.slice(0, 30)));
@@ -4885,7 +4902,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           partner.username.substring(0, 2).toUpperCase()
                         )}
                       </div>
-                      {onlineUsers.has(partner.id) && (
+                      {(onlineUsers.has(partner.id) || Boolean(partner.is_online)) && (
                         <span 
                           className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[var(--card)] shadow-sm pointer-events-none" 
                           title="Active now" 
@@ -5004,7 +5021,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                         getChatPartner(activeConvo).username.substring(0, 2).toUpperCase()
                       )}
                     </div>
-                    {onlineUsers.has(getChatPartner(activeConvo).id) && (
+                    {(onlineUsers.has(getChatPartner(activeConvo).id) || Boolean(getChatPartner(activeConvo).is_online)) && (
                       <span 
                         className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[var(--bg)] shadow-sm pointer-events-none" 
                         title="Active now" 
@@ -5044,7 +5061,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-ping"></span>
                       <span>typing...</span>
                     </span>
-                  ) : onlineUsers.has(getChatPartner(activeConvo).id) ? (
+                  ) : (onlineUsers.has(getChatPartner(activeConvo).id) || Boolean(getChatPartner(activeConvo).is_online)) ? (
                     <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5 mt-0.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                       <span>Active now</span>
@@ -5357,14 +5374,22 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                         style={{ width: 'fit-content' }}
                       >
                         {!isMe && (
-                          <div 
-                            onClick={() => onNavigate && onNavigate('profile', msg.username)}
-                            className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden flex-shrink-0 text-[10px] font-bold text-slate-400 select-none mt-0.5 cursor-pointer hover:opacity-80 transition-opacity"
-                          >
-                            {msg.avatar_url ? (
-                              <img src={`/api/media/file/${msg.avatar_url}`} alt={msg.username} className="w-full h-full object-cover" />
-                            ) : (
-                              msg.username.substring(0, 2).toUpperCase()
+                          <div className="relative flex-shrink-0 self-start mt-0.5">
+                            <div 
+                              onClick={() => onNavigate && onNavigate('profile', msg.username)}
+                              className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden text-[10px] font-bold text-slate-400 select-none cursor-pointer hover:opacity-80 transition-opacity"
+                            >
+                              {msg.avatar_url ? (
+                                <img src={`/api/media/file/${msg.avatar_url}`} alt={msg.username} className="w-full h-full object-cover" />
+                              ) : (
+                                msg.username.substring(0, 2).toUpperCase()
+                              )}
+                            </div>
+                            {(onlineUsers.has(msg.sender_id) || Boolean(activeConvo?.members?.find(m => m.id === msg.sender_id)?.is_online)) && (
+                              <span 
+                                className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[var(--bg)] shadow-sm pointer-events-none" 
+                                title="Active now" 
+                              />
                             )}
                           </div>
                         )}
@@ -6602,7 +6627,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
           currentUserId={user?.id || ''}
           token={token || ''}
           messages={messages}
-          isOnline={!activeConvo.is_group ? onlineUsers.has(getChatPartner(activeConvo).id) : false}
+          isOnline={!activeConvo.is_group ? (onlineUsers.has(getChatPartner(activeConvo).id) || Boolean(getChatPartner(activeConvo).is_online)) : false}
           onStartCall={handleStartAudioCall}
           onNavigate={onNavigate}
           onOpenFullscreenVideo={(url, allowSave) => {

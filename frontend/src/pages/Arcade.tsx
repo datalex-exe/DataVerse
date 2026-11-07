@@ -130,6 +130,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   // Contacts from recent chats for multiplayer challenges
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
 
   // Challenge modal
   const [showChallengeModal, setShowChallengeModal] = useState(false);
@@ -210,11 +211,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   }, [initialParam]);
 
   // Fetch recent chat contacts for multiplayer
-  const fetchContacts = async () => {
+  const fetchContacts = async (silent = false) => {
     if (!token) return;
-    setLoadingContacts(true);
+    if (!silent) setLoadingContacts(true);
     try {
-      const res = await fetch('/api/conversations', {
+      const res = await fetch('/api/conversations?t=' + Date.now(), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -222,36 +223,49 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         const convos = data.conversations || [];
         const contactList: ChatContact[] = [];
         const seenUserIds = new Set<string>();
+        const onlineIds = new Set<string>();
 
         for (const c of convos) {
           if (c.is_group) continue;
           const other = (c.members || []).find((m: any) => m.id !== user?.id);
           if (other && !seenUserIds.has(other.id)) {
             seenUserIds.add(other.id);
+            const isOnline = Boolean(other.is_online);
+            if (isOnline) onlineIds.add(other.id);
             contactList.push({
               id: other.id,
               conversationId: c.id,
               username: other.username,
               display_name: other.display_name || other.username,
               avatar_url: other.avatar_url,
-              is_online: Boolean(other.is_online)
+              is_online: isOnline
             });
           }
         }
         setContacts(contactList);
+        setOnlineUserIds(prev => {
+          const merged = new Set(prev);
+          onlineIds.forEach(id => merged.add(id));
+          return merged;
+        });
       }
     } catch {
       // Ignore
     } finally {
-      setLoadingContacts(false);
+      if (!silent) setLoadingContacts(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === 'multiplayer') {
-      fetchContacts();
+    if (!token || (activeTab !== 'multiplayer' && !showChallengeModal)) {
+      return undefined;
     }
-  }, [activeTab]);
+    fetchContacts(false);
+    const interval = setInterval(() => {
+      fetchContacts(true);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeTab, showChallengeModal, token]);
 
   // Connect to active game session WebSocket for Multiplayer
   useEffect(() => {
@@ -270,6 +284,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: 'get_game_state' }));
+      ws.send(JSON.stringify({ type: 'get_presence' }));
       if (activeSession.gameType) {
         ws.send(JSON.stringify({ type: 'game_invite', gameType: activeSession.gameType }));
       }
@@ -280,6 +295,24 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         const data = JSON.parse(event.data);
         if (data.type === 'game_state') {
           setGameState(data.game);
+        }
+        if (data.type === 'presence_state') {
+          const list = data.onlineUsers || data.userIds || [];
+          if (Array.isArray(list)) {
+            setOnlineUserIds(prev => {
+              const next = new Set(prev);
+              list.forEach((id: string) => next.add(id));
+              return next;
+            });
+          }
+        }
+        if (data.type === 'user_presence') {
+          setOnlineUserIds(prev => {
+            const next = new Set(prev);
+            if (data.status === 'online') next.add(data.userId);
+            else next.delete(data.userId);
+            return next;
+          });
         }
       } catch {}
     };
@@ -2213,7 +2246,9 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                      {contacts.slice(0, 6).map(c => (
+                      {contacts.slice(0, 6).map(c => {
+                        const isOnline = Boolean(c.is_online || onlineUserIds.has(c.id));
+                        return (
                         <div
                           key={c.id}
                           className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/50 border border-white/5 hover:border-teal-500/30 transition-all"
@@ -2221,7 +2256,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative flex-shrink-0">
                               <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-10 h-10" rounded="rounded-xl" />
-                              {c.is_online && (
+                              {isOnline && (
                                 <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900 shadow-sm" title="Online now" />
                               )}
                             </div>
@@ -2230,7 +2265,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <span className="text-[10px] text-slate-400 truncate">@{c.username}</span>
                                 <span className="text-[9px] text-slate-600">•</span>
-                                {c.is_online ? (
+                                {isOnline ? (
                                   <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                     Online
@@ -2254,7 +2289,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                             <span>Challenge</span>
                           </button>
                         </div>
-                      ))}
+                      );})}
                     </div>
                   )}
                 </div>
@@ -2297,6 +2332,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 <div className="max-h-40 overflow-y-auto space-y-1.5 p-1 bg-slate-950/60 rounded-2xl border border-white/5">
                   {contacts.map(c => {
                     const isSelected = selectedContact?.id === c.id;
+                    const isOnline = Boolean(c.is_online || onlineUserIds.has(c.id));
                     return (
                       <button
                         key={c.id}
@@ -2311,14 +2347,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="relative flex-shrink-0">
                             <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-8 h-8" rounded="rounded-lg" />
-                            {c.is_online && (
-                              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-900" />
+                            {isOnline && (
+                              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-900 shadow-sm" />
                             )}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs font-bold block truncate">{c.display_name}</span>
-                              {c.is_online && <span className="text-[9px] text-emerald-400 font-bold">• Online</span>}
+                              {isOnline && <span className="text-[9px] text-emerald-400 font-bold">• Online</span>}
                             </div>
                             <span className="text-[9px] text-slate-400 block truncate">@{c.username}</span>
                           </div>

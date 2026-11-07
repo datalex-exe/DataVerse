@@ -139,7 +139,7 @@ conversationsApp.get('/', async (c) => {
       .all<any>();
 
     if (!conversations || conversations.length === 0) {
-      c.header('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
+      c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
       return c.json({ conversations: [], nextOffset: null });
     }
 
@@ -188,7 +188,7 @@ conversationsApp.get('/', async (c) => {
       };
     });
 
-    c.header('Cache-Control', 'private, max-age=5, stale-while-revalidate=30');
+    c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
     return c.json({ 
       conversations: result, 
       nextOffset: result.length === limit ? offset + limit : null 

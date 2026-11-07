@@ -368,4 +368,13 @@ authApp.get('/me', authMiddleware, async (c) => {
   return c.json({ user: userObj });
 });
 
+// PRESENCE HEARTBEAT PING
+authApp.post('/ping', authMiddleware, async (c) => {
+  return c.json({ ok: true, active_at: Date.now() });
+});
+
+authApp.get('/ping', authMiddleware, async (c) => {
+  return c.json({ ok: true, active_at: Date.now() });
+});
+
 export default authApp;

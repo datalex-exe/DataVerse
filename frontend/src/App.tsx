@@ -101,6 +101,34 @@ const AppContent: React.FC = () => {
     }
   }, [user]);
 
+  // Real-time active user presence heartbeat
+  React.useEffect(() => {
+    if (!token || !user) return;
+
+    const ping = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        fetch('/api/auth/ping', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {});
+      }
+    };
+
+    ping();
+    const interval = setInterval(ping, 25000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        ping();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [token, user]);
+
   // Synchronize mobile visualViewport and keyboard height for chat view
   React.useEffect(() => {
     if (activeView !== 'messages') {
