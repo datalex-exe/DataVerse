@@ -96,3 +96,4 @@ export const LinkPreviewCard: React.FC<{ url: string }> = ({ url }) => {
     </a>
   );
 };
+

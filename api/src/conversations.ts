@@ -467,6 +467,149 @@ conversationsApp.get('/:id/messages', async (c) => {
   }
 });
 
+// GET SHARED MEDIA, LINKS, FILES, AUDIO FOR A CONVERSATION
+conversationsApp.get('/:id/shared', async (c) => {
+  const conversationId = c.req.param('id');
+  const currentUserId = c.get('userId');
+
+  try {
+    const caller = await c.env.DB.prepare('SELECT is_top_admin FROM users WHERE id = ?')
+      .bind(currentUserId)
+      .first<any>();
+    const isTopAdmin = caller && caller.is_top_admin === 1;
+
+    let isMember = false;
+    if (conversationId.startsWith('room_')) {
+      isMember = true;
+    } else {
+      if (isTopAdmin) {
+        isMember = true;
+      } else {
+        const check = await c.env.DB.prepare(`
+          SELECT 1 FROM conversation_members cm
+          JOIN conversations c ON cm.conversation_id = c.id
+          WHERE cm.conversation_id = ? AND cm.user_id = ? AND (c.is_deleted IS NULL OR c.is_deleted = 0)
+        `).bind(conversationId, currentUserId).first();
+        isMember = !!check;
+      }
+    }
+
+    if (!isMember) {
+      return c.json({ error: 'Access denied: You are not a participant in this conversation' }, 403);
+    }
+
+    const query = `
+      SELECT m.id, m.conversation_id, m.sender_id, m.body, m.created_at,
+             COALESCE(u.username, m.sender_id) AS username, u.display_name, u.avatar_url, u.is_verified
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      WHERE m.conversation_id = ?
+        AND (m.is_deleted IS NULL OR m.is_deleted = 0)
+        AND m.created_at > COALESCE(
+          (SELECT deleted_at FROM user_chat_deletions WHERE user_id = ? AND conversation_id = m.conversation_id),
+          0
+        )
+      ORDER BY m.created_at DESC
+    `;
+    const { results: rawMessages } = await c.env.DB.prepare(query)
+      .bind(conversationId, currentUserId)
+      .all<any>();
+
+    const media: any[] = [];
+    const links: any[] = [];
+    const files: any[] = [];
+    const audio: any[] = [];
+
+    const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`]+)/gi;
+
+    for (const msg of (rawMessages || [])) {
+      const sender = {
+        id: msg.sender_id,
+        username: msg.username,
+        display_name: msg.display_name,
+        avatar_url: msg.avatar_url,
+        is_verified: msg.is_verified === 1
+      };
+
+      let parsedMedia: any = null;
+      let textToScan = msg.body;
+
+      if (typeof msg.body === 'string' && msg.body.startsWith('{') && msg.body.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(msg.body);
+          if (parsed && parsed.type === 'secure_media') {
+            parsedMedia = parsed;
+          } else if (parsed && parsed.type === 'reply') {
+            textToScan = parsed.text || '';
+          }
+        } catch {}
+      }
+
+      if (parsedMedia) {
+        const item = {
+          id: msg.id,
+          message_id: msg.id,
+          created_at: msg.created_at,
+          sender,
+          url: parsedMedia.url,
+          media_type: parsedMedia.media_type,
+          file_name: parsedMedia.file_name,
+          allow_save: parsedMedia.allow_save !== false
+        };
+
+        if (parsedMedia.media_type === 'image' || parsedMedia.media_type === 'video') {
+          media.push(item);
+        } else if (parsedMedia.media_type === 'voice') {
+          audio.push(item);
+        } else {
+          files.push(item);
+        }
+      }
+
+      if (textToScan && typeof textToScan === 'string') {
+        const matches = textToScan.match(urlRegex);
+        if (matches && matches.length > 0) {
+          const uniqueUrls = Array.from(new Set(matches));
+          for (let i = 0; i < uniqueUrls.length; i++) {
+            const linkUrl = uniqueUrls[i];
+            let domain = '';
+            try {
+              domain = new URL(linkUrl).hostname.replace(/^www\./, '');
+            } catch {
+              domain = linkUrl;
+            }
+            links.push({
+              id: `${msg.id}-${i}`,
+              message_id: msg.id,
+              url: linkUrl,
+              domain,
+              snippet: textToScan,
+              created_at: msg.created_at,
+              sender
+            });
+          }
+        }
+      }
+    }
+
+    return c.json({
+      conversation_id: conversationId,
+      media,
+      links,
+      files,
+      audio,
+      counts: {
+        media: media.length,
+        links: links.length,
+        files: files.length,
+        audio: audio.length
+      }
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // MARK CONVERSATION AS READ
 conversationsApp.post('/:id/read', async (c) => {
   const conversationId = c.req.param('id');

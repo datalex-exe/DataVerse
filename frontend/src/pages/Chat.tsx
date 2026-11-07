@@ -47,10 +47,12 @@ import {
   WifiOff,
   Sparkles,
   Smile,
-  Phone
+  Phone,
+  Info
 } from 'lucide-react';
 import { AudioCallModal, CallState } from '../components/AudioCallModal';
 import { LinkPreviewCard } from '../components/LinkPreviewCard';
+import { ChatProfileModal } from '../components/ChatProfileModal';
 
 interface Member {
   id: string;
@@ -521,6 +523,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const typingTimersRef = useRef<Record<string, any>>({});
   const lastTypingSentRef = useRef<number>(0);
   const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState<string | null>(null);
+
+  // Chat Profile & Shared Media Details Modal
+  const [showChatProfileModal, setShowChatProfileModal] = useState<boolean>(false);
 
   // WebRTC Direct Audio Call States
   const [activeCall, setActiveCall] = useState<CallState | null>(null);
@@ -4773,14 +4778,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 
                 {/* Avatar */}
                 {activeConvo.is_group ? (
-                  <div className="w-10 h-10 rounded-full bg-brand-600/20 border border-brand-500/30 flex items-center justify-center flex-shrink-0">
+                  <div 
+                    onClick={() => setShowChatProfileModal(true)}
+                    className="w-10 h-10 rounded-full bg-brand-600/20 border border-brand-500/30 flex items-center justify-center flex-shrink-0 cursor-pointer hover:opacity-85 transition-opacity"
+                    title="View Group Info & Media"
+                  >
                     <Users className="w-5 h-5 text-brand-400" />
                   </div>
                 ) : (
                   <div className="relative flex-shrink-0">
                     <div 
-                      onClick={() => onNavigate && onNavigate('profile', getChatPartner(activeConvo).username)}
+                      onClick={() => setShowChatProfileModal(true)}
                       className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden text-xs font-semibold text-[var(--accent-2)] cursor-pointer hover:opacity-85 transition-opacity"
+                      title="View Contact Info & Media"
                     >
                       {getChatPartner(activeConvo).avatar_url ? (
                         <img src={`/api/media/file/${getChatPartner(activeConvo).avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
@@ -4798,12 +4808,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 )}
                 
                 <div 
-                  onClick={() => {
-                    if (!activeConvo.is_group && onNavigate) {
-                      onNavigate('profile', getChatPartner(activeConvo).username);
-                    }
-                  }}
-                  className={`min-w-0 ${!activeConvo.is_group ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+                  onClick={() => setShowChatProfileModal(true)}
+                  className="min-w-0 cursor-pointer hover:opacity-90 transition-opacity"
+                  title="View Info & Shared Media"
                 >
                   <h4 className="text-sm font-semibold text-[var(--text)] flex items-center gap-1.5 truncate">
                     <span className="truncate">
@@ -4873,6 +4880,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
                 {showHeaderMenu && (
                   <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--card)] border border-[var(--line)] rounded-2xl shadow-2xl shadow-[var(--shadow-card)] z-50 overflow-hidden animate-scale-up">
+                    {/* View Info & Shared Media */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowHeaderMenu(false);
+                        setShowChatProfileModal(true);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] transition-all"
+                    >
+                      <Info className="w-4 h-4 text-[var(--accent-2)]" />
+                      <span>{activeConvo.is_group ? 'Group Details & Media' : 'Contact Info & Media'}</span>
+                    </button>
+
                     {/* Play Game — 1:1 DM only */}
                     {!activeConvo.is_group && (
                       <button
@@ -6193,6 +6213,24 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
           onEndCall={() => {
             setActiveCall(null);
             setIncomingSignal(null);
+          }}
+        />
+      )}
+
+      {/* Chat Profile & Shared Content Details Modal */}
+      {showChatProfileModal && activeConvo && (
+        <ChatProfileModal
+          isOpen={showChatProfileModal}
+          onClose={() => setShowChatProfileModal(false)}
+          conversation={activeConvo}
+          currentUserId={user?.id || ''}
+          token={token || ''}
+          isOnline={!activeConvo.is_group ? onlineUsers.has(getChatPartner(activeConvo).id) : false}
+          onStartCall={handleStartAudioCall}
+          onNavigate={onNavigate}
+          onOpenFullscreenVideo={(url, allowSave) => {
+            setActiveFullscreenVideo({ url, allowSave });
+            modalOpenTimeRef.current = Date.now();
           }}
         />
       )}

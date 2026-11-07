@@ -30,3 +30,4 @@ CREATE TABLE IF NOT EXISTS saved_collection_items (
 );
 CREATE INDEX IF NOT EXISTS idx_collection_items_col ON saved_collection_items(collection_id);
 CREATE INDEX IF NOT EXISTS idx_collection_items_user ON saved_collection_items(user_id);
+
