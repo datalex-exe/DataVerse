@@ -1723,6 +1723,216 @@ usersApp.delete('/admin/reports/:id', authMiddleware, async (c) => {
   return c.json({ success: true });
 });
 
+// ─── ADMIN: GET ALL SYSTEM MEDIA (SENT TO DELETED, FILTERABLE BY USER) ───────
+usersApp.get('/admin/media', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+
+  // Verify caller is Admin or Top Admin
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
+    .bind(callerId)
+    .first<any>();
+
+  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
+    return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
+  }
+
+  const queryUser = c.req.query('user') || '';
+  const queryStatus = c.req.query('status') || 'all'; // 'all' | 'active' | 'deleted'
+  const queryType = c.req.query('type') || 'all'; // 'all' | 'image' | 'video' | 'audio' | 'file'
+  const querySource = c.req.query('source') || 'all'; // 'all' | 'chat' | 'post'
+  const limit = Math.min(parseInt(c.req.query('limit') || '300', 10), 1000);
+
+  try {
+    // 1. Fetch Chat Messages Media (Both Active and Deleted)
+    const chatQuery = `
+      SELECT m.id AS message_id, m.conversation_id, m.sender_id AS user_id, m.body, m.created_at,
+             COALESCE(m.is_deleted, 0) AS is_deleted,
+             COALESCE(u.username, m.sender_id) AS username, u.display_name, u.avatar_url,
+             c.is_group, c.group_name
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN conversations c ON m.conversation_id = c.id
+      WHERE (m.body LIKE '%"type":"secure_media"%' OR m.body LIKE '%"type":"media"%' OR m.body LIKE '%"media_type":%')
+      ORDER BY m.created_at DESC
+      LIMIT 500
+    `;
+    const { results: chatRows } = await c.env.DB.prepare(chatQuery).all<any>();
+
+    // 2. Fetch Post & Reel Media
+    const postQuery = `
+      SELECT pm.id AS media_id, pm.post_id, pm.r2_key AS url, pm.media_type, pm.position,
+             p.user_id, p.caption, p.created_at,
+             u.username, u.display_name, u.avatar_url
+      FROM post_media pm
+      JOIN posts p ON pm.post_id = p.id
+      LEFT JOIN users u ON p.user_id = u.id
+      ORDER BY p.created_at DESC
+      LIMIT 500
+    `;
+    const { results: postRows } = await c.env.DB.prepare(postQuery).all<any>();
+
+    const items: any[] = [];
+
+    // Parse chat messages media
+    for (const m of (chatRows || [])) {
+      let parsedMedia: any = null;
+      try {
+        const obj = JSON.parse(m.body);
+        if (obj && (obj.type === 'secure_media' || obj.type === 'media' || obj.media_type)) {
+          parsedMedia = obj;
+        }
+      } catch {}
+
+      if (!parsedMedia || !parsedMedia.url) continue;
+
+      let mediaType = (parsedMedia.media_type || 'image').toLowerCase();
+      if (mediaType === 'voice') mediaType = 'audio';
+      if (mediaType !== 'image' && mediaType !== 'video' && mediaType !== 'audio' && mediaType !== 'file') {
+        mediaType = 'file';
+      }
+
+      items.push({
+        id: `chat-${m.message_id}`,
+        raw_id: m.message_id,
+        source: 'chat',
+        source_name: m.is_group ? (m.group_name || 'Group Chat') : 'Direct Chat',
+        source_id: m.conversation_id,
+        user: {
+          id: m.user_id,
+          username: m.username || 'unknown',
+          display_name: m.display_name || m.username || 'User',
+          avatar_url: m.avatar_url || null
+        },
+        url: parsedMedia.url,
+        media_type: mediaType,
+        file_name: parsedMedia.file_name || (mediaType === 'audio' ? 'Voice Note.webm' : (mediaType === 'video' ? 'Video.mp4' : 'Photo.jpg')),
+        allow_save: parsedMedia.allow_save !== false,
+        status: m.is_deleted === 1 ? 'deleted' : 'active',
+        created_at: m.created_at,
+        context: parsedMedia.file_name || (m.is_group ? `Group: ${m.group_name || 'Chat'}` : 'Direct Message')
+      });
+    }
+
+    // Parse posts & reels media
+    for (const p of (postRows || [])) {
+      const isVideo = p.media_type === 'video' || (typeof p.url === 'string' && (p.url.endsWith('.mp4') || p.url.endsWith('.webm')));
+      items.push({
+        id: `post-${p.media_id}`,
+        raw_id: p.media_id,
+        source: 'post',
+        source_name: isVideo ? 'Reel / Video Post' : 'Feed Post',
+        source_id: p.post_id,
+        user: {
+          id: p.user_id,
+          username: p.username || 'unknown',
+          display_name: p.display_name || p.username || 'User',
+          avatar_url: p.avatar_url || null
+        },
+        url: p.url,
+        media_type: isVideo ? 'video' : 'image',
+        file_name: isVideo ? 'Video Post' : 'Post Photo',
+        allow_save: true,
+        status: 'active',
+        created_at: p.created_at,
+        context: p.caption || ''
+      });
+    }
+
+    // Sort descending by created_at
+    items.sort((a, b) => b.created_at - a.created_at);
+
+    // Compute unfiltered metrics
+    const counts = {
+      total: items.length,
+      active: items.filter(i => i.status === 'active').length,
+      deleted: items.filter(i => i.status === 'deleted').length,
+      images: items.filter(i => i.media_type === 'image').length,
+      videos: items.filter(i => i.media_type === 'video').length,
+      audio: items.filter(i => i.media_type === 'audio').length,
+      files: items.filter(i => i.media_type === 'file').length,
+    };
+
+    // Filter
+    let filtered = items;
+
+    // Filter by user search (username, display name, user id, or filename)
+    if (queryUser.trim()) {
+      const q = queryUser.trim().toLowerCase().replace(/^@/, '');
+      filtered = filtered.filter(item => 
+        (item.user.username && item.user.username.toLowerCase().includes(q)) ||
+        (item.user.display_name && item.user.display_name.toLowerCase().includes(q)) ||
+        (item.user.id && item.user.id.toLowerCase().includes(q)) ||
+        (item.file_name && item.file_name.toLowerCase().includes(q)) ||
+        (item.context && item.context.toLowerCase().includes(q))
+      );
+    }
+
+    // Filter by status: 'all' | 'active' | 'deleted'
+    if (queryStatus === 'active') {
+      filtered = filtered.filter(item => item.status === 'active');
+    } else if (queryStatus === 'deleted') {
+      filtered = filtered.filter(item => item.status === 'deleted');
+    }
+
+    // Filter by type: 'all' | 'image' | 'video' | 'audio' | 'file'
+    if (queryType !== 'all') {
+      filtered = filtered.filter(item => item.media_type === queryType);
+    }
+
+    // Filter by source: 'all' | 'chat' | 'post'
+    if (querySource !== 'all') {
+      filtered = filtered.filter(item => item.source === querySource);
+    }
+
+    const pagedItems = filtered.slice(0, limit);
+
+    return c.json({
+      items: pagedItems,
+      total_matching: filtered.length,
+      counts
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ─── ADMIN: PURGE / DELETE A MEDIA ASSET (ADMIN & TOP ADMIN) ─────────────────
+usersApp.delete('/admin/media/:id', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  const mediaId = c.req.param('id') || '';
+
+  if (!mediaId) {
+    return c.json({ error: 'Missing media ID' }, 400);
+  } // e.g. "chat-<msgId>" or "post-<mediaId>"
+
+  // Verify caller is Admin or Top Admin
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
+    .bind(callerId)
+    .first<any>();
+
+  if (!caller || (!caller.is_admin && !caller.is_top_admin)) {
+    return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
+  }
+
+  try {
+    if (mediaId.startsWith('chat-')) {
+      const msgId = mediaId.substring(5);
+      await c.env.DB.prepare('UPDATE messages SET is_deleted = 1, body = ? WHERE id = ?')
+        .bind(JSON.stringify({ type: 'deleted', text: '[Media purged by Admin]' }), msgId)
+        .run();
+    } else if (mediaId.startsWith('post-')) {
+      const pmId = mediaId.substring(5);
+      await c.env.DB.prepare('DELETE FROM post_media WHERE id = ?')
+        .bind(pmId)
+        .run();
+    }
+
+    return c.json({ success: true, message: 'Media removed successfully' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // ─── SAVED COLLECTIONS / BOOKMARK FOLDERS ────────────────────────────────────
 
 // GET USER COLLECTIONS

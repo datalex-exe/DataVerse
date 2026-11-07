@@ -35,7 +35,14 @@ import {
   ExternalLink,
   Check,
   Trash2,
-  MessageSquareOff
+  MessageSquareOff,
+  Film,
+  Image as ImageIcon,
+  FileText,
+  Mic,
+  Download,
+  Play,
+  Folder
 } from 'lucide-react';
 
 export type AdminStatus = 
@@ -190,13 +197,63 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const { token, user: currentUser } = useAuth();
   const { toast } = useToast();
   
-  const [activeTab, setActiveTab] = useState<'users' | 'chats' | 'restrictions' | 'verifications' | 'reports' | 'push'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'chats' | 'restrictions' | 'verifications' | 'reports' | 'push' | 'media'>('users');
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [convos, setConvos] = useState<SystemConvo[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [reportsLoading, setReportsLoading] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // System Media Platform States (All media access from sent to deleted)
+  interface AdminMediaItem {
+    id: string;
+    raw_id: string;
+    source: 'chat' | 'post';
+    source_name: string;
+    source_id: string;
+    user: {
+      id: string;
+      username: string;
+      display_name: string;
+      avatar_url: string | null;
+    };
+    url: string;
+    media_type: 'image' | 'video' | 'audio' | 'file';
+    file_name: string;
+    allow_save: boolean;
+    status: 'active' | 'deleted';
+    created_at: number;
+    context: string;
+  }
+
+  interface AdminMediaCounts {
+    total: number;
+    active: number;
+    deleted: number;
+    images: number;
+    videos: number;
+    audio: number;
+    files: number;
+  }
+
+  const [adminMedia, setAdminMedia] = useState<AdminMediaItem[]>([]);
+  const [adminMediaCounts, setAdminMediaCounts] = useState<AdminMediaCounts>({
+    total: 0,
+    active: 0,
+    deleted: 0,
+    images: 0,
+    videos: 0,
+    audio: 0,
+    files: 0
+  });
+  const [mediaLoading, setMediaLoading] = useState<boolean>(false);
+  const [mediaUserSearch, setMediaUserSearch] = useState<string>('');
+  const [mediaStatusFilter, setMediaStatusFilter] = useState<'all' | 'active' | 'deleted'>('all');
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<'all' | 'image' | 'video' | 'audio' | 'file'>('all');
+  const [mediaSourceFilter, setMediaSourceFilter] = useState<'all' | 'chat' | 'post'>('all');
+  const [mediaViewMode, setMediaViewMode] = useState<'grid' | 'table'>('grid');
+  const [activeMediaPreview, setActiveMediaPreview] = useState<AdminMediaItem | null>(null);
 
   // Web Push Notifications / Broadcast States (Available to Admin and Super Admin)
   interface PushStatsData {
@@ -414,6 +471,70 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     } finally {
       setReportsLoading(false);
     }
+  };
+
+  const fetchAdminMedia = async () => {
+    if (!token) return;
+    setMediaLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (mediaUserSearch.trim()) params.append('user', mediaUserSearch.trim());
+      if (mediaStatusFilter !== 'all') params.append('status', mediaStatusFilter);
+      if (mediaTypeFilter !== 'all') params.append('type', mediaTypeFilter);
+      if (mediaSourceFilter !== 'all') params.append('source', mediaSourceFilter);
+
+      const res = await fetch(`/api/users/admin/media?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminMedia(data.items || []);
+        if (data.counts) setAdminMediaCounts(data.counts);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || 'Failed to fetch media assets');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Network error loading system media');
+    } finally {
+      setMediaLoading(false);
+    }
+  };
+
+  const handlePurgeMedia = (item: AdminMediaItem) => {
+    setConfirmDialog({
+      title: `Purge ${item.media_type.toUpperCase()} Media?`,
+      description: `Permanently delete this ${item.source_name} file (${item.file_name}) sent by @${item.user.username}. This cannot be undone.`,
+      actionLabel: "Permanently Purge",
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const res = await fetch(`/api/users/admin/media/${item.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            toast.success('Media purged successfully');
+            setAdminMedia(prev => prev.filter(m => m.id !== item.id));
+            setAdminMediaCounts(prev => ({
+              ...prev,
+              total: Math.max(0, prev.total - 1),
+              [item.status === 'deleted' ? 'deleted' : 'active']: Math.max(0, prev[item.status === 'deleted' ? 'deleted' : 'active'] - 1)
+            }));
+            if (activeMediaPreview?.id === item.id) {
+              setActiveMediaPreview(null);
+            }
+          } else {
+            const err = await res.json().catch(() => ({}));
+            toast.error(err.error || 'Failed to purge media');
+          }
+        } catch {
+          toast.error('Network error purging media');
+        }
+      }
+    });
   };
 
   const fetchPushStats = async () => {
@@ -868,6 +989,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
         if (users.length === 0) {
           fetchUsers().catch(() => {});
         }
+      } else if (activeTab === 'media') {
+        await fetchAdminMedia();
       } else {
         await fetchConvos();
       }
@@ -881,6 +1004,15 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   useEffect(() => {
     loadDashboardData();
   }, [activeTab, token]);
+
+  // Real-time debounced filter updates for Media Hub
+  useEffect(() => {
+    if (activeTab !== 'media') return undefined;
+    const timer = setTimeout(() => {
+      fetchAdminMedia();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [activeTab, mediaUserSearch, mediaStatusFilter, mediaTypeFilter, mediaSourceFilter]);
 
   // Load audit chat history
   const loadAuditHistory = async (convo: SystemConvo) => {
@@ -1206,6 +1338,27 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               {reports.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">
                   {reports.length}
+                </span>
+              )}
+            </button>
+          )}
+          {(currentUser?.is_admin || currentUser?.is_top_admin) && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'media'}
+              onClick={() => setActiveTab('media')}
+              className={`shrink-0 whitespace-nowrap py-2 px-4 sm:py-2.5 sm:px-5 rounded-full text-xs sm:text-sm font-bold tracking-wide transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
+                activeTab === 'media'
+                  ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] shadow-md shadow-[var(--shadow-accent)] border border-transparent'
+                  : 'bg-[color-mix(in_srgb,var(--card)_80%,transparent)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)] hover:border-[var(--card-border)]'
+              }`}
+            >
+              <Film className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[var(--accent-2)]" />
+              <span>Media Platform</span>
+              {adminMediaCounts.total > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] text-[var(--accent-2)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)]">
+                  {adminMediaCounts.total}
                 </span>
               )}
             </button>
@@ -2791,6 +2944,515 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               </div>
             </div>
           )}
+
+          {/* TAB: MEDIA PLATFORM (ALL MEDIA ACCESS: SENT TO DELETED, BY USER) */}
+          {activeTab === 'media' && (currentUser?.is_admin || currentUser?.is_top_admin) && (
+            <div className="space-y-6 animate-fade-in select-none pb-36 sm:pb-16">
+              
+              {/* Header Card */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle_at_top_right,var(--glow),transparent_70%)] pointer-events-none opacity-50" />
+                
+                <div className="flex items-start gap-3.5 relative z-10 min-w-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-[var(--accent-2)] flex items-center justify-center text-[var(--on-accent)] shadow-lg shadow-[var(--shadow-accent)] flex-shrink-0">
+                    <Film className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base sm:text-lg font-black text-[var(--text)] tracking-wide uppercase">System Media Platform</h3>
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[color-mix(in_srgb,var(--accent-2)_15%,transparent)] text-[var(--accent-2)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)]">
+                        Full Audit Access
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--muted)] mt-1 max-w-2xl leading-relaxed">
+                      Complete administrative media vault. Access all photos, videos, voice recordings, and files sent across direct messages, groups, feed posts, and reels — including deleted and unsent media, searchable by user name.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto relative z-10">
+                  <button
+                    type="button"
+                    onClick={fetchAdminMedia}
+                    disabled={mediaLoading}
+                    className="px-3.5 py-2 rounded-xl bg-[var(--hover)] hover:bg-[var(--card-border)] text-xs font-bold text-[var(--text)] border border-[var(--line)] transition-all flex items-center gap-2 cursor-pointer"
+                    title="Refresh Media Vault"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${mediaLoading ? 'animate-spin text-[var(--accent-2)]' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Metric Summary Counters */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">Total Assets</div>
+                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.total}</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-emerald-500/20 bg-emerald-500/5 shadow-sm">
+                  <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Sent / Live
+                  </div>
+                  <div className="text-xl font-black text-emerald-400 mt-1">{adminMediaCounts.active}</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-rose-500/20 bg-rose-500/5 shadow-sm">
+                  <div className="text-[10px] font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                    Deleted
+                  </div>
+                  <div className="text-xl font-black text-rose-400 mt-1">{adminMediaCounts.deleted}</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
+                    <ImageIcon className="w-3 h-3 text-[var(--accent-2)]" />
+                    Photos
+                  </div>
+                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.images}</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
+                    <Film className="w-3 h-3 text-[var(--accent-2)]" />
+                    Videos
+                  </div>
+                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.videos}</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
+                    <Mic className="w-3 h-3 text-[var(--accent-2)]" />
+                    Audio
+                  </div>
+                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.audio}</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--line)] shadow-sm">
+                  <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1">
+                    <Folder className="w-3 h-3 text-[var(--accent-2)]" />
+                    Files
+                  </div>
+                  <div className="text-xl font-black text-[var(--text)] mt-1">{adminMediaCounts.files}</div>
+                </div>
+              </div>
+
+              {/* Filters & Controls Toolbar */}
+              <div className="p-4 rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-3 flex-wrap">
+                {/* Search by User name or filename */}
+                <div className="relative flex-1 min-w-[240px]">
+                  <Search className="w-4 h-4 text-[var(--muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={mediaUserSearch}
+                    onChange={(e) => setMediaUserSearch(e.target.value)}
+                    placeholder="Search by user name (@user), display name, or filename..."
+                    className="w-full bg-[var(--input)] border border-[var(--line)] rounded-2xl pl-10 pr-9 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[var(--accent-2)] transition-colors"
+                  />
+                  {mediaUserSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setMediaUserSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)] p-0.5 rounded-md"
+                      title="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Controls Row */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Status Filter */}
+                  <select
+                    value={mediaStatusFilter}
+                    onChange={(e) => setMediaStatusFilter(e.target.value as any)}
+                    aria-label="Filter media by status"
+                    className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
+                  >
+                    <option value="all">All Status (Sent & Deleted)</option>
+                    <option value="active">🟢 Live / Sent Only</option>
+                    <option value="deleted">🔴 Deleted Only</option>
+                  </select>
+
+                  {/* Type Filter */}
+                  <select
+                    value={mediaTypeFilter}
+                    onChange={(e) => setMediaTypeFilter(e.target.value as any)}
+                    aria-label="Filter media by type"
+                    className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="image">📸 Photos & Images</option>
+                    <option value="video">🎬 Videos & Reels</option>
+                    <option value="audio">🎙️ Voice & Audio</option>
+                    <option value="file">📁 Files & Docs</option>
+                  </select>
+
+                  {/* Source Filter */}
+                  <select
+                    value={mediaSourceFilter}
+                    onChange={(e) => setMediaSourceFilter(e.target.value as any)}
+                    aria-label="Filter media by source"
+                    className="bg-[var(--input)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold rounded-xl px-3 py-2 cursor-pointer focus:outline-none focus:border-[var(--accent-2)]"
+                  >
+                    <option value="all">All Sources</option>
+                    <option value="chat">💬 Chat Messages</option>
+                    <option value="post">📰 Posts & Reels</option>
+                  </select>
+
+                  {/* View Mode Toggle: Grid vs Table */}
+                  <div className="flex items-center p-1 bg-[var(--input)] rounded-xl border border-[var(--line)]">
+                    <button
+                      type="button"
+                      onClick={() => setMediaViewMode('grid')}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-colors ${
+                        mediaViewMode === 'grid'
+                          ? 'bg-[var(--card)] text-[var(--accent-2)] shadow-sm'
+                          : 'text-[var(--muted)] hover:text-[var(--text)]'
+                      }`}
+                      title="Visual Grid View"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMediaViewMode('table')}
+                      className={`p-1.5 rounded-lg text-xs font-bold transition-colors ${
+                        mediaViewMode === 'table'
+                          ? 'bg-[var(--card)] text-[var(--accent-2)] shadow-sm'
+                          : 'text-[var(--muted)] hover:text-[var(--text)]'
+                      }`}
+                      title="Detailed Table View"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Media Content Display */}
+              {mediaLoading ? (
+                <div className="py-24 flex flex-col items-center justify-center text-[var(--muted)] gap-3 bg-[var(--card)] border border-[var(--line)] rounded-3xl">
+                  <Loader2 className="w-8 h-8 animate-spin text-[var(--accent-2)]" />
+                  <span className="text-xs font-semibold">Querying system media vault...</span>
+                </div>
+              ) : adminMedia.length === 0 ? (
+                <div className="py-20 text-center text-[var(--muted)] bg-[var(--card)] border border-[var(--line)] rounded-3xl p-6 flex flex-col items-center justify-center space-y-2">
+                  <div className="w-14 h-14 rounded-2xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center text-[var(--muted)]">
+                    <Film className="w-7 h-7 opacity-60" />
+                  </div>
+                  <h4 className="text-sm font-bold text-[var(--text)]">No Media Assets Found</h4>
+                  <p className="text-xs text-[var(--muted)] max-w-sm">
+                    {mediaUserSearch ? `No media found matching "${mediaUserSearch}". Try adjusting your search or filters.` : 'No media items currently logged in the platform.'}
+                  </p>
+                  {mediaUserSearch && (
+                    <button
+                      type="button"
+                      onClick={() => { setMediaUserSearch(''); setMediaStatusFilter('all'); setMediaTypeFilter('all'); setMediaSourceFilter('all'); }}
+                      className="mt-2 text-xs font-bold text-[var(--accent-2)] hover:underline cursor-pointer"
+                    >
+                      Clear all filters
+                    </button>
+                  )}
+                </div>
+              ) : mediaViewMode === 'grid' ? (
+                /* VISUAL GRID VIEW */
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+                  {adminMedia.map((item) => {
+                    const isVideo = item.media_type === 'video';
+                    const isAudio = item.media_type === 'audio';
+                    const isFile = item.media_type === 'file';
+                    const fileUrl = `/api/media/file/${item.url}`;
+                    const isDeleted = item.status === 'deleted';
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`group rounded-2xl bg-[var(--card)] border transition-all duration-200 overflow-hidden flex flex-col shadow-md relative ${
+                          isDeleted ? 'border-rose-500/30 hover:border-rose-500/60' : 'border-[var(--line)] hover:border-[var(--accent-2)]/60'
+                        }`}
+                      >
+                        {/* Status Badges Overlay */}
+                        <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 pointer-events-none">
+                          <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full backdrop-blur-md shadow ${
+                            isDeleted ? 'bg-rose-500/80 text-white' : 'bg-emerald-500/80 text-white'
+                          }`}>
+                            {isDeleted ? 'Deleted' : 'Sent'}
+                          </span>
+                        </div>
+
+                        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+                          <span className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-white/90">
+                            {item.source === 'chat' ? 'Chat' : 'Post'}
+                          </span>
+                        </div>
+
+                        {/* Thumbnail / Media Box */}
+                        <div
+                          className="relative aspect-square w-full bg-[var(--input)] overflow-hidden cursor-pointer flex items-center justify-center"
+                          onClick={() => {
+                            if (isFile) {
+                              window.open(fileUrl, '_blank');
+                            } else {
+                              setActiveMediaPreview(item);
+                            }
+                          }}
+                        >
+                          {isVideo ? (
+                            <div className="w-full h-full relative bg-black flex items-center justify-center">
+                              <video src={fileUrl} className="w-full h-full object-cover opacity-80" preload="none" />
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                <div className="w-9 h-9 rounded-full bg-black/70 border border-white/20 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                  <Play className="w-4 h-4 fill-current ml-0.5" />
+                                </div>
+                              </div>
+                            </div>
+                          ) : isAudio ? (
+                            <div className="w-full h-full bg-gradient-to-br from-purple-950/40 to-slate-950 flex flex-col items-center justify-center p-3 text-center gap-2">
+                              <div className="w-10 h-10 rounded-full bg-[var(--accent)]/20 border border-[var(--accent)]/30 text-[var(--accent-2)] flex items-center justify-center shadow-md">
+                                <Mic className="w-5 h-5" />
+                              </div>
+                              <span className="text-[10px] font-bold text-white/80 truncate max-w-full">
+                                {item.file_name}
+                              </span>
+                            </div>
+                          ) : isFile ? (
+                            <div className="w-full h-full bg-gradient-to-br from-blue-950/40 to-slate-950 flex flex-col items-center justify-center p-3 text-center gap-2">
+                              <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shadow-md">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <span className="text-[10px] font-bold text-white/80 truncate max-w-full">
+                                {item.file_name}
+                              </span>
+                            </div>
+                          ) : (
+                            <img
+                              src={fileUrl}
+                              alt={item.file_name}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                            />
+                          )}
+
+                          {/* Quick Action Overlay on Hover */}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMediaPreview(item);
+                              }}
+                              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center shadow-lg transition-transform active:scale-95"
+                              title="Full Preview"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <a
+                              href={fileUrl}
+                              download={item.file_name}
+                              onClick={(e) => e.stopPropagation()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white flex items-center justify-center shadow-lg transition-transform active:scale-95"
+                              title="Download File"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePurgeMedia(item);
+                              }}
+                              className="w-8 h-8 rounded-full bg-rose-600/80 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg transition-transform active:scale-95"
+                              title="Purge Media Permanently"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Card Info Details */}
+                        <div className="p-2.5 flex flex-col justify-between flex-1 gap-1.5">
+                          {/* User info row with 1-click filter */}
+                          <div 
+                            className="flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity"
+                            onClick={() => setMediaUserSearch(item.user.username)}
+                            title={`Filter media by @${item.user.username}`}
+                          >
+                            <div className="w-5 h-5 rounded-full bg-[var(--input)] border border-[var(--line)] overflow-hidden flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-[var(--accent-2)]">
+                              {item.user.avatar_url ? (
+                                <img src={`/api/media/file/${item.user.avatar_url}`} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                item.user.username.substring(0, 2).toUpperCase()
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-bold text-[var(--text)] truncate leading-tight">
+                                @{item.user.username}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Filename & Timestamp */}
+                          <div className="flex items-center justify-between text-[9px] text-[var(--muted)] pt-1 border-t border-[var(--line)]">
+                            <span className="truncate max-w-[65%]" title={item.file_name}>
+                              {item.file_name}
+                            </span>
+                            <span className="font-mono flex-shrink-0 ml-1">
+                              {new Date(item.created_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* DETAILED AUDIT TABLE VIEW */
+                <div className="overflow-x-auto scrollbar-none rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-xl">
+                  <table className="w-full text-left text-xs text-[var(--text)] min-w-[700px]">
+                    <thead className="bg-[var(--input)] text-[var(--muted)] text-[10px] font-black uppercase tracking-wider border-b border-[var(--line)]">
+                      <tr>
+                        <th className="py-3 px-4">Preview</th>
+                        <th className="py-3 px-4">Sender / User</th>
+                        <th className="py-3 px-4">Asset Details</th>
+                        <th className="py-3 px-4">Source Origin</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Timestamp</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--line)]">
+                      {adminMedia.map((item) => {
+                        const fileUrl = `/api/media/file/${item.url}`;
+                        const isDeleted = item.status === 'deleted';
+
+                        return (
+                          <tr key={item.id} className="hover:bg-[var(--hover)]/40 transition-colors">
+                            {/* Preview */}
+                            <td className="py-2.5 px-4">
+                              <div
+                                onClick={() => setActiveMediaPreview(item)}
+                                className="w-12 h-12 rounded-xl bg-[var(--input)] border border-[var(--line)] overflow-hidden cursor-pointer flex items-center justify-center relative flex-shrink-0 group"
+                              >
+                                {item.media_type === 'video' ? (
+                                  <div className="w-full h-full relative bg-black flex items-center justify-center">
+                                    <video src={fileUrl} className="w-full h-full object-cover" preload="none" />
+                                    <Play className="w-3.5 h-3.5 text-white absolute fill-current" />
+                                  </div>
+                                ) : item.media_type === 'audio' ? (
+                                  <Mic className="w-5 h-5 text-[var(--accent-2)]" />
+                                ) : item.media_type === 'file' ? (
+                                  <FileText className="w-5 h-5 text-blue-400" />
+                                ) : (
+                                  <img src={fileUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                )}
+                              </div>
+                            </td>
+
+                            {/* User */}
+                            <td className="py-2.5 px-4">
+                              <div
+                                className="flex items-center gap-2 cursor-pointer hover:opacity-85 transition-opacity"
+                                onClick={() => setMediaUserSearch(item.user.username)}
+                                title={`Filter by @${item.user.username}`}
+                              >
+                                <div className="w-7 h-7 rounded-full bg-[var(--input)] border border-[var(--line)] overflow-hidden flex items-center justify-center text-[9px] font-bold text-[var(--accent-2)] flex-shrink-0">
+                                  {item.user.avatar_url ? (
+                                    <img src={`/api/media/file/${item.user.avatar_url}`} alt="" className="w-full h-full object-cover" />
+                                  ) : (
+                                    item.user.username.substring(0, 2).toUpperCase()
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-xs truncate">{item.user.display_name || item.user.username}</div>
+                                  <div className="text-[10px] text-[var(--muted)]">@{item.user.username}</div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Asset Details */}
+                            <td className="py-2.5 px-4">
+                              <div className="font-semibold text-xs truncate max-w-xs" title={item.file_name}>
+                                {item.file_name}
+                              </div>
+                              <div className="text-[10px] text-[var(--muted)] uppercase font-mono mt-0.5">
+                                {item.media_type}
+                              </div>
+                            </td>
+
+                            {/* Origin */}
+                            <td className="py-2.5 px-4">
+                              <span className="text-[11px] font-medium text-[var(--text)]">
+                                {item.source_name}
+                              </span>
+                              {item.context && item.context !== item.file_name && (
+                                <p className="text-[10px] text-[var(--muted)] truncate max-w-xs">{item.context}</p>
+                              )}
+                            </td>
+
+                            {/* Status */}
+                            <td className="py-2.5 px-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 ${
+                                isDeleted
+                                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                                  : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${isDeleted ? 'bg-rose-400' : 'bg-emerald-400 animate-pulse'}`} />
+                                {isDeleted ? 'Deleted' : 'Sent'}
+                              </span>
+                            </td>
+
+                            {/* Timestamp */}
+                            <td className="py-2.5 px-4 font-mono text-[10px] text-[var(--muted)]">
+                              {new Date(item.created_at).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-2.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveMediaPreview(item)}
+                                  className="p-1.5 rounded-lg bg-[var(--input)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+                                  title="View Preview"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                                <a
+                                  href={fileUrl}
+                                  download={item.file_name}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1.5 rounded-lg bg-[var(--input)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
+                                  title="Download Original"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePurgeMedia(item)}
+                                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                                  title="Purge Media Permanently"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -3457,6 +4119,87 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             </div>
           )}
         </aside>
+      )}
+
+      {/* ADMIN MEDIA FULLSCREEN LIGHTBOX / PREVIEW MODAL */}
+      {activeMediaPreview && (
+        <div 
+          role="dialog"
+          aria-modal="true"
+          aria-label="Media preview"
+          onClick={() => setActiveMediaPreview(null)}
+          className="fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-center p-4 animate-fade-in select-none cursor-zoom-out"
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-2 z-10" onClick={(e) => e.stopPropagation()}>
+            <a
+              href={`/api/media/file/${activeMediaPreview.url}`}
+              download={activeMediaPreview.file_name}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-xl transition-colors border border-white/10 active:scale-95 flex items-center justify-center gap-1.5 text-xs font-semibold"
+              title="Download original file"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => setActiveMediaPreview(null)}
+              className="p-2.5 bg-slate-900/80 hover:bg-slate-900 text-white rounded-xl transition-colors border border-white/10 active:scale-95 flex items-center justify-center"
+              title="Close preview"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="relative max-w-4xl max-h-[85vh] flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {activeMediaPreview.media_type === 'video' ? (
+              <video
+                src={`/api/media/file/${activeMediaPreview.url}`}
+                controls
+                autoPlay
+                playsInline
+                className="max-w-full max-h-[75vh] rounded-2xl shadow-2xl border border-white/10"
+              />
+            ) : activeMediaPreview.media_type === 'audio' ? (
+              <div className="bg-[var(--card)] border border-[var(--line)] p-6 rounded-3xl shadow-2xl w-96 flex flex-col items-center gap-4 text-center">
+                <div className="w-16 h-16 rounded-full bg-[var(--accent)]/15 border border-[var(--accent)]/30 flex items-center justify-center text-[var(--accent-2)]">
+                  <Mic className="w-8 h-8" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-[var(--text)]">{activeMediaPreview.file_name}</h4>
+                  <p className="text-xs text-[var(--muted)]">Sent by @{activeMediaPreview.user.username}</p>
+                </div>
+                <audio src={`/api/media/file/${activeMediaPreview.url}`} controls autoPlay className="w-full" />
+              </div>
+            ) : (
+              <img
+                src={`/api/media/file/${activeMediaPreview.url}`}
+                alt={activeMediaPreview.file_name}
+                className="max-w-full max-h-[75vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+              />
+            )}
+
+            {/* Media Metadata overlay bar */}
+            <div className="mt-3 px-4 py-2 rounded-2xl bg-black/70 backdrop-blur-md border border-white/10 text-white flex items-center gap-4 text-xs">
+              <span className="font-bold flex items-center gap-1.5">
+                <span>@{activeMediaPreview.user.username}</span>
+              </span>
+              <span className="text-white/40">•</span>
+              <span className="text-white/80">{activeMediaPreview.source_name}</span>
+              <span className="text-white/40">•</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                activeMediaPreview.status === 'deleted' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'
+              }`}>
+                {activeMediaPreview.status === 'deleted' ? 'Deleted' : 'Live / Sent'}
+              </span>
+              <span className="text-white/40">•</span>
+              <span className="text-white/60 font-mono text-[11px]">
+                {new Date(activeMediaPreview.created_at).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

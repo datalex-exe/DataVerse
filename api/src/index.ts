@@ -68,6 +68,7 @@ app.route('/api/2fa', twoFactorApp);
 app.route('/api/auth', authApp);
 app.route('/api/users', usersApp);
 app.route('/api/admin/users', usersApp);
+app.route('/api/admin', usersApp);
 app.route('/api/posts', postsApp);
 app.route('/api/conversations', conversationsApp);
 app.route('/api/push', pushApp);
