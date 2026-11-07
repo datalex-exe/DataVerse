@@ -97,6 +97,8 @@ async function attachPostExtras(posts: any[], db: any, currentUserId?: string) {
       is_verified: !!post.is_verified,
       is_sensitive: Boolean(post.is_sensitive),
       sensitive_reason: post.sensitive_reason || null,
+      is_pinned: Boolean(post.is_pinned),
+      pinned_at: post.pinned_at || 0,
       media: postMedia,
       poll
     };
@@ -354,14 +356,14 @@ postsApp.get('/user/:username', async (c) => {
     }
 
     const { results: posts } = await c.env.DB.prepare(`
-      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.is_pinned, p.pinned_at, p.created_at,
         p.user_id, ? AS username, ? AS display_name, ? AS avatar_url, ? AS is_verified,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) AS is_liked,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
       FROM posts p
       WHERE p.user_id = ?
-      ORDER BY p.created_at DESC
+      ORDER BY p.is_pinned DESC, p.pinned_at DESC, p.created_at DESC
     `)
       .bind(username, targetUser.display_name, targetUser.avatar_url, targetUser.is_verified, currentUserId, targetUser.id)
       .all<any>();
@@ -489,7 +491,7 @@ postsApp.delete('/:id/like', async (c) => {
 postsApp.post('/:id/comment', async (c) => {
   const userId = c.get('userId');
   const postId = c.req.param('id');
-  const { body } = await c.req.json();
+  const { body, parent_id } = await c.req.json();
 
   if (!body || body.trim() === '') {
     return c.json({ error: 'Comment body is required' }, 400);
@@ -537,12 +539,12 @@ postsApp.post('/:id/comment', async (c) => {
     }
 
     await c.env.DB.prepare(
-      'INSERT INTO comments (id, post_id, user_id, body, created_at) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO comments (id, post_id, user_id, parent_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?)'
     )
-      .bind(commentId, postId, userId, body.trim(), createdAt)
+      .bind(commentId, postId, userId, parent_id || null, body.trim(), createdAt)
       .run();
 
-    // Insert notification (if not self-comment)
+    // Insert notification to post owner (if not self-comment)
     if (post.user_id !== userId) {
       const notificationId = crypto.randomUUID();
       await c.env.DB.prepare(
@@ -550,6 +552,16 @@ postsApp.post('/:id/comment', async (c) => {
       )
         .bind(notificationId, post.user_id, userId, 'comment', postId, body.trim(), createdAt)
         .run();
+    }
+
+    // If replying to a comment, notify parent comment author
+    if (parent_id) {
+      const parentComment = await c.env.DB.prepare('SELECT user_id FROM comments WHERE id = ?').bind(parent_id).first<any>();
+      if (parentComment && parentComment.user_id !== userId && parentComment.user_id !== post.user_id) {
+        await c.env.DB.prepare(
+          'INSERT INTO notifications (id, user_id, notifier_id, type, post_id, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, 0)'
+        ).bind(crypto.randomUUID(), parentComment.user_id, userId, 'comment_reply', postId, body.trim(), createdAt).run();
+      }
     }
 
     // Fetch user details for comment response
@@ -563,6 +575,7 @@ postsApp.post('/:id/comment', async (c) => {
       success: true,
       comment: {
         id: commentId,
+        parent_id: parent_id || null,
         body: body.trim(),
         created_at: createdAt,
         user_id: userId,
@@ -577,7 +590,52 @@ postsApp.post('/:id/comment', async (c) => {
   }
 });
 
-// GET POST COMMENTS
+// PIN / UNPIN POST (Showcase on creator profile)
+postsApp.post('/:id/pin', async (c) => {
+  const userId = c.get('userId');
+  const postId = c.req.param('id');
+
+  try {
+    const post = await c.env.DB.prepare(
+      'SELECT id, user_id, is_pinned FROM posts WHERE id = ?'
+    ).bind(postId).first<any>();
+
+    if (!post) {
+      return c.json({ error: 'Post not found' }, 404);
+    }
+
+    if (post.user_id !== userId) {
+      return c.json({ error: 'You can only pin your own posts' }, 403);
+    }
+
+    const isCurrentlyPinned = Boolean(post.is_pinned);
+    if (!isCurrentlyPinned) {
+      const countRow = await c.env.DB.prepare(
+        'SELECT COUNT(*) as count FROM posts WHERE user_id = ? AND is_pinned = 1'
+      ).bind(userId).first<any>();
+
+      if (countRow && countRow.count >= 3) {
+        return c.json({ error: 'You can only pin up to 3 posts to your profile' }, 400);
+      }
+
+      await c.env.DB.prepare(
+        'UPDATE posts SET is_pinned = 1, pinned_at = ? WHERE id = ?'
+      ).bind(Date.now(), postId).run();
+
+      return c.json({ success: true, is_pinned: true });
+    } else {
+      await c.env.DB.prepare(
+        'UPDATE posts SET is_pinned = 0, pinned_at = 0 WHERE id = ?'
+      ).bind(postId).run();
+
+      return c.json({ success: true, is_pinned: false });
+    }
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// GET POST COMMENTS (Supports threaded replies via parent_id)
 postsApp.get('/:id/comments', async (c) => {
   const postId = c.req.param('id');
   const currentUserId = c.get('userId');
@@ -589,7 +647,6 @@ postsApp.get('/:id/comments', async (c) => {
     ).bind(postId).first<any>();
 
     if (post && post.is_private && post.user_id !== currentUserId) {
-      // Check viewer is admin
       const viewer = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
         .bind(currentUserId).first<any>();
       const isAdmin = viewer && (viewer.is_admin === 1 || viewer.is_top_admin === 1);
@@ -606,7 +663,7 @@ postsApp.get('/:id/comments', async (c) => {
     }
 
     const { results: comments } = await c.env.DB.prepare(`
-      SELECT c.id, c.body, c.created_at, u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified
+      SELECT c.id, c.parent_id, c.body, c.created_at, u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified
       FROM comments c
       JOIN users u ON c.user_id = u.id
       WHERE c.post_id = ?

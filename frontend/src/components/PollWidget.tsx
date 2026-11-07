@@ -161,3 +161,4 @@ export const PollWidget: React.FC<PollWidgetProps> = ({ poll, token, onVoteSucce
     </div>
   );
 };
+

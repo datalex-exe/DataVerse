@@ -452,6 +452,78 @@ app.get('/api/media/file/*', async (c) => {
   }
 });
 
+// OPENGRAPH LINK PREVIEW ROUTE
+app.get('/api/media/link-preview', async (c) => {
+  const targetUrl = c.req.query('url');
+  if (!targetUrl) return c.json({ error: 'url parameter required' }, 400);
+
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return c.json({ error: 'Only http and https URLs supported' }, 400);
+    }
+
+    const domain = parsed.hostname.replace(/^www\./, '');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+
+    const res = await fetch(parsed.toString(), {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 DataVerseBot/1.0',
+        'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8'
+      }
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return c.json({ url: targetUrl, domain, title: domain });
+    }
+
+    const html = (await res.text()).slice(0, 150000);
+
+    const getMeta = (prop: string) => {
+      const match = html.match(new RegExp(`<meta[^>]+(?:property|name)=["'](?:og:)?${prop}["'][^>]+content=["']([^"']+)["']`, 'i')) ||
+                    html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:)?${prop}["']`, 'i'));
+      return match ? match[1].trim() : null;
+    };
+
+    let title = getMeta('title');
+    if (!title) {
+      const titleTag = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      title = titleTag ? titleTag[1].trim() : domain;
+    }
+
+    const description = getMeta('description');
+    let image = getMeta('image');
+
+    if (image && !image.startsWith('http')) {
+      try {
+        image = new URL(image, parsed.origin).toString();
+      } catch (_) {}
+    }
+
+    const siteName = getMeta('site_name') || domain;
+
+    return c.json({
+      url: targetUrl,
+      domain,
+      title: title.slice(0, 140),
+      description: description ? description.slice(0, 240) : null,
+      image,
+      siteName
+    });
+  } catch (err: any) {
+    try {
+      const domain = new URL(targetUrl).hostname.replace(/^www\./, '');
+      return c.json({ url: targetUrl, domain, title: domain });
+    } catch {
+      return c.json({ error: 'Failed to parse URL' }, 400);
+    }
+  }
+});
+
 app.get('/', (c) => {
   return c.text('DataVerse Backend API running on Cloudflare Workers!');
 });

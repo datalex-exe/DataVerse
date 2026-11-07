@@ -59,11 +59,14 @@ CREATE TABLE IF NOT EXISTS posts (
   caption TEXT,
   is_sensitive INTEGER DEFAULT 0,
   sensitive_reason TEXT,
+  is_pinned INTEGER DEFAULT 0,
+  pinned_at INTEGER DEFAULT 0,
   created_at INTEGER NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_posts_user ON posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_pinned ON posts(user_id, is_pinned);
 
 -- Post Media Table (Support carousel/multiple images per post)
 CREATE TABLE IF NOT EXISTS post_media (
@@ -91,12 +94,38 @@ CREATE TABLE IF NOT EXISTS comments (
   id TEXT PRIMARY KEY,
   post_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
+  parent_id TEXT DEFAULT NULL,
   body TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
+
+-- Saved Collections / Bookmark Folders
+CREATE TABLE IF NOT EXISTS saved_collections (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_saved_collections_user ON saved_collections(user_id);
+
+CREATE TABLE IF NOT EXISTS saved_collection_items (
+  id TEXT PRIMARY KEY,
+  collection_id TEXT NOT NULL,
+  post_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  UNIQUE(collection_id, post_id),
+  FOREIGN KEY (collection_id) REFERENCES saved_collections(id) ON DELETE CASCADE,
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_collection_items_col ON saved_collection_items(collection_id);
+CREATE INDEX IF NOT EXISTS idx_collection_items_user ON saved_collection_items(user_id);
 
 -- Conversations Table
 CREATE TABLE IF NOT EXISTS conversations (

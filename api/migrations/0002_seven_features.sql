@@ -64,3 +64,4 @@ CREATE TABLE IF NOT EXISTS post_hashtags (
 );
 CREATE INDEX IF NOT EXISTS idx_hashtags_tag ON post_hashtags(hashtag);
 CREATE INDEX IF NOT EXISTS idx_hashtags_created ON post_hashtags(created_at DESC);
+

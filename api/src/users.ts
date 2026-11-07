@@ -1723,4 +1723,176 @@ usersApp.delete('/admin/reports/:id', authMiddleware, async (c) => {
   return c.json({ success: true });
 });
 
+// ─── SAVED COLLECTIONS / BOOKMARK FOLDERS ────────────────────────────────────
+
+// GET USER COLLECTIONS
+usersApp.get('/collections', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  try {
+    const { results: collections } = await c.env.DB.prepare(`
+      SELECT sc.id, sc.name, sc.created_at,
+        (SELECT COUNT(*) FROM saved_collection_items WHERE collection_id = sc.id) AS item_count,
+        (
+          SELECT pm.r2_key 
+          FROM saved_collection_items sci
+          JOIN post_media pm ON sci.post_id = pm.post_id
+          WHERE sci.collection_id = sc.id
+          ORDER BY sci.created_at DESC LIMIT 1
+        ) AS cover_image
+      FROM saved_collections sc
+      WHERE sc.user_id = ?
+      ORDER BY sc.created_at DESC
+    `).bind(userId).all<any>();
+
+    return c.json({ collections: collections || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// CREATE COLLECTION
+usersApp.post('/collections', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const { name } = await c.req.json();
+  if (!name || !name.trim()) {
+    return c.json({ error: 'Collection name is required' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  const createdAt = Date.now();
+
+  try {
+    await c.env.DB.prepare(
+      'INSERT INTO saved_collections (id, user_id, name, created_at) VALUES (?, ?, ?, ?)'
+    ).bind(id, userId, name.trim(), createdAt).run();
+
+    return c.json({
+      success: true,
+      collection: { id, user_id: userId, name: name.trim(), created_at: createdAt, item_count: 0 }
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// DELETE COLLECTION
+usersApp.delete('/collections/:id', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const collectionId = c.req.param('id');
+
+  try {
+    await c.env.DB.prepare(
+      'DELETE FROM saved_collections WHERE id = ? AND user_id = ?'
+    ).bind(collectionId, userId).run();
+
+    return c.json({ success: true });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ADD POST TO COLLECTION
+usersApp.post('/collections/:id/items', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const collectionId = c.req.param('id');
+  const { postId } = await c.req.json();
+
+  if (!postId) return c.json({ error: 'postId is required' }, 400);
+
+  try {
+    // Verify collection ownership
+    const collection = await c.env.DB.prepare(
+      'SELECT id FROM saved_collections WHERE id = ? AND user_id = ?'
+    ).bind(collectionId, userId).first();
+
+    if (!collection) return c.json({ error: 'Collection not found' }, 404);
+
+    const id = crypto.randomUUID();
+    await c.env.DB.prepare(`
+      INSERT INTO saved_collection_items (id, collection_id, post_id, user_id, created_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(collection_id, post_id) DO NOTHING
+    `).bind(id, collectionId, postId, userId, Date.now()).run();
+
+    return c.json({ success: true });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// REMOVE POST FROM COLLECTION
+usersApp.delete('/collections/:id/items/:postId', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const collectionId = c.req.param('id');
+  const postId = c.req.param('postId');
+
+  try {
+    await c.env.DB.prepare(
+      'DELETE FROM saved_collection_items WHERE collection_id = ? AND post_id = ? AND user_id = ?'
+    ).bind(collectionId, postId, userId).run();
+
+    return c.json({ success: true });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// GET POSTS IN SPECIFIC COLLECTION
+usersApp.get('/collections/:id/posts', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+  const collectionId = c.req.param('id');
+
+  try {
+    // Verify collection ownership
+    const collection = await c.env.DB.prepare(
+      'SELECT id, name FROM saved_collections WHERE id = ? AND user_id = ?'
+    ).bind(collectionId, userId).first<any>();
+
+    if (!collection) return c.json({ error: 'Collection not found' }, 404);
+
+    const { results: posts } = await c.env.DB.prepare(`
+      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+        p.user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) AS is_liked,
+        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
+      FROM saved_collection_items sci
+      JOIN posts p ON sci.post_id = p.id
+      JOIN users u ON p.user_id = u.id
+      WHERE sci.collection_id = ? AND sci.user_id = ?
+      ORDER BY sci.created_at DESC
+    `).bind(userId, collectionId, userId).all<any>();
+
+    if (!posts || posts.length === 0) {
+      return c.json({ collection, posts: [] });
+    }
+
+    const postIds = posts.map(p => p.id);
+    const placeholders = postIds.map(() => '?').join(',');
+    const { results: mediaResults }: any = await c.env.DB.prepare(`
+      SELECT * FROM post_media WHERE post_id IN (${placeholders}) ORDER BY position ASC
+    `).bind(...postIds).all();
+
+    const mappedPosts = posts.map(post => ({
+      ...post,
+      is_liked: Boolean(post.is_liked),
+      is_verified: !!post.is_verified,
+      is_sensitive: Boolean(post.is_sensitive),
+      sensitive_reason: post.sensitive_reason || null,
+      media: (mediaResults || [])
+        .filter((m: any) => m.post_id === post.id)
+        .map((m: any) => ({
+          id: m.id,
+          r2_key: m.r2_key,
+          media_type: m.media_type,
+          position: m.position
+        }))
+    }));
+
+    return c.json({ collection, posts: mappedPosts });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 export default usersApp;

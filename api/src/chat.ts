@@ -421,6 +421,30 @@ export class ChatRoom {
         return;
       }
 
+      // CASE A.4: WEBRTC AUDIO CALL SIGNALING
+      if (
+        data.type === 'call_request' ||
+        data.type === 'call_accept' ||
+        data.type === 'call_reject' ||
+        data.type === 'call_end' ||
+        data.type === 'webrtc_offer' ||
+        data.type === 'webrtc_answer' ||
+        data.type === 'webrtc_ice'
+      ) {
+        const payload = JSON.stringify({
+          ...data,
+          fromUserId: userId,
+          conversationId
+        });
+        for (const socket of sockets) {
+          const [socketUserId] = this.state.getTags(socket);
+          if (socketUserId !== userId) {
+            try { socket.send(payload); } catch {}
+          }
+        }
+        return;
+      }
+
       // CASE B: RETRIEVE GAME STATE (On component mount)
       if (data.type === 'get_game_state') {
         const game = await this.getGame();

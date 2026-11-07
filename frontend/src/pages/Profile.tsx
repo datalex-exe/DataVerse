@@ -33,6 +33,10 @@ import {
   ShieldCheck,
   ShieldAlert,
   Copy,
+  QrCode,
+  Pin,
+  FolderPlus,
+  Folder,
   Download,
   RefreshCw,
   BadgeCheck,
@@ -42,10 +46,10 @@ import {
   Mail,
   Move,
   CreditCard,
-  QrCode,
   CheckCircle2,
   WifiOff
 } from 'lucide-react';
+import { ProfileQrModal } from '../components/ProfileQrModal';
 /* THEME START */
 import { SettingsThemeControl } from '../utils/theme';
 /* THEME END */
@@ -64,6 +68,8 @@ interface Post {
   likes_count: number;
   comments_count: number;
   is_liked: boolean;
+  is_pinned?: boolean;
+  pinned_at?: number;
   media: Media[];
 }
 
@@ -141,6 +147,11 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
   });
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [loadingSaved, setLoadingSaved] = useState<boolean>(false);
+  const [showQrModal, setShowQrModal] = useState<boolean>(false);
+  const [collections, setCollections] = useState<any[]>([]);
+  const [selectedCollection, setSelectedCollection] = useState<{ id: string; name: string } | null>(null);
+  const [collectionPosts, setCollectionPosts] = useState<Post[]>([]);
+  const [loadingCollectionPosts, setLoadingCollectionPosts] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(() => {
     if (isOwnProfile && currentUser) return false;
     return true;
@@ -616,9 +627,43 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
     }
   };
 
+  const fetchUserCollections = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/users/collections', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setCollections(json.collections || []);
+      }
+    } catch (err) {
+      console.error('Error fetching collections:', err);
+    }
+  };
+
+  const fetchCollectionPosts = async (colId: string) => {
+    if (!token) return;
+    try {
+      setLoadingCollectionPosts(true);
+      const res = await fetch(`/api/users/collections/${colId}/posts`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setCollectionPosts(json.posts || []);
+      }
+    } catch (err) {
+      console.error('Error fetching collection posts:', err);
+    } finally {
+      setLoadingCollectionPosts(false);
+    }
+  };
+
   useEffect(() => {
     if (activeSubTab === 'saved') {
       fetchSavedPosts();
+      fetchUserCollections();
     }
   }, [activeSubTab]);
 
@@ -4011,6 +4056,15 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                 </button>
                 <button
                   type="button"
+                  onClick={() => setShowQrModal(true)}
+                  className="btn-secondary w-10 h-10 flex items-center justify-center cursor-pointer flex-shrink-0"
+                  aria-label="Share QR Code"
+                  title="Share Profile QR Code"
+                >
+                  <QrCode className="w-4 h-4 stroke-[1.8] text-[var(--accent-2)]" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowSettings(true)}
                   className="btn-secondary w-10 h-10 flex items-center justify-center cursor-pointer flex-shrink-0"
                   aria-label="Settings"
@@ -4058,6 +4112,16 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                       className="btn-secondary flex-1 h-10 px-4 text-xs sm:text-sm font-semibold text-center flex items-center justify-center cursor-pointer"
                     >
                       Message
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowQrModal(true)}
+                      className="btn-secondary w-10 h-10 flex items-center justify-center cursor-pointer shrink-0"
+                      title="View QR Code"
+                      aria-label="View QR Code"
+                    >
+                      <QrCode className="w-4 h-4 stroke-[1.8] text-[var(--accent-2)]" />
                     </button>
 
                     <button
@@ -4216,6 +4280,14 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                         style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
                         className="relative aspect-square sm:rounded-2xl overflow-hidden bg-[var(--card)] border border-[var(--card-border)] group cursor-pointer shadow-sm select-none animate-fade-in"
                       >
+                        {/* Pinned Badge if pinned */}
+                        {post.is_pinned && (
+                          <div className="absolute top-2 left-2 z-20 flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-teal-500/40 text-teal-400 text-[10px] font-bold shadow-md select-none pointer-events-none">
+                            <Pin className="w-2.5 h-2.5 fill-teal-400" />
+                            <span>Pinned</span>
+                          </div>
+                        )}
+
                         {post.media && post.media[0] ? (
                           post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
                             <video 
@@ -4270,60 +4342,158 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
               )}
 
               {activeSubTab === 'saved' && (
-                loadingSaved ? (
-                  <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
-                  </div>
-                ) : savedPosts.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
-                    <div className="w-14 h-14 rounded-2xl bg-[var(--card)] border border-[var(--card-border)] flex items-center justify-center text-[var(--muted)] mb-3">
-                      <Bookmark className="w-6 h-6 stroke-[1.8]" />
+                <div>
+                  {/* Collections Selector Bar */}
+                  {!selectedCollection && collections.length > 0 && (
+                    <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-none select-none">
+                      <div className="px-3.5 py-1.5 rounded-full bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] border border-[var(--accent-2)]/50 text-[var(--accent-2)] text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                        <Bookmark className="w-3.5 h-3.5" />
+                        <span>All Bookmarks ({savedPosts.length})</span>
+                      </div>
+                      {collections.map(col => (
+                        <button
+                          key={col.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCollection(col);
+                            fetchCollectionPosts(col.id);
+                          }}
+                          className="px-3.5 py-1.5 rounded-full bg-[var(--input)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--text)] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                        >
+                          <Folder className="w-3.5 h-3.5 text-[var(--accent-2)]" />
+                          <span>{col.name}</span>
+                          <span className="text-[10px] text-[var(--muted)] font-mono">({col.item_count})</span>
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-sm font-semibold text-[var(--text)]">No saved posts yet.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-0.5 sm:gap-3 animate-fade-in">
-                    {savedPosts.map((post, idx) => (
-                      <div 
-                        key={post.id}
-                        onClick={() => onNavigate('feed')}
-                        style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
-                        className="relative aspect-square sm:rounded-2xl overflow-hidden border border-[var(--card-border)] bg-[var(--card)] group cursor-pointer select-none animate-fade-in"
+                  )}
+
+                  {/* Selected Collection Header */}
+                  {selectedCollection && (
+                    <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-[var(--line)] animate-fade-in select-none">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCollection(null)}
+                        className="flex items-center gap-1.5 text-xs font-bold text-[var(--accent-2)] hover:underline cursor-pointer"
                       >
-                        {post.media && post.media[0] && (
-                          post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
-                            <video 
-                              src={`/api/media/file/${post.media[0].r2_key}`} 
-                              className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
-                              preload="metadata"
-                              muted
-                              playsInline
-                            />
-                          ) : (
-                            <img 
-                              src={`/api/media/file/${post.media[0].r2_key}`} 
-                              alt={post.caption ? `Saved post: ${post.caption}` : 'Saved post'} 
-                              className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
-                              loading="lazy"
-                            />
-                          )
-                        )}
-                        
-                        {/* Gradient Hover Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-4 z-10">
-                          <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
-                            <Heart className="w-4 h-4 fill-white" />
-                            <span>{post.likes_count}</span>
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                        <span>Back to All Saved</span>
+                      </button>
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--text)]">
+                        <Folder className="w-4 h-4 text-[var(--accent-2)]" />
+                        <span>{selectedCollection.name}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedCollection ? (
+                    loadingCollectionPosts ? (
+                      <div className="flex items-center justify-center py-20">
+                        <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
+                      </div>
+                    ) : collectionPosts.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
+                        <div className="w-14 h-14 rounded-2xl bg-[var(--card)] border border-[var(--card-border)] flex items-center justify-center text-[var(--muted)] mb-3">
+                          <FolderPlus className="w-6 h-6 stroke-[1.8]" />
+                        </div>
+                        <p className="text-sm font-semibold text-[var(--text)]">No posts in this collection yet.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-0.5 sm:gap-3 animate-fade-in">
+                        {collectionPosts.map((post, idx) => (
+                          <div
+                            key={post.id}
+                            onClick={() => onNavigate('feed')}
+                            style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+                            className="relative aspect-square sm:rounded-2xl overflow-hidden border border-[var(--card-border)] bg-[var(--card)] group cursor-pointer select-none animate-fade-in"
+                          >
+                            {post.media && post.media[0] && (
+                              post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
+                                <video
+                                  src={`/api/media/file/${post.media[0].r2_key}`}
+                                  className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                                  preload="metadata"
+                                  muted
+                                  playsInline
+                                />
+                              ) : (
+                                <img
+                                  src={`/api/media/file/${post.media[0].r2_key}`}
+                                  alt={post.caption ? `Saved post: ${post.caption}` : 'Saved post'}
+                                  className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+                                  loading="lazy"
+                                />
+                              )
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-4 z-10">
+                              <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
+                                <Heart className="w-4 h-4 fill-white" />
+                                <span>{post.likes_count}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
+                                <MessageCircle className="w-4 h-4 fill-white" />
+                                <span>{post.comments_count}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
-                            <MessageCircle className="w-4 h-4 fill-white" />
-                            <span>{post.comments_count}</span>
+                        ))}
+                      </div>
+                    )
+                  ) : loadingSaved ? (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-2)]" />
+                    </div>
+                  ) : savedPosts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 px-4 text-center select-none">
+                      <div className="w-14 h-14 rounded-2xl bg-[var(--card)] border border-[var(--card-border)] flex items-center justify-center text-[var(--muted)] mb-3">
+                        <Bookmark className="w-6 h-6 stroke-[1.8]" />
+                      </div>
+                      <p className="text-sm font-semibold text-[var(--text)]">No saved posts yet.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-0.5 sm:gap-3 animate-fade-in">
+                      {savedPosts.map((post, idx) => (
+                        <div 
+                          key={post.id}
+                          onClick={() => onNavigate('feed')}
+                          style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+                          className="relative aspect-square sm:rounded-2xl overflow-hidden border border-[var(--card-border)] bg-[var(--card)] group cursor-pointer select-none animate-fade-in"
+                        >
+                          {post.media && post.media[0] && (
+                            post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
+                              <video 
+                                src={`/api/media/file/${post.media[0].r2_key}`} 
+                                className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
+                                preload="metadata"
+                                muted
+                                playsInline
+                              />
+                            ) : (
+                              <img 
+                                src={`/api/media/file/${post.media[0].r2_key}`} 
+                                alt={post.caption ? `Saved post: ${post.caption}` : 'Saved post'} 
+                                className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105" 
+                                loading="lazy"
+                              />
+                            )
+                          )}
+                          
+                          {/* Gradient Hover Overlay */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-4 z-10">
+                            <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
+                              <Heart className="w-4 h-4 fill-white" />
+                              <span>{post.likes_count}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm text-white">
+                              <MessageCircle className="w-4 h-4 fill-white" />
+                              <span>{post.comments_count}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -4415,6 +4585,17 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
           onClose={() => setShowReportUserModal(false)}
           targetUsername={profile.username}
           targetType="user"
+        />
+      )}
+
+      {showQrModal && profile && (
+        <ProfileQrModal
+          isOpen={showQrModal}
+          onClose={() => setShowQrModal(false)}
+          username={profile.username}
+          displayName={profile.display_name}
+          avatarUrl={profile.avatar_url}
+          isVerified={profile.is_verified}
         />
       )}
 

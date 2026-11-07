@@ -46,8 +46,11 @@ import {
   RefreshCw,
   WifiOff,
   Sparkles,
-  Smile
+  Smile,
+  Phone
 } from 'lucide-react';
+import { AudioCallModal, CallState } from '../components/AudioCallModal';
+import { LinkPreviewCard } from '../components/LinkPreviewCard';
 
 interface Member {
   id: string;
@@ -519,6 +522,30 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const lastTypingSentRef = useRef<number>(0);
   const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState<string | null>(null);
 
+  // WebRTC Direct Audio Call States
+  const [activeCall, setActiveCall] = useState<CallState | null>(null);
+  const [incomingSignal, setIncomingSignal] = useState<any>(null);
+
+  const sendCallSignaling = useCallback((msg: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  }, []);
+
+  const handleStartAudioCall = useCallback(() => {
+    if (!activeConvo || activeConvo.is_group || !user) return;
+    const partner = getChatPartner(activeConvo);
+    const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    setActiveCall({
+      status: 'outgoing',
+      callId,
+      partnerId: partner.id,
+      partnerName: partner.display_name || partner.username,
+      partnerAvatar: partner.avatar_url,
+      isCaller: true
+    });
+  }, [activeConvo, user]);
+
   const isOtherUserTyping = useMemo(() => {
     if (!activeConvo) return false;
     if (activeConvo.is_group) {
@@ -861,7 +888,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         const convos = data.conversations || [];
         setConversations(convos);
         try {
-          sessionStorage.setItem('dv_cached_convos', JSON.stringify(convos.slice(0, 30)));
+          try {
+            sessionStorage.setItem('dv_cached_convos', JSON.stringify(convos.slice(0, 30)));
+          } catch (_) {}
         } catch {}
         const unreadCount = convos.filter((c: any) => c.unread_count && c.unread_count > 0).length;
         window.dispatchEvent(new CustomEvent('unread-chats-update-value', { detail: unreadCount }));
@@ -1106,6 +1135,40 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               else next.delete(data.userId);
               return next;
             });
+            return;
+          }
+
+          // WebRTC Audio Calling Signaling
+          if (data.type === 'call_request') {
+            if (activeConvo && !activeConvo.is_group) {
+              const partner = getChatPartner(activeConvo);
+              setActiveCall({
+                status: 'incoming',
+                callId: data.callId,
+                partnerId: data.fromUserId,
+                partnerName: partner.display_name || partner.username,
+                partnerAvatar: partner.avatar_url,
+                isCaller: false
+              });
+              setIncomingSignal(data);
+            }
+            return;
+          }
+
+          if (data.type === 'call_accept') {
+            setActiveCall(prev => prev ? { ...prev, status: 'connected' } : null);
+            setIncomingSignal(data);
+            return;
+          }
+
+          if (data.type === 'call_reject' || data.type === 'call_end') {
+            setActiveCall(null);
+            setIncomingSignal(data);
+            return;
+          }
+
+          if (data.type === 'webrtc_offer' || data.type === 'webrtc_answer' || data.type === 'webrtc_ice') {
+            setIncomingSignal(data);
             return;
           }
 
@@ -4782,8 +4845,20 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 </div>
               </div>
 
-              {/* Header Right: Three-dot menu */}
-              <div className="relative flex items-center gap-1" ref={headerMenuRef}>
+              {/* Header Right: Call & Three-dot menu */}
+              <div className="relative flex items-center gap-1.5" ref={headerMenuRef}>
+                {!activeConvo.is_group && (
+                  <button
+                    type="button"
+                    onClick={handleStartAudioCall}
+                    className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--accent-2)] hover:text-white active:scale-95 shadow-sm"
+                    title="Start Audio Call"
+                    aria-label="Start Audio Call"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </button>
+                )}
+
                 <button
                   type="button"
                   aria-haspopup="true"
@@ -5328,7 +5403,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                     </div>
                                   );
                                 })() : (
-                                  renderFormattedMessageText(msg.body)
+                                  <div>
+                                    {renderFormattedMessageText(msg.body)}
+                                    {(() => {
+                                      const match = msg.body.match(/(https?:\/\/[^\s]+)/i);
+                                      return match ? <LinkPreviewCard url={match[0]} /> : null;
+                                    })()}
+                                  </div>
                                 )}
                               </div>
                             );
@@ -6101,6 +6182,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             className="w-full h-full max-h-screen object-contain"
           />
         </div>
+      )}
+
+      {/* WebRTC Audio Call Modal */}
+      {activeCall && (
+        <AudioCallModal
+          call={activeCall}
+          incomingSignal={incomingSignal}
+          sendSignaling={sendCallSignaling}
+          onEndCall={() => {
+            setActiveCall(null);
+            setIncomingSignal(null);
+          }}
+        />
       )}
 
     </>

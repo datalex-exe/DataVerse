@@ -24,10 +24,15 @@ import {
   SlidersHorizontal,
   Flag,
   VolumeX,
-  Eye
+  Eye,
+  Pin,
+  FolderPlus,
+  CornerDownRight
 } from 'lucide-react';
 import { ReportModal } from '../components/ReportModal';
 import { PollWidget } from '../components/PollWidget';
+import { LinkPreviewCard } from '../components/LinkPreviewCard';
+import { CollectionsModal } from '../components/CollectionsModal';
 
 export type FeedStatus = 
   | 'idle'
@@ -61,11 +66,14 @@ interface Post {
   is_private?: boolean;
   is_sensitive?: boolean;
   sensitive_reason?: string | null;
+  is_pinned?: boolean;
+  pinned_at?: number;
   poll?: any;
 }
 
 interface Comment {
   id: string;
+  parent_id?: string | null;
   body: string;
   created_at: number;
   user_id: string;
@@ -125,6 +133,32 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
   const [reportingPost, setReportingPost] = useState<Post | null>(null);
   const [revealedSensitive, setRevealedSensitive] = useState<Record<string, boolean>>({});
+  const [replyingToComment, setReplyingToComment] = useState<{ id: string; username: string } | null>(null);
+  const [selectedPostForCollection, setSelectedPostForCollection] = useState<string | null>(null);
+
+  const extractFirstUrl = (text: string | null) => {
+    if (!text) return null;
+    const match = text.match(/(https?:\/\/[^\s]+)/i);
+    return match ? match[0] : null;
+  };
+
+  const handleTogglePinPost = async (postId: string) => {
+    try {
+      const res = await fetch(`/api/posts/${postId}/pin`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, is_pinned: data.is_pinned } : p));
+        toast.success(data.is_pinned ? 'Post pinned to your profile!' : 'Post unpinned from profile');
+      } else {
+        toast.error(data.error || 'Failed to pin post');
+      }
+    } catch {
+      toast.error('Network error pinning post');
+    }
+  };
 
   const handleMuteUser = async (targetUserId: string, targetUsername: string) => {
     try {
@@ -506,7 +540,9 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     if (!activePostComments || !token) return;
 
     const text = newCommentText.trim();
+    const parentId = replyingToComment?.id || null;
     setNewCommentText('');
+    setReplyingToComment(null);
 
     try {
       const res = await fetch(`/api/posts/${activePostComments}/comment`, {
@@ -515,7 +551,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ body: text })
+        body: JSON.stringify({ body: text, parent_id: parentId })
       });
 
       if (res.status === 401) {
@@ -1071,6 +1107,32 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                           Share Link
                         </button>
 
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenMenuPostId(null);
+                            setSelectedPostForCollection(post.id);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] rounded-lg transition-colors min-h-[38px] cursor-pointer"
+                        >
+                          <FolderPlus className="w-4 h-4 text-[var(--accent-2)]" aria-hidden="true" />
+                          Save to Collection
+                        </button>
+
+                        {post.user_id === user?.id && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenMenuPostId(null);
+                              handleTogglePinPost(post.id);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] rounded-lg transition-colors min-h-[38px] cursor-pointer"
+                          >
+                            <Pin className="w-4 h-4 text-teal-400" aria-hidden="true" />
+                            {post.is_pinned ? 'Unpin from Profile' : 'Pin to Profile'}
+                          </button>
+                        )}
+
                         {post.user_id !== user?.id && (
                           <>
                             <button
@@ -1261,6 +1323,11 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                         return part;
                       })}
                     </span>
+
+                    {/* Rich Link Preview Card */}
+                    {extractFirstUrl(cleanCaption) && (
+                      <LinkPreviewCard url={extractFirstUrl(cleanCaption)!} />
+                    )}
                   </div>
                 )}
 
@@ -1400,7 +1467,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
             </div>
 
             {/* Comments List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin">
               {loadingComments ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-2)]" />
@@ -1410,44 +1477,90 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                   No comments yet.
                 </div>
               ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <div 
-                      onClick={() => {
-                        setActivePostComments(null);
-                        onNavigate('profile', comment.username);
-                      }}
-                      className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex-shrink-0 cursor-pointer overflow-hidden flex items-center justify-center text-[10px] font-bold text-brand-400 select-none shadow"
-                    >
-                      {comment.avatar_url ? (
-                        <img src={`/api/media/file/${comment.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
-                      ) : (
-                        comment.username.substring(0, 2).toUpperCase()
+                (() => {
+                  const rootComments = comments.filter(c => !c.parent_id);
+                  const repliesMap = comments.reduce((acc: Record<string, Comment[]>, c) => {
+                    if (c.parent_id) {
+                      if (!acc[c.parent_id]) acc[c.parent_id] = [];
+                      acc[c.parent_id].push(c);
+                    }
+                    return acc;
+                  }, {});
+
+                  const renderCommentItem = (comment: Comment, isReply = false) => (
+                    <div key={comment.id} className="flex gap-2.5">
+                      <div 
+                        onClick={() => {
+                          setActivePostComments(null);
+                          onNavigate('profile', comment.username);
+                        }}
+                        className={`${isReply ? 'w-6 h-6 text-[9px]' : 'w-8 h-8 text-[10px]'} rounded-full bg-slate-900 border border-slate-800 flex-shrink-0 cursor-pointer overflow-hidden flex items-center justify-center font-bold text-brand-400 select-none shadow`}
+                      >
+                        {comment.avatar_url ? (
+                          <img src={`/api/media/file/${comment.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
+                        ) : (
+                          comment.username.substring(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      <div className="bg-[var(--input)] border border-[var(--line)] rounded-2xl p-2.5 flex-1">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span 
+                            onClick={() => {
+                              setActivePostComments(null);
+                              onNavigate('profile', comment.username);
+                            }}
+                            className="text-xs font-extrabold text-[var(--text)] hover:text-[var(--accent-2)] cursor-pointer flex items-center inline-flex gap-1"
+                          >
+                            {comment.display_name || comment.username}
+                            {!!comment.is_verified && <VerifiedBadge />}
+                          </span>
+                          <span className="text-[9px] text-[var(--muted)] font-bold">{formatTime(comment.created_at)}</span>
+                        </div>
+                        <p className="text-xs text-[var(--text)] leading-relaxed">{comment.body}</p>
+                        <button
+                          type="button"
+                          onClick={() => setReplyingToComment({ id: comment.id, username: comment.username })}
+                          className="mt-1 text-[10px] font-bold text-[var(--muted)] hover:text-[var(--accent-2)] transition-colors flex items-center gap-1 select-none"
+                        >
+                          <CornerDownRight className="w-2.5 h-2.5" />
+                          <span>Reply</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+
+                  return rootComments.map(comment => (
+                    <div key={comment.id} className="space-y-2">
+                      {renderCommentItem(comment)}
+                      {repliesMap[comment.id] && repliesMap[comment.id].length > 0 && (
+                        <div className="border-l-2 border-[var(--line)] pl-3 ml-4 space-y-2">
+                          {repliesMap[comment.id].map(reply => renderCommentItem(reply, true))}
+                        </div>
                       )}
                     </div>
-                    <div className="bg-[var(--input)] border border-[var(--line)] rounded-2xl p-3 flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <span 
-                          onClick={() => {
-                            setActivePostComments(null);
-                            onNavigate('profile', comment.username);
-                          }}
-                          className="text-xs font-extrabold text-[var(--text)] hover:text-[var(--accent-2)] cursor-pointer flex items-center inline-flex gap-1"
-                        >
-                          {comment.display_name || comment.username}
-                          {!!comment.is_verified && <VerifiedBadge />}
-                        </span>
-                        <span className="text-[10px] text-[var(--muted)] font-bold">{formatTime(comment.created_at)}</span>
-                      </div>
-                      <p className="text-xs text-[var(--text)] leading-relaxed">{comment.body}</p>
-                    </div>
-                  </div>
-                ))
+                  ));
+                })()
               )}
             </div>
 
             {/* Comment Input */}
             <form onSubmit={handleAddComment} className="p-4 pb-8 sm:pb-4 border-t border-[var(--line)] flex flex-col gap-1.5 bg-[var(--card)]">
+              {/* Replying indicator banner */}
+              {replyingToComment && (
+                <div className="flex items-center justify-between px-2.5 py-1 bg-[var(--input)] border border-[var(--line)] rounded-lg text-[11px] text-[var(--accent-2)] font-semibold select-none animate-fade-in">
+                  <span className="flex items-center gap-1">
+                    <CornerDownRight className="w-3 h-3" />
+                    Replying to @{replyingToComment.username}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingToComment(null)}
+                    className="p-0.5 hover:text-white transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2">
                 <label htmlFor="comments-drawer-input" className="sr-only">
                   Add a comment
@@ -1649,6 +1762,15 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           targetUsername={reportingPost.username}
           targetPostId={reportingPost.id}
           targetType="post"
+        />
+      )}
+
+      {/* Save to Collection Modal */}
+      {selectedPostForCollection && (
+        <CollectionsModal
+          isOpen={!!selectedPostForCollection}
+          postId={selectedPostForCollection}
+          onClose={() => setSelectedPostForCollection(null)}
         />
       )}
 
