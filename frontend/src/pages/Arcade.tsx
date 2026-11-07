@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Gamepad2, 
-  ArrowLeft, 
-  Maximize2, 
-  Minimize2, 
-  RefreshCw, 
-  Swords, 
-  Users, 
-  Send, 
-  X, 
+import {
+  Gamepad2,
+  ArrowLeft,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  Swords,
+  Send,
+  X,
   Check,
   Loader2,
   Play,
@@ -97,7 +96,7 @@ const ArcadeAvatar: React.FC<ArcadeAvatarProps> = ({
   if (!src || hasError) {
     const initial = (name || 'P').trim().substring(0, 2).toUpperCase();
     return (
-      <div 
+      <div
         className={`${size} ${rounded} bg-gradient-to-br from-teal-500/20 to-emerald-500/20 border border-teal-500/30 text-teal-300 flex items-center justify-center font-black text-xs flex-shrink-0 shadow-sm select-none ${className}`}
       >
         {initial}
@@ -314,7 +313,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             return next;
           });
         }
-      } catch {}
+      } catch { }
     };
 
     return () => {
@@ -415,19 +414,19 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     const fromCol = fromIdx % 8;
     const toRow = Math.floor(toIdx / 8);
     const toCol = toIdx % 8;
-    
+
     const rowDiff = toRow - fromRow;
     const colDiff = toCol - fromCol;
-    
+
     const targetPiece = board[toIdx];
     if (targetPiece) {
       const isPieceUpper = piece === piece.toUpperCase();
       const isTargetUpper = targetPiece === targetPiece.toUpperCase();
       if (isPieceUpper === isTargetUpper) return false;
     }
-    
+
     const pieceType = piece.toLowerCase();
-    
+
     if (pieceType === 'p') {
       const direction = piece === 'P' ? -1 : 1;
       const startRow = piece === 'P' ? 6 : 1;
@@ -439,7 +438,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       if (Math.abs(colDiff) === 1 && rowDiff === direction) return targetPiece !== null;
       return false;
     }
-    
+
     if (pieceType === 'r') {
       if (rowDiff !== 0 && colDiff !== 0) return false;
       const rowStep = rowDiff === 0 ? 0 : (rowDiff > 0 ? 1 : -1);
@@ -453,7 +452,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       }
       return true;
     }
-    
+
     if (pieceType === 'b') {
       if (Math.abs(rowDiff) !== Math.abs(colDiff)) return false;
       const rowStep = rowDiff > 0 ? 1 : -1;
@@ -467,7 +466,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       }
       return true;
     }
-    
+
     if (pieceType === 'q') {
       const isRook = rowDiff === 0 || colDiff === 0;
       const isBishop = Math.abs(rowDiff) === Math.abs(colDiff);
@@ -483,17 +482,17 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       }
       return true;
     }
-    
+
     if (pieceType === 'n') {
       const absR = Math.abs(rowDiff);
       const absC = Math.abs(colDiff);
       return (absR === 2 && absC === 1) || (absR === 1 && absC === 2);
     }
-    
+
     if (pieceType === 'k') {
       return Math.abs(rowDiff) <= 1 && Math.abs(colDiff) <= 1;
     }
-    
+
     return false;
   };
 
@@ -534,11 +533,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
       const nextBoard = [...(gameState.chessBoard || Array(64).fill(null))];
       const movingPiece = nextBoard[selectedChessSquare];
-      
+
       if (!movingPiece || !isValidChessMove(selectedChessSquare, squareIdx, movingPiece, nextBoard)) {
         return;
       }
-      
+
       let status = gameState.status;
       let winner = gameState.winner;
       const targetPiece = nextBoard[squareIdx];
@@ -578,7 +577,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     const moves = { ...(gameState.rpsPlayerMoves || {}) };
     moves[user.id] = choice;
     const opponentId = user.id === gameState.playerX ? gameState.playerO : gameState.playerX;
-    
+
     let status = gameState.status;
     let winner = gameState.winner;
     let turn = gameState.turn;
@@ -714,7 +713,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       setHlStreak(nextStreak);
       if (nextScore > hlBestScore) {
         setHlBestScore(nextScore);
-        try { localStorage.setItem('arcade_offline_hl_best', String(nextScore)); } catch {}
+        try { localStorage.setItem('arcade_offline_hl_best', String(nextScore)); } catch { }
       }
     } else {
       setHlGameOver(true);
@@ -747,7 +746,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       setMoleScore(newScore);
       if (newScore > moleBestScore) {
         setMoleBestScore(newScore);
-        try { localStorage.setItem('arcade_offline_mole_best', String(newScore)); } catch {}
+        try { localStorage.setItem('arcade_offline_mole_best', String(newScore)); } catch { }
       }
       setMoleActiveIndex(null);
     }
@@ -816,15 +815,15 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         </div>
 
         {/* Rotating Wheel Body: Continuous cumulative rotation, never resets */}
-        <div 
+        <div
           className="w-full h-full rounded-full will-change-transform"
-          style={{ 
+          style={{
             transform: `rotate(${rotationDeg}deg)`,
             transition: 'transform 4.5s cubic-bezier(0.17, 0.67, 0.12, 0.99)'
           }}
         >
-          <svg 
-            viewBox={`0 0 ${size} ${size}`} 
+          <svg
+            viewBox={`0 0 ${size} ${size}`}
             className="w-full h-full"
           >
             <defs>
@@ -946,21 +945,21 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             })}
 
             {/* Outer glowing border ring */}
-            <circle 
-              cx={center} 
-              cy={center} 
-              r={radius + 3} 
-              fill="none" 
-              stroke="url(#wheelRimGlow)" 
-              strokeWidth="6" 
+            <circle
+              cx={center}
+              cy={center}
+              r={radius + 3}
+              fill="none"
+              stroke="url(#wheelRimGlow)"
+              strokeWidth="6"
             />
-            <circle 
-              cx={center} 
-              cy={center} 
-              r={radius + 6} 
-              fill="none" 
-              stroke="#040b0d" 
-              strokeWidth="2" 
+            <circle
+              cx={center}
+              cy={center}
+              r={radius + 6}
+              fill="none"
+              stroke="#040b0d"
+              strokeWidth="2"
             />
 
             {/* Golden studs around the rim aligned with top origin */}
@@ -982,29 +981,29 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             })}
 
             {/* Center Hub */}
-            <circle 
-              cx={center} 
-              cy={center} 
-              r="28" 
-              fill="url(#wheelCenterHub)" 
-              stroke="#ffffff" 
-              strokeWidth="2.5" 
+            <circle
+              cx={center}
+              cy={center}
+              r="28"
+              fill="url(#wheelCenterHub)"
+              stroke="#ffffff"
+              strokeWidth="2.5"
               className="drop-shadow-lg"
             />
-            <circle 
-              cx={center} 
-              cy={center} 
-              r={12} 
-              fill="#040b0d" 
-              stroke="#2dd4bf" 
-              strokeWidth="2" 
+            <circle
+              cx={center}
+              cy={center}
+              r={12}
+              fill="#040b0d"
+              stroke="#2dd4bf"
+              strokeWidth="2"
             />
-            <text 
-              x={center} 
-              y={center + 4} 
-              textAnchor="middle" 
-              fill="#2dd4bf" 
-              fontSize="12" 
+            <text
+              x={center}
+              y={center + 4}
+              textAnchor="middle"
+              fill="#2dd4bf"
+              fontSize="12"
               fontWeight="bold"
             >
               ★
@@ -1252,7 +1251,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                       {hlCard.suit}
                     </span>
                   </div>
-                  
+
                   <span className={`text-6xl self-center ${['♥', '♦'].includes(hlCard.suit) ? 'text-rose-500' : 'text-slate-200'}`}>
                     {hlCard.suit}
                   </span>
@@ -1367,9 +1366,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               <p className="text-xs text-slate-400">Flip a coin to make a quick decision!</p>
             </div>
 
-            <div className={`h-28 w-28 rounded-full border-4 border-amber-400 bg-gradient-to-tr from-amber-500 to-yellow-300 shadow-[0_0_40px_rgba(245,158,11,0.3)] flex items-center justify-center text-5xl select-none ${
-              coinFlipping ? 'animate-spin' : ''
-            }`}>
+            <div className={`h-28 w-28 rounded-full border-4 border-amber-400 bg-gradient-to-tr from-amber-500 to-yellow-300 shadow-[0_0_40px_rgba(245,158,11,0.3)] flex items-center justify-center text-5xl select-none ${coinFlipping ? 'animate-spin' : ''
+              }`}>
               {coinResult === 'heads' ? '👑' : coinResult === 'tails' ? '🍂' : '🪙'}
             </div>
 
@@ -1404,9 +1402,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               <div className="flex items-center gap-1.5 flex-wrap justify-center mt-2">
                 <span className="text-[10px] text-slate-500 font-bold uppercase mr-1">History:</span>
                 {coinHistory.map((res, i) => (
-                  <span key={i} className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                    res === 'heads' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-300 border-slate-700'
-                  }`}>
+                  <span key={i} className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${res === 'heads' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-300 border-slate-700'
+                    }`}>
                     {res === 'heads' ? '👑 H' : '🍂 T'}
                   </span>
                 ))}
@@ -1432,11 +1429,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 type="button"
                 disabled={wheelSpinning}
                 onClick={handleSpinWheel}
-                className={`py-3.5 px-8 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all ${
-                  wheelSpinning || wheelSegments.length < 2
+                className={`py-3.5 px-8 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all ${wheelSpinning || wheelSegments.length < 2
                     ? 'bg-slate-800 text-slate-500 opacity-60 cursor-not-allowed border border-white/5 shadow-none'
                     : 'bg-gradient-to-b from-teal-400 to-emerald-500 hover:from-teal-300 hover:to-emerald-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.25),inset_0_-2px_0_rgba(0,0,0,0.35),0_4px_6px_-1px_rgba(0,0,0,0.4),0_0_20px_rgba(45,212,191,0.25)] active:translate-y-0.5 active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.4)]'
-                }`}
+                  }`}
               >
                 {wheelSpinning ? 'Spinning...' : 'Spin The Wheel 🎡'}
               </button>
@@ -1524,9 +1520,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             <div className="flex items-center justify-between w-full border-b border-white/10 pb-4">
               <div className="flex flex-col items-center gap-1 w-24 text-center">
                 <span className="text-[9px] font-black uppercase text-slate-400">Player X</span>
-                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                  gameState?.playerX === user?.id ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-900 text-slate-400'
-                }`}>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${gameState?.playerX === user?.id ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-slate-900 text-slate-400'
+                  }`}>
                   {gameState?.playerX === user?.id ? 'You' : (activeSession.opponentName || 'Opponent')}
                 </span>
                 <span className="text-xl font-black text-rose-500">X</span>
@@ -1536,9 +1531,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
               <div className="flex flex-col items-center gap-1 w-24 text-center">
                 <span className="text-[9px] font-black uppercase text-slate-400">Player O</span>
-                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                  gameState?.playerO === user?.id ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-slate-900 text-slate-400'
-                }`}>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${gameState?.playerO === user?.id ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-slate-900 text-slate-400'
+                  }`}>
                   {gameState?.playerO === user?.id ? 'You' : (activeSession.opponentName || 'Opponent')}
                 </span>
                 <span className="text-xl font-black text-blue-400">O</span>
@@ -1553,15 +1547,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                   type="button"
                   disabled={gameState?.status !== 'playing' || gameState?.turn !== user?.id || cell !== null}
                   onClick={() => handleMakeMove(idx)}
-                  className={`rounded-xl flex items-center justify-center font-black text-3xl select-none transition-all active:scale-95 ${
-                    cell === 'X'
+                  className={`rounded-xl flex items-center justify-center font-black text-3xl select-none transition-all active:scale-95 ${cell === 'X'
                       ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
                       : cell === 'O'
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
-                      : gameState?.status === 'playing' && gameState?.turn === user?.id
-                      ? 'bg-slate-800/80 hover:bg-slate-700 border border-slate-700 cursor-pointer hover:border-teal-400'
-                      : 'bg-slate-950/40 border border-slate-900 opacity-40 cursor-not-allowed'
-                  }`}
+                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
+                        : gameState?.status === 'playing' && gameState?.turn === user?.id
+                          ? 'bg-slate-800/80 hover:bg-slate-700 border border-slate-700 cursor-pointer hover:border-teal-400'
+                          : 'bg-slate-950/40 border border-slate-900 opacity-40 cursor-not-allowed'
+                    }`}
                 >
                   {cell}
                 </button>
@@ -1582,7 +1575,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           </div>
         );
 
-            case 'chess': {
+      case 'chess': {
         const board = gameState?.chessBoard || Array(64).fill(null);
         const isPlayerWhite = user?.id === gameState?.playerX;
         const isPlayerBlack = user?.id === gameState?.playerO;
@@ -1623,15 +1616,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 key={idx}
                 type="button"
                 onClick={() => handleChessSquareClick(idx)}
-                className={`w-full h-full flex items-center justify-center relative border border-transparent select-none cursor-pointer p-0 m-0 transition-colors duration-150 ${
-                  isSelected 
-                    ? 'bg-teal-500/40 ring-2 ring-teal-400 z-10' 
+                className={`w-full h-full flex items-center justify-center relative border border-transparent select-none cursor-pointer p-0 m-0 transition-colors duration-150 ${isSelected
+                    ? 'bg-teal-500/40 ring-2 ring-teal-400 z-10'
                     : isLastMoveSquare
-                    ? 'bg-amber-400/20'
-                    : isDark 
-                    ? 'bg-[#12282c] hover:bg-[#18353a]' 
-                    : 'bg-[#224f52] hover:bg-[#2b6064]'
-                }`}
+                      ? 'bg-amber-400/20'
+                      : isDark
+                        ? 'bg-[#12282c] hover:bg-[#18353a]'
+                        : 'bg-[#224f52] hover:bg-[#2b6064]'
+                  }`}
               >
                 {/* Legal move indicators */}
                 {isLegal && !piece && (
@@ -1643,15 +1635,15 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
                 {/* PROBLEM 3 FIX: High-contrast pieces with white outline/stroke on dark pieces */}
                 {piece && (
-                  <span 
+                  <span
                     className="transition-transform duration-150 ease-out select-none text-2xl sm:text-3xl font-black leading-none"
                     style={{
                       color: piece === piece.toUpperCase() ? '#f8fafc' : '#0c151c',
-                      WebkitTextStroke: piece === piece.toUpperCase() 
-                        ? '0.5px rgba(0, 0, 0, 0.4)' 
+                      WebkitTextStroke: piece === piece.toUpperCase()
+                        ? '0.5px rgba(0, 0, 0, 0.4)'
                         : '1px rgba(255, 255, 255, 0.85)',
-                      filter: piece === piece.toUpperCase() 
-                        ? 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.8))' 
+                      filter: piece === piece.toUpperCase()
+                        ? 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.8))'
                         : 'drop-shadow(0 0 1px rgba(255, 255, 255, 0.8)) drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9))',
                     }}
                   >
@@ -1690,7 +1682,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             </div>
 
             {/* PROBLEM 2 FIX: Board with fixed max width and 1:1 aspect-ratio */}
-            <div 
+            <div
               className="w-full max-w-[480px] aspect-square grid grid-cols-8 grid-rows-8 border-2 border-teal-500/40 rounded-2xl overflow-hidden shadow-2xl bg-[#091518] p-0.5"
               style={{
                 width: 'min(100%, 480px)',
@@ -1810,11 +1802,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                     type="button"
                     onClick={() => handleMemoryCardClick(idx)}
                     disabled={gameState?.status !== 'playing' || gameState?.turn !== user?.id || isRevealed}
-                    className={`aspect-square rounded-xl flex items-center justify-center text-2xl transition-all select-none active:scale-90 ${
-                      isRevealed
+                    className={`aspect-square rounded-xl flex items-center justify-center text-2xl transition-all select-none active:scale-90 ${isRevealed
                         ? 'bg-slate-800 border border-slate-700'
                         : 'bg-gradient-to-tr from-teal-600 to-emerald-500 hover:from-teal-500 hover:to-emerald-400'
-                    }`}
+                      }`}
                   >
                     {isRevealed ? card.symbol : '❓'}
                   </button>
@@ -1838,11 +1829,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             <div className="flex flex-col items-center gap-5">
               {/* Turn indicator */}
               <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-black border ${
-                  isMyTurn
+                <span className={`px-3 py-1 rounded-full text-xs font-black border ${isMyTurn
                     ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 animate-pulse'
                     : 'bg-slate-800 text-slate-400 border-slate-700'
-                }`}>
+                  }`}>
                   {isMyTurn ? "🎮 Your Turn to Spin!" : `⏳ Waiting for ${activeSession?.opponentName || 'Opponent'}...`}
                 </span>
               </div>
@@ -1941,7 +1931,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
   return (
     <div className="w-full flex-1 flex flex-col items-center bg-[var(--bg)] min-h-[calc(100vh-64px)] p-3 sm:p-6 pb-28 sm:pb-8 animate-fade-in select-none">
-      
+
       {/* Top Header Bar */}
       <div className="w-full max-w-4xl flex flex-wrap items-center justify-between gap-2.5 mb-3 sm:mb-6">
         <button
@@ -1958,11 +1948,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           <button
             type="button"
             onClick={() => setActiveTab('retro')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
-              activeTab === 'retro'
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${activeTab === 'retro'
                 ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md'
                 : 'text-[var(--muted)] hover:text-[var(--text)]'
-            }`}
+              }`}
           >
             <Gamepad2 className="w-3.5 h-3.5" />
             <span>Solo Retro</span>
@@ -1970,11 +1959,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           <button
             type="button"
             onClick={() => setActiveTab('multiplayer')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
-              activeTab === 'multiplayer'
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${activeTab === 'multiplayer'
                 ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md'
                 : 'text-[var(--muted)] hover:text-[var(--text)]'
-            }`}
+              }`}
           >
             <Swords className="w-3.5 h-3.5" />
             <span>Play with Friends</span>
@@ -2009,9 +1997,8 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       {/* Main Arcade Cabinet Container */}
       <div
         ref={containerRef}
-        className={`w-full max-w-4xl flex flex-col rounded-2xl sm:rounded-3xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl overflow-hidden relative ${
-          isFullscreen ? 'fixed inset-0 z-50 rounded-none max-w-none h-screen bg-[#040b0d]' : 'min-h-[480px] sm:min-h-[640px]'
-        }`}
+        className={`w-full max-w-4xl flex flex-col rounded-2xl sm:rounded-3xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl overflow-hidden relative ${isFullscreen ? 'fixed inset-0 z-50 rounded-none max-w-none h-screen bg-[#040b0d]' : 'min-h-[480px] sm:min-h-[640px]'
+          }`}
       >
         {/* Retro Header Strip */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-gradient-to-r from-slate-950 via-[#06181b] to-slate-950 border-b border-white/[0.08]">
@@ -2083,11 +2070,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                   key={g.id}
                   type="button"
                   onClick={() => setSelectedSoloGame(g.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 ${
-                    selectedSoloGame === g.id
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 ${selectedSoloGame === g.id
                       ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black shadow-md'
                       : 'bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-white border border-white/5'
-                  }`}
+                    }`}
                 >
                   <span>{g.emoji}</span>
                   <span>{g.name}</span>
@@ -2153,49 +2139,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             ) : (
               /* Multiplayer Lobby */
               <div className="w-full flex flex-col gap-6">
-                
-                {/* Current User Player Profile Card */}
-                {user && (
-                  <div className="w-full p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-900/90 via-[#061e1b] to-slate-900/90 border border-teal-500/30 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
-                      <div className="relative">
-                        <ArcadeAvatar url={user.avatar_url} name={user.display_name || user.username} size="w-12 h-12" rounded="rounded-2xl" />
-                        <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-950" title="Online" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="text-sm font-black text-white truncate">{user.display_name || user.username}</h4>
-                          {user.is_verified && <span className="text-teal-400 text-xs font-bold">✓</span>}
-                        </div>
-                        <p className="text-[11px] text-teal-300/80 font-mono">@{user.username}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                            🎮 Ready for 1v1 Battles
-                          </span>
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setShowChallengeModal(true)}
-                        className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black transition-all shadow-md active:scale-95"
-                      >
-                        <Swords className="w-3.5 h-3.5" />
-                        <span>Challenge a Friend</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onNavigate('profile')}
-                        className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold border border-white/10 transition-colors"
-                      >
-                        View Profile
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
                 {/* Multiplayer 1v1 Games Grid */}
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
@@ -2225,73 +2169,6 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                       </button>
                     ))}
                   </div>
-                </div>
-
-                {/* Recent Chat Friends Section */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                      <Users className="w-3.5 h-3.5 text-teal-400" />
-                      <span>Challenge Recent Chat Friends</span>
-                    </h3>
-                  </div>
-
-                  {loadingContacts ? (
-                    <div className="flex items-center justify-center py-8 text-slate-500">
-                      <Loader2 className="w-5 h-5 animate-spin text-teal-400" />
-                    </div>
-                  ) : contacts.length === 0 ? (
-                    <div className="p-6 rounded-2xl bg-slate-900/30 border border-white/5 text-center text-xs text-slate-400">
-                      No recent 1:1 chat conversations found. Message a friend first or click "Challenge a Friend" above!
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                      {contacts.slice(0, 6).map(c => {
-                        const isOnline = Boolean(c.is_online || onlineUserIds.has(c.id));
-                        return (
-                        <div
-                          key={c.id}
-                          className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/50 border border-white/5 hover:border-teal-500/30 transition-all"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="relative flex-shrink-0">
-                              <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-10 h-10" rounded="rounded-xl" />
-                              {isOnline && (
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900 shadow-sm" title="Online now" />
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <h5 className="text-xs font-bold text-white truncate">{c.display_name}</h5>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="text-[10px] text-slate-400 truncate">@{c.username}</span>
-                                <span className="text-[9px] text-slate-600">•</span>
-                                {isOnline ? (
-                                  <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                    Online
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] text-slate-500 font-medium">Offline</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedContact(c);
-                              setShowChallengeModal(true);
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-[10px] font-black border border-teal-500/30 active:scale-95 transition-all flex items-center gap-1"
-                          >
-                            <Swords className="w-3 h-3" />
-                            <span>Challenge</span>
-                          </button>
-                        </div>
-                      );})}
-                    </div>
-                  )}
                 </div>
 
               </div>
@@ -2326,7 +2203,11 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             {/* Select Friend */}
             <div>
               <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Select Friend from Chats</label>
-              {contacts.length === 0 ? (
+              {loadingContacts ? (
+                <div className="flex items-center justify-center py-6 text-slate-500">
+                  <Loader2 className="w-5 h-5 animate-spin text-teal-400" />
+                </div>
+              ) : contacts.length === 0 ? (
                 <p className="text-xs text-slate-500">No recent chat contacts found.</p>
               ) : (
                 <div className="max-h-40 overflow-y-auto space-y-1.5 p-1 bg-slate-950/60 rounded-2xl border border-white/5">
@@ -2338,11 +2219,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                         key={c.id}
                         type="button"
                         onClick={() => setSelectedContact(c)}
-                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${
-                          isSelected
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${isSelected
                             ? 'bg-teal-500/20 border border-teal-500/40 text-white'
                             : 'hover:bg-white/5 text-slate-300 border border-transparent'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="relative flex-shrink-0">
@@ -2378,11 +2258,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                       key={g.id}
                       type="button"
                       onClick={() => setSelectedGameType(g.id)}
-                      className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${
-                        isSelected
+                      className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${isSelected
                           ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
                           : 'bg-slate-900/50 border-white/5 text-slate-400 hover:text-white hover:border-white/10'
-                      }`}
+                        }`}
                     >
                       <span className="text-lg">{g.emoji}</span>
                       <span className="text-xs font-bold truncate">{g.name}</span>
