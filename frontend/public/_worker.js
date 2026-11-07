@@ -12,7 +12,7 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
 };
 
-const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; connect-src 'self' https://dataverse-api.24216287.workers.dev wss://dataverse-api.24216287.workers.dev https://*.workers.dev wss://*.workers.dev; worker-src 'self'; frame-ancestors 'none';";
+const CSP_HEADER = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; connect-src 'self' https://dataverse-api.24216287.workers.dev wss://dataverse-api.24216287.workers.dev https://*.workers.dev wss://*.workers.dev; worker-src 'self'; frame-src 'self'; frame-ancestors 'none';";
 
 // Crawler and AI assistant user-agent matcher
 const BOT_UA_REGEX = /googlebot|bingbot|yandexbot|duckduckbot|baiduspider|slurp|applebot|facebot|facebookexternalhit|twitterbot|linkedinbot|slackbot|discordbot|whatsapp|telegrambot|ia_archiver|gptbot|chatgpt-user|oai-searchbot|claudebot|perplexitybot|google-extended/i;
@@ -53,6 +53,7 @@ export default {
         newHeaders.set('Content-Type', 'text/html; charset=utf-8');
         newHeaders.set('Cache-Control', 'public, max-age=86400');
         newHeaders.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'");
+        newHeaders.set('X-Frame-Options', 'SAMEORIGIN');
       } else if (url.pathname.endsWith('.js')) {
         newHeaders.set('Content-Type', 'application/javascript; charset=utf-8');
         newHeaders.set('Cache-Control', 'public, max-age=0, must-revalidate');

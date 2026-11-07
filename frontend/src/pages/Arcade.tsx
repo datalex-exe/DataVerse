@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { Retro8BitSuite } from '../components/Retro8BitSuite';
 
 interface ArcadeProps {
   onNavigate: (view: string, param?: string) => void;
@@ -1114,15 +1115,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   const renderSoloRetroGame = () => {
     switch (selectedSoloGame) {
       case '8bit-suite':
-        return (
-          <iframe
-            ref={iframeRef}
-            src="/arcade-offline.html"
-            title="Arcade 8-Bit Retro Games"
-            className="w-full flex-1 border-0 bg-[#040b0d] h-[520px] sm:h-[580px]"
-            sandbox="allow-scripts allow-same-origin allow-pointer-lock"
-          />
-        );
+        return <Retro8BitSuite />;
 
       case 'higher-lower':
         return (

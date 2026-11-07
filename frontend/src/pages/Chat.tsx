@@ -43,12 +43,12 @@ import {
   CornerUpLeft,
   Maximize2,
   MoreVertical,
+  MoreHorizontal,
   Clock,
   RefreshCw,
   WifiOff,
   Sparkles,
-  Smile,
-  Phone,
+    Phone,
   Info
 } from 'lucide-react';
 import { AudioCallModal, CallState } from '../components/AudioCallModal';
@@ -523,7 +523,33 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   const typingTimersRef = useRef<Record<string, any>>({});
   const lastTypingSentRef = useRef<number>(0);
-  const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState<string | null>(null);
+    const [activeMsgActionMenuId, setActiveMsgActionMenuId] = useState<string | null>(null);
+  const msgLongPressTimerRef = useRef<any>(null);
+
+  const handleMsgTouchStart = useCallback((msgId: string) => {
+    if (msgLongPressTimerRef.current) clearTimeout(msgLongPressTimerRef.current);
+    msgLongPressTimerRef.current = setTimeout(() => {
+      setActiveMsgActionMenuId(msgId);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(35); } catch {}
+      }
+    }, 380);
+  }, []);
+
+  const handleMsgTouchEnd = useCallback(() => {
+    if (msgLongPressTimerRef.current) {
+      clearTimeout(msgLongPressTimerRef.current);
+      msgLongPressTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleCloseMsgMenu = () => {
+      if (activeMsgActionMenuId) setActiveMsgActionMenuId(null);
+    };
+    window.addEventListener('click', handleCloseMsgMenu);
+    return () => window.removeEventListener('click', handleCloseMsgMenu);
+  }, [activeMsgActionMenuId]);
 
   // Chat Profile & Shared Media Details Modal
   const [showChatProfileModal, setShowChatProfileModal] = useState<boolean>(false);
@@ -584,8 +610,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   }, []);
 
   const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
-    setActiveReactionPickerMsgId(null);
-    if (!user) return;
+        if (!user) return;
 
     // Optimistic UI update
     setMessages(prev => prev.map(m => {
@@ -1036,8 +1061,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     Object.values(typingTimersRef.current).forEach(t => clearTimeout(t));
     typingTimersRef.current = {};
     setTypingUsers({});
-    setActiveReactionPickerMsgId(null);
-
+    
     // Fast-path: display cached messages immediately if available for 0ms transition
     if (messagesCacheRef.current[currentConvoId] && messagesCacheRef.current[currentConvoId].length > 0) {
       setMessages(messagesCacheRef.current[currentConvoId]);
@@ -5289,6 +5313,18 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           className={`flex flex-col min-w-0 max-w-full flex-1 ${isMe ? 'items-end' : 'items-start'}`}
                           style={{ maxWidth: '100%', minWidth: 0 }}
                         >
+                          <div className={`group relative flex items-center gap-1.5 max-w-full ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div
+                              onTouchStart={() => handleMsgTouchStart(msg.id)}
+                              onTouchEnd={handleMsgTouchEnd}
+                              onTouchMove={handleMsgTouchEnd}
+                              onTouchCancel={handleMsgTouchEnd}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                setActiveMsgActionMenuId(prev => prev === msg.id ? null : msg.id);
+                              }}
+                              className="relative max-w-full min-w-0"
+                            >
                           {/* Secure Media Rendering */}
                           {secureMedia ? (
                             <div className="space-y-1.5 max-w-full min-w-0">
@@ -5586,6 +5622,127 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                               </div>
                             );
                           })()}
+                            </div>
+
+                            {/* Message Actions Three-Dot Trigger Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMsgActionMenuId(prev => prev === msg.id ? null : msg.id);
+                              }}
+                              title="Message options"
+                              aria-label="Message options"
+                              className="opacity-0 group-hover:opacity-100 max-[768px]:opacity-40 hover:opacity-100 focus:opacity-100 transition-opacity p-1.5 rounded-full hover:bg-white/10 text-slate-400 hover:text-white flex-shrink-0"
+                            >
+                              <MoreHorizontal className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Floating Popover Action Menu */}
+                            {activeMsgActionMenuId === msg.id && (
+                              <div 
+                                onClick={(e) => e.stopPropagation()}
+                                className={`absolute z-50 bottom-full mb-1.5 ${isMe ? 'right-0' : 'left-0'} w-52 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 space-y-1 animate-scale-up select-none`}
+                              >
+                                {/* Quick Reactions bar */}
+                                <div className="flex items-center justify-between px-1.5 py-1 border-b border-white/5 pb-1.5">
+                                  {['❤️', '👍', '😂', '🔥', '😮', '👏'].map(emoji => (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleReaction(msg.id, emoji);
+                                        setActiveMsgActionMenuId(null);
+                                      }}
+                                      className="w-7 h-7 flex items-center justify-center text-sm rounded-full hover:bg-white/15 active:scale-125 transition-transform"
+                                      title={`React ${emoji}`}
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Reply */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleInitiateReply(msg);
+                                    setActiveMsgActionMenuId(null);
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                >
+                                  <CornerUpLeft className="w-3.5 h-3.5 text-teal-400" />
+                                  <span>Reply</span>
+                                </button>
+
+                                {/* Forward */}
+                                {(!secureMedia || secureMedia.allow_forward) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setForwardingMessageBody(msg.body);
+                                      setShowForwardModal(true);
+                                      setActiveMsgActionMenuId(null);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                  >
+                                    <Forward className="w-3.5 h-3.5 text-teal-400" />
+                                    <span>Forward</span>
+                                  </button>
+                                )}
+
+                                {/* Sender Control Toggles */}
+                                {isMe && secureMedia && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'save');
+                                        setActiveMsgActionMenuId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                    >
+                                      {secureMedia.allow_save ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
+                                      <span>{secureMedia.allow_save ? 'Block Save' : 'Allow Save'}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'forward');
+                                        setActiveMsgActionMenuId(null);
+                                      }}
+                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                    >
+                                      {secureMedia.allow_forward ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
+                                      <span>{secureMedia.allow_forward ? 'Block Forward' : 'Allow Forward'}</span>
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Unsend */}
+                                {(isMe || user?.is_top_admin) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUnsend(msg.id);
+                                      setActiveMsgActionMenuId(null);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-colors text-left border-t border-white/5"
+                                  >
+                                    <Trash className="w-3.5 h-3.5" />
+                                    <span>Unsend</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
 
                         </div>
 
@@ -5628,132 +5785,22 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                         );
                       })()}
 
-                      {/* Action buttons (Toggles for sender, forward for receiver if allowed) */}
+                      {/* Compact Timestamp and sending status row */}
                       <div 
-                        className={`chat-meta-row flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1 text-[10px] max-[400px]:text-[13px] max-[400px]:gap-x-[10px] max-[400px]:gap-y-1 font-normal text-[var(--muted)] select-none max-w-full min-w-0 ${isMe ? 'justify-end ml-auto text-right' : 'justify-start pl-10 text-left'}`}
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          rowGap: '4px',
-                          maxWidth: '100%',
-                          minWidth: 0,
-                        }}
+                        className={`chat-meta-row flex items-center gap-1.5 px-1 mt-0.5 text-[10px] text-[var(--muted)] select-none ${isMe ? 'justify-end ml-auto text-right' : 'justify-start pl-1 text-left'}`}
                       >
                         <span className="text-[var(--muted)] font-normal flex-shrink-0 flex items-center gap-1">
                           {formatTime(msg.created_at)}
                           {isMe && msg.id.startsWith('optimistic-') && (
                             secureMedia?.status === 'failed' ? (
-                              <span className="text-red-400 font-bold text-[9px] ml-1">Failed</span>
+                              <span className="text-red-400 font-bold text-[9px] ml-0.5">Failed</span>
                             ) : (
-                              <span className="text-[var(--accent-2)] flex items-center gap-0.5 text-[9px] ml-1" title="Sending...">
+                              <span className="text-[var(--accent-2)] flex items-center gap-0.5 text-[9px] ml-0.5" title="Sending...">
                                 <Clock className="w-2.5 h-2.5 animate-spin" />
                               </span>
                             )
                           )}
                         </span>
-                        
-                        {/* Sender Control Toggles */}
-                        {isMe && secureMedia && (
-                          <div className="flex items-center gap-2 border-l border-white/[0.04] pl-2 flex-wrap">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'save')}
-                              className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-all ${
-                                secureMedia.allow_save 
-                                  ? 'text-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10'
-                                  : 'text-amber-500 bg-amber-500/5 hover:bg-amber-500/10'
-                              }`}
-                              title={secureMedia.allow_save ? "Revoke download access" : "Grant download access"}
-                            >
-                              {secureMedia.allow_save ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
-                              {secureMedia.allow_save ? 'Allow Save' : 'Block Save'}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'forward')}
-                              className={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-all ${
-                                secureMedia.allow_forward 
-                                  ? 'text-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10'
-                                  : 'text-amber-500 bg-amber-500/5 hover:bg-amber-500/10'
-                              }`}
-                              title={secureMedia.allow_forward ? "Revoke forward access" : "Grant forward access"}
-                            >
-                              {secureMedia.allow_forward ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
-                              {secureMedia.allow_forward ? 'Allow Forward' : 'Block Forward'}
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Unsend message button (only for sender or top admin) */}
-                        {(isMe || user?.is_top_admin) && (
-                          <button
-                            type="button"
-                            onClick={() => handleUnsend(msg.id)}
-                            className="text-red-500/70 hover:text-red-400 flex items-center gap-0.5 transition-colors pl-2 border-l border-white/[0.04]"
-                            title="Unsend this message"
-                          >
-                            Unsend
-                          </button>
-                        )}
-
-                        {/* Receiver Forward Action (Only if sender allowed it or it is a standard text message) */}
-                        {(!secureMedia || secureMedia.allow_forward) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setForwardingMessageBody(msg.body);
-                              setShowForwardModal(true);
-                            }}
-                            className="text-slate-550 hover:text-white flex items-center gap-0.5 transition-colors"
-                            title="Forward message"
-                          >
-                            <Forward className="w-3 h-3" />
-                            Forward
-                          </button>
-                        )}
-
-                        {/* Reply Action */}
-                        <button
-                          type="button"
-                          onClick={() => handleInitiateReply(msg)}
-                          className="text-slate-550 hover:text-white flex items-center gap-0.5 transition-colors pl-2 border-l border-white/[0.04]"
-                          title="Reply to message"
-                        >
-                          <CornerUpLeft className="w-3 h-3" />
-                          Reply
-                        </button>
-
-                        {/* Quick Emoji Reaction Trigger */}
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={() => setActiveReactionPickerMsgId(activeReactionPickerMsgId === msg.id ? null : msg.id)}
-                            className="text-slate-550 hover:text-white flex items-center gap-0.5 transition-colors pl-2 border-l border-white/[0.04]"
-                            title="React with emoji"
-                          >
-                            <Smile className="w-3 h-3" />
-                            <span>React</span>
-                          </button>
-                          {activeReactionPickerMsgId === msg.id && (
-                            <div 
-                              className={`absolute bottom-full mb-1 z-50 flex items-center gap-1 p-1 bg-slate-900 border border-white/10 rounded-full shadow-2xl backdrop-blur-md animate-fade-in ${isMe ? 'right-0' : 'left-0'}`}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {['❤️', '👍', '😂', '🔥', '😮', '👏'].map(emoji => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={() => handleToggleReaction(msg.id, emoji)}
-                                  className="w-7 h-7 flex items-center justify-center text-sm rounded-full hover:bg-white/10 active:scale-125 transition-transform"
-                                  title={`React with ${emoji}`}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
                       </div>
 
                     </div>
