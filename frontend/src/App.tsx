@@ -20,6 +20,7 @@ import { SidebarThemeSwitch } from './utils/theme';
 import { ToastProvider } from './context/ToastContext';
 import { CookieBanner } from './components/CookieBanner';
 import { PushNotificationPrompt } from './components/PushNotificationPrompt';
+import { GameChallengeModal, GameInvitation } from './components/GameChallengeModal';
 import { sendPushHeartbeat, registerServiceWorker, autoSyncPushSubscription } from './utils/push';
 import { DataVerseLogo } from './components/DataVerseLogo';
 
@@ -54,6 +55,7 @@ const AppContent: React.FC = () => {
   const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
   const [messagesParam, setMessagesParam] = useState<string | undefined>(undefined);
   const [postParam, setPostParam] = useState<string | undefined>(undefined);
+  const [arcadeParam, setArcadeParam] = useState<string | undefined>(undefined);
   const [hideBottomNav, setHideBottomNav] = useState<boolean>(false);
   const [isSidebarHovered, setIsSidebarHovered] = useState<boolean>(false);
   // Visited tabs are preserved in DOM for 0ms instantaneous tab switching once loaded.
@@ -534,6 +536,7 @@ const AppContent: React.FC = () => {
       targetPath = '/admin/';
     } else if (newView === 'arcade') {
       setActiveView('arcade');
+      setArcadeParam(param);
       setProfileParam(undefined);
       setMessagesParam(undefined);
       setPostParam(undefined);
@@ -552,6 +555,17 @@ const AppContent: React.FC = () => {
       window.history.pushState(null, '', targetPath);
     }
     window.scrollTo(0, 0);
+  };
+
+  const handleAcceptGameInvitation = (invite: GameInvitation) => {
+    navigate('arcade', JSON.stringify({
+      conversationId: invite.conversationId,
+      gameType: invite.gameType,
+      opponentId: invite.challenger.id,
+      opponentName: invite.challenger.display_name || invite.challenger.username,
+      opponentAvatar: invite.challenger.avatar_url,
+      autoStart: true
+    }));
   };
 
   // Fullscreen Loading State (Smooth theme-aware branded loader)
@@ -983,7 +997,7 @@ const AppContent: React.FC = () => {
             {/* Dynamic / Parameter-based Views */}
             {activeView === 'settings' && <div className="w-full flex-1 animate-fade-in"><Profile initialShowSettings={true} onNavigate={navigate} /></div>}
             {activeView === 'profile' && !!profileParam && <div className="w-full flex-1 animate-fade-in"><Profile targetUsername={profileParam} onNavigate={navigate} /></div>}
-            {activeView === 'arcade' && <div className="w-full flex-1 animate-fade-in"><Arcade onNavigate={navigate} /></div>}
+            {activeView === 'arcade' && <div className="w-full flex-1 animate-fade-in"><Arcade onNavigate={navigate} initialParam={arcadeParam} /></div>}
             {activeView === 'admin' && <div className="w-full flex-1 animate-fade-in"><Admin onNavigate={navigate} /></div>}
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (
               <div className="w-full flex-1 animate-fade-in"><Legal type={activeView as any} onNavigate={navigate} /></div>
@@ -1127,6 +1141,7 @@ const AppContent: React.FC = () => {
 
       <CookieBanner onNavigate={navigate} />
       <PushNotificationPrompt />
+      <GameChallengeModal onAccept={handleAcceptGameInvitation} />
     </div>
   );
 };

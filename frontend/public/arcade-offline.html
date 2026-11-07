@@ -30,18 +30,18 @@
   * { box-sizing: border-box; margin: 0; }
   html, body { height: 100%; }
   body { background: var(--bg); color: var(--ink); font: 14px/1.5 'Outfit', ui-monospace, "SF Mono", Menlo, Consolas, monospace; -webkit-font-smoothing: antialiased; }
-  main { max-width: 760px; min-height: 100%; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 24px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; min-height: 40px; }
-  .logo { font-weight: 800; font-size: 20px; letter-spacing: .08em; color: inherit; text-decoration: none; text-transform: uppercase; }
-  .logo span { color: var(--accent); }
-  #notice { display: flex; align-items: center; gap: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  header, #notice, #title, #sub { display: none !important; }
+  main { max-width: 760px; min-height: 100%; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; justify-content: center; }
+  header { display: none !important; }
+  .logo { display: none !important; }
+  #notice { display: none !important; }
   button { font: inherit; color: inherit; background: none; border: 2px solid var(--ink); border-radius: 8px; padding: 6px 14px; cursor: pointer; text-transform: uppercase; letter-spacing: .06em; transition: all .15s ease; }
   button:hover, button:focus-visible, #go { background: var(--ink); color: var(--bg); outline: none; }
   #go:hover, #go:focus-visible { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   [hidden] { display: none !important; }
-  h1 { font-size: clamp(28px, 8vw, 44px); line-height: 1.1; letter-spacing: .04em; font-weight: 800; }
-  #sub { margin-top: 8px; max-width: 48ch; opacity: 0.85; }
-  #grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 24px; }
+  h1 { display: none !important; }
+  #sub { display: none !important; }
+  #grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 0; }
   .card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 18px; text-align: left; text-transform: none; letter-spacing: 0; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); border-radius: 14px; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
   .card:hover, .card:focus-visible { background: rgba(45,212,191,0.06); border-color: var(--accent); color: inherit; transform: translate(-3px, -3px); box-shadow: 4px 4px 0 var(--accent); }
   .card canvas { height: 40px; width: auto; image-rendering: pixelated; margin-bottom: 8px; }
@@ -56,14 +56,13 @@
 </head>
 <body>
 <main>
-  <header>
-    <!-- CUSTOMIZE: your site name. The optional <span> is drawn in the accent colour. -->
-    <a class="logo" href="/">DataVerse<span>.</span></a>
-    <div id="notice" role="status"><span id="notice-text"></span><button id="go" hidden></button></div>
+  <header style="display: none !important;">
+    <a class="logo" href="/" style="display: none !important;"></a>
+    <div id="notice" role="status" style="display: none !important;"><span id="notice-text"></span><button id="go" hidden></button></div>
   </header>
   <section id="menu">
-    <h1 id="title"></h1>
-    <p id="sub"></p>
+    <h1 id="title" style="display: none !important;"></h1>
+    <p id="sub" style="display: none !important;"></p>
     <div id="grid"></div>
   </section>
   <section id="play" hidden>

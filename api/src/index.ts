@@ -9,6 +9,7 @@ import conversationsApp from './conversations';
 import contactApp from './contact';
 import seoApp, { INDEXNOW_KEY } from './seo';
 import { pushApp } from './push';
+import arcadeApp from './arcade';
 import { checkRateLimit } from './rateLimit';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -71,6 +72,7 @@ app.route('/api/admin/users', usersApp);
 app.route('/api/admin', usersApp);
 app.route('/api/posts', postsApp);
 app.route('/api/conversations', conversationsApp);
+app.route('/api/arcade', arcadeApp);
 app.route('/api/push', pushApp);
 app.route('/api/contact', contactApp);
 app.route('/api/seo', seoApp);

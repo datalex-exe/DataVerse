@@ -2248,6 +2248,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const handleInviteGame = () => {
     setShowGameSelectorModal(true);
   };
+  void handleInviteGame;
 
   const handleStartSelectedGame = (gameType: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -4898,18 +4899,18 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       <button
                         onClick={() => {
                           setShowHeaderMenu(false);
-                          if (gameState && gameState.status !== 'idle') {
-                            setShowGameBoard(!showGameBoard);
-                          } else {
-                            handleInviteGame();
-                          }
+                          const otherMember = activeConvo.members?.find((m: any) => m.id !== user?.id);
+                          onNavigate?.('arcade', JSON.stringify({
+                            conversationId: activeConvo.id,
+                            opponentId: otherMember?.id,
+                            opponentName: otherMember?.display_name || otherMember?.username,
+                            opponentAvatar: otherMember?.avatar_url
+                          }));
                         }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] transition-all"
                       >
-                        <Gamepad2 className={`w-4 h-4 ${gameState && gameState.status !== 'idle' ? 'text-[var(--accent-2)] animate-pulse' : 'text-[var(--muted)]'}`} />
-                        {gameState && gameState.status !== 'idle'
-                          ? (showGameBoard ? 'Go to Chat' : 'Resume Game')
-                          : 'Play Game'}
+                        <Gamepad2 className="w-4 h-4 text-teal-400" />
+                        <span>Play Game in Arcade 🎮</span>
                       </button>
                     )}
 
@@ -5425,6 +5426,24 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                 })() : (
                                   <div>
                                     {renderFormattedMessageText(msg.body)}
+                                    {msg.body.startsWith('🎮') && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const otherMember = activeConvo.members?.find((m: any) => m.id !== user?.id);
+                                          onNavigate?.('arcade', JSON.stringify({
+                                            conversationId: activeConvo.id,
+                                            opponentId: otherMember?.id,
+                                            opponentName: otherMember?.display_name || otherMember?.username,
+                                            opponentAvatar: otherMember?.avatar_url
+                                          }));
+                                        }}
+                                        className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 font-extrabold text-[11px] border border-teal-500/30 transition-all active:scale-95"
+                                      >
+                                        <Gamepad2 className="w-3.5 h-3.5" />
+                                        <span>Join / Play in Arcade 🎮</span>
+                                      </button>
+                                    )}
                                     {(() => {
                                       const match = msg.body.match(/(https?:\/\/[^\s]+)/i);
                                       return match ? <LinkPreviewCard url={match[0]} /> : null;

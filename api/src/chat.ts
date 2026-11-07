@@ -123,6 +123,24 @@ export class ChatRoom {
           return new Response(JSON.stringify({ error: err.message }), { status: 500 });
         }
       }
+      if (url.pathname.endsWith('/broadcast_game_invite')) {
+        try {
+          const payload = await request.json<any>();
+          const sockets = this.state.getWebSockets();
+          const broadcastMsg = JSON.stringify({
+            type: 'game_invite',
+            ...payload
+          });
+          for (const socket of sockets) {
+            try { socket.send(broadcastMsg); } catch {}
+          }
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        }
+      }
       if (url.pathname.endsWith('/broadcast_system')) {
         try {
           const { messageId, conversationId, text, createdAt } = await request.json<any>();
