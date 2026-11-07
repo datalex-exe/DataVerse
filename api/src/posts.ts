@@ -221,7 +221,49 @@ postsApp.post('/', async (c) => {
       await c.env.DB.batch(tagStatements);
     }
 
-    return c.json({ success: true, postId });
+    // Invalidate cached candidate feed pool
+    feedCandidateCache.clear();
+
+    // Fetch full post extras for real-time broadcast
+    let fullPost: any = null;
+    try {
+      const rawPost = await c.env.DB.prepare(`
+        SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+          u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
+          0 AS likes_count,
+          0 AS is_liked,
+          0 AS comments_count
+        FROM posts p
+        JOIN users u ON p.user_id = u.id
+        WHERE p.id = ?
+      `).bind(postId).first<any>();
+
+      if (rawPost) {
+        const attached = await attachPostExtras([rawPost], c.env.DB, userId);
+        fullPost = attached[0] || rawPost;
+      }
+    } catch (fetchErr) {
+      console.error('Error attaching post extras for broadcast:', fetchErr);
+    }
+
+    // Broadcast live new post event to global real-time room
+    if (fullPost && c.env.CHAT_ROOM) {
+      try {
+        const doId = c.env.CHAT_ROOM.idFromName('room_global');
+        const stub = c.env.CHAT_ROOM.get(doId);
+        c.executionCtx.waitUntil(
+          stub.fetch(new Request('http://durableobject/broadcast_new_post', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post: fullPost })
+          })).catch(err => console.error('Failed to broadcast new post:', err))
+        );
+      } catch (broadcastErr) {
+        console.error('Broadcast trigger error:', broadcastErr);
+      }
+    }
+
+    return c.json({ success: true, postId, post: fullPost });
   } catch (err: any) {
     return c.json({ error: err.message || 'Post creation failed' }, 500);
   }
@@ -1003,9 +1045,66 @@ postsApp.delete('/:id', async (c) => {
     // 3. Delete from posts table (cascades will delete likes, comments, post_media records)
     await c.env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(postId).run();
 
+    // Invalidate cached candidate feed pool
+    feedCandidateCache.clear();
+
+    // Broadcast deletion in real-time
+    if (c.env.CHAT_ROOM) {
+      try {
+        const doId = c.env.CHAT_ROOM.idFromName('room_global');
+        const stub = c.env.CHAT_ROOM.get(doId);
+        c.executionCtx.waitUntil(
+          stub.fetch(new Request('http://durableobject/broadcast_post_deleted', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId })
+          })).catch(() => {})
+        );
+      } catch (_) {}
+    }
+
     return c.json({ success: true });
   } catch (err: any) {
     return c.json({ error: err.message || 'Failed to delete post' }, 500);
+  }
+});
+
+
+// GET LIVE POSTS SINCE TIMESTAMP (for reconnect sync & lightweight background update)
+postsApp.get('/live', async (c) => {
+  const userId = c.get('userId');
+  const since = parseInt(c.req.query('since') || '0', 10);
+  if (!since || isNaN(since)) {
+    return c.json({ posts: [] });
+  }
+
+  try {
+    const { results: rawPosts } = await c.env.DB.prepare(`
+      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+        u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) AS is_liked,
+        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
+      FROM posts p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.created_at > ?
+        AND (u.is_private = 0 OR p.user_id = ? OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = ? AND is_accepted = 1))
+        AND p.user_id NOT IN (
+          SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
+          UNION
+          SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
+        )
+        AND p.user_id NOT IN (
+          SELECT muted_id FROM user_mutes WHERE muter_id = ?
+        )
+      ORDER BY p.created_at DESC
+      LIMIT 20
+    `).bind(userId, since, userId, userId, userId, userId, userId).all<any>();
+
+    const posts = await attachPostExtras(rawPosts || [], c.env.DB, userId);
+    return c.json({ posts: posts || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
   }
 });
 

@@ -87,9 +87,10 @@ interface FeedProps {
   onNavigate: (view: string, targetUsername?: string) => void;
   onToggleBottomNav?: (hide: boolean) => void;
   targetPostId?: string;
+  isActive?: boolean;
 }
 
-export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targetPostId }) => {
+export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targetPostId, isActive = true }) => {
   const { user, token } = useAuth();
   const { toast } = useToast();
   
@@ -117,6 +118,11 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
   const [showPreviewToolbar, setShowPreviewToolbar] = useState<boolean>(false);
   const [postToDelete, setPostToDelete] = useState<Post | null>(null);
   const [commentValidationErrors, setCommentValidationErrors] = useState<Record<string, string>>({});
+  // Real-time live feed state (holds posts while user is watching video or reading)
+  const [pendingLivePosts, setPendingLivePosts] = useState<Post[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<any>(null);
+  const lastLiveCheckRef = useRef<number>(Date.now());
   const [drawerCommentError, setDrawerCommentError] = useState<string | null>(null);
   const [isLiteMode, setIsLiteMode] = useState<boolean>(false);
   const slowTimerRef = useRef<any>(null);
@@ -221,6 +227,162 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  // Real-time Live Post Handlers (Never interrupts playing video or game)
+  const handleIncomingLivePost = useCallback((newPost: Post) => {
+    if (!newPost || !newPost.id) return;
+    lastLiveCheckRef.current = Math.max(lastLiveCheckRef.current, newPost.created_at || Date.now());
+
+    // Check if user is scrolled down, actively watching a video, or viewing comments
+    const isScrolledDown = (window.scrollY || document.documentElement.scrollTop || 0) > 120;
+    const isCommentsOpen = Boolean(activePostComments);
+    const isAnyVideoPlaying = Array.from(document.querySelectorAll('video')).some(
+      v => !v.paused && !v.ended && v.readyState > 2
+    );
+
+    // If user is scrolled down or watching media or in another tab, queue without jarring scroll
+    if (isScrolledDown || isCommentsOpen || isAnyVideoPlaying || !isActive) {
+      setPendingLivePosts(prev => {
+        if (prev.some(p => p.id === newPost.id)) return prev;
+        return [newPost, ...prev];
+      });
+    } else {
+      // User is at top & idle: prepend smoothly
+      setPosts(prev => {
+        if (prev.some(p => p.id === newPost.id)) return prev;
+        const updated = [newPost, ...prev];
+        try {
+          sessionStorage.setItem('dv_cached_feed', JSON.stringify(updated.slice(0, 25)));
+        } catch (_) {}
+        return updated;
+      });
+      setStatus('idle');
+    }
+  }, [activePostComments, isActive]);
+
+  const handleIncomingDeletedPost = useCallback((postId: string) => {
+    setPosts(prev => {
+      const filtered = prev.filter(p => p.id !== postId);
+      try {
+        sessionStorage.setItem('dv_cached_feed', JSON.stringify(filtered.slice(0, 25)));
+      } catch (_) {}
+      return filtered;
+    });
+    setPendingLivePosts(prev => prev.filter(p => p.id !== postId));
+  }, []);
+
+  const handleShowPendingPosts = useCallback(() => {
+    if (pendingLivePosts.length === 0) return;
+    setPosts(prev => {
+      const existingIds = new Set(prev.map(p => p.id));
+      const fresh = pendingLivePosts.filter(p => !existingIds.has(p.id));
+      const combined = [...fresh, ...prev];
+      try {
+        sessionStorage.setItem('dv_cached_feed', JSON.stringify(combined.slice(0, 25)));
+      } catch (_) {}
+      return combined;
+    });
+    setPendingLivePosts([]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [pendingLivePosts]);
+
+  // Connect to room_global WebSocket for 0ms instant live post deliveries
+  useEffect(() => {
+    if (!token || !user) return;
+
+    let isMounted = true;
+    let reconnectDelay = 2000;
+
+    const connectWs = () => {
+      if (!isMounted || !navigator.onLine) return;
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const authToken = token || localStorage.getItem('dataverse_token') || '';
+        const wsUrl = `${protocol}//${window.location.host}/api/chat/ws/room_global?userId=${user.id}${authToken ? `&token=${encodeURIComponent(authToken)}` : ''}`;
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          reconnectDelay = 2000;
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'new_post' && data.post) {
+              handleIncomingLivePost(data.post);
+            } else if (data.type === 'post_deleted' && data.postId) {
+              handleIncomingDeletedPost(data.postId);
+            }
+          } catch (_) {}
+        };
+
+        ws.onclose = () => {
+          if (isMounted) {
+            reconnectTimeoutRef.current = setTimeout(connectWs, reconnectDelay);
+            reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+          }
+        };
+
+        ws.onerror = () => {
+          try { ws.close(); } catch (_) {}
+        };
+      } catch (err) {
+        if (isMounted) {
+          reconnectTimeoutRef.current = setTimeout(connectWs, reconnectDelay);
+        }
+      }
+    };
+
+    connectWs();
+
+    // Passive fallback check every 25s for background updates
+    const fallbackInterval = setInterval(async () => {
+      if (!document.hidden && navigator.onLine && token) {
+        try {
+          const res = await fetch(`/api/posts/live?since=${lastLiveCheckRef.current}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.posts && data.posts.length > 0) {
+              lastLiveCheckRef.current = Date.now();
+              data.posts.forEach((p: Post) => handleIncomingLivePost(p));
+            }
+          }
+        } catch (_) {}
+      }
+    }, 25000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(fallbackInterval);
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (wsRef.current) {
+        try { wsRef.current.close(); } catch (_) {}
+        wsRef.current = null;
+      }
+    };
+  }, [token, user, handleIncomingLivePost, handleIncomingDeletedPost]);
+
+  // Auto-merge pending posts when user scrolls back to the very top and isn't watching video
+  useEffect(() => {
+    if (pendingLivePosts.length === 0 || !isActive) return;
+    const handleScrollTop = () => {
+      const top = window.scrollY || document.documentElement.scrollTop || 0;
+      if (top === 0) {
+        const isAnyVideoPlaying = Array.from(document.querySelectorAll('video')).some(
+          v => !v.paused && !v.ended && v.readyState > 2
+        );
+        if (!isAnyVideoPlaying && !activePostComments) {
+          handleShowPendingPosts();
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScrollTop, { passive: true });
+    return () => window.removeEventListener('scroll', handleScrollTop);
+  }, [pendingLivePosts, isActive, activePostComments, handleShowPendingPosts]);
 
   // Fetch feed posts with deterministic seed & cursor pagination
   const fetchFeed = async (showLoading = false, freshSeed?: string) => {
@@ -1026,6 +1188,20 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
             </button>
           </div>
         </div>
+
+        {/* Real-time New Posts Floating Pill (Zero buffering or layout jumps) */}
+        {pendingLivePosts.length > 0 && (
+          <div className="sticky top-16 sm:top-20 z-40 flex justify-center w-full pointer-events-none mb-3 animate-slide-down">
+            <button
+              type="button"
+              onClick={handleShowPendingPosts}
+              className="pointer-events-auto flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black text-xs rounded-full shadow-xl shadow-teal-500/25 active:scale-95 transition-all cursor-pointer border border-teal-300/40"
+            >
+              <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
+              <span>↑ {pendingLivePosts.length} new {pendingLivePosts.length === 1 ? 'post' : 'posts'}</span>
+            </button>
+          </div>
+        )}
 
         {/* State 4: Pinned Offline Notice Banner */}
         {isOffline && (

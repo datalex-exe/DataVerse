@@ -123,6 +123,42 @@ export class ChatRoom {
           return new Response(JSON.stringify({ error: err.message }), { status: 500 });
         }
       }
+      if (url.pathname.endsWith('/broadcast_new_post')) {
+        try {
+          const { post } = await request.json<any>();
+          const sockets = this.state.getWebSockets();
+          const broadcastMsg = JSON.stringify({
+            type: 'new_post',
+            post
+          });
+          for (const socket of sockets) {
+            try { socket.send(broadcastMsg); } catch {}
+          }
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        }
+      }
+      if (url.pathname.endsWith('/broadcast_post_deleted')) {
+        try {
+          const { postId } = await request.json<any>();
+          const sockets = this.state.getWebSockets();
+          const broadcastMsg = JSON.stringify({
+            type: 'post_deleted',
+            postId
+          });
+          for (const socket of sockets) {
+            try { socket.send(broadcastMsg); } catch {}
+          }
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        }
+      }
       if (url.pathname.endsWith('/broadcast_game_invite')) {
         try {
           const payload = await request.json<any>();

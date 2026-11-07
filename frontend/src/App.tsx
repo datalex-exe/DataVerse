@@ -981,7 +981,7 @@ const AppContent: React.FC = () => {
             {/* Primary Core Views - Kept mounted once visited for 0ms instant tab switching */}
             {visitedTabs.has('feed') && (
               <div className={activeView === 'feed' ? 'block w-full flex-1 animate-fade-in' : 'hidden'}>
-                <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} targetPostId={postParam} />
+                <Feed onNavigate={navigate} onToggleBottomNav={setHideBottomNav} targetPostId={postParam} isActive={activeView === 'feed'} />
               </div>
             )}
 
