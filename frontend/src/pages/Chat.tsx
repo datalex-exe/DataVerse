@@ -184,7 +184,7 @@ const renderFormattedMessageText = (content: string) => {
     <span
       className="select-text inline leading-relaxed"
       style={{
-        overflowWrap: 'anywhere',
+        overflowWrap: 'break-word',
         whiteSpace: 'pre-wrap',
       }}
     >
@@ -200,7 +200,7 @@ const renderFormattedMessageText = (content: string) => {
               className="underline underline-offset-2 hover:opacity-80 transition-opacity font-medium cursor-pointer inline"
               style={{
                 color: 'inherit',
-                overflowWrap: 'anywhere',
+                overflowWrap: 'break-word',
                 display: 'inline',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -5350,31 +5350,14 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     <div 
                       key={msg.id} 
                       id={`msg-${msg.id}`} 
-                      className={`w-full flex flex-col gap-1 min-w-0 ${isMe ? 'items-end' : 'items-start'}`}
+                      className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} min-w-0 my-1`}
                     >
-                      {/* Group Chat: sender name label */}
-                      {activeConvo?.is_group && !isMe && (() => {
-                        const member = activeConvo.members.find(m => m.id === msg.sender_id);
-                        const displayName = member?.nickname 
-                          ? `${member.nickname} (@${msg.username})`
-                          : (msg.display_name || msg.username);
-                        return (
-                          <span 
-                            onClick={() => onNavigate && onNavigate('profile', msg.username)}
-                            className="text-[9px] font-bold text-slate-550 pl-11 select-none cursor-pointer hover:text-white transition-colors"
-                          >
-                            {displayName}
-                          </span>
-                        );
-                      })()}
-
                       {/* Message Sender and Profile */}
                       <div 
-                        className={`flex items-start gap-2 max-w-[85%] sm:max-w-[70%] min-w-0 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
-                        style={{ width: 'fit-content' }}
+                        className={`flex items-end gap-2 max-w-[85%] sm:max-w-[70%] min-w-0 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
                       >
                         {!isMe && (
-                          <div className="relative flex-shrink-0 self-start mt-0.5">
+                          <div className="relative flex-shrink-0 self-end mb-5">
                             <div 
                               onClick={() => onNavigate && onNavigate('profile', msg.username)}
                               className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden text-[10px] font-bold text-slate-400 select-none cursor-pointer hover:opacity-80 transition-opacity"
@@ -5398,6 +5381,21 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                         <div 
                           className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full min-w-0`}
                         >
+                          {/* Group Chat: sender name label */}
+                          {activeConvo?.is_group && !isMe && (() => {
+                            const member = activeConvo.members.find(m => m.id === msg.sender_id);
+                            const displayName = member?.nickname 
+                              ? `${member.nickname} (@${msg.username})`
+                              : (msg.display_name || msg.username);
+                            return (
+                              <span 
+                                onClick={() => onNavigate && onNavigate('profile', msg.username)}
+                                className="text-[9px] font-bold text-slate-550 mb-1 select-none cursor-pointer hover:text-white transition-colors"
+                              >
+                                {displayName}
+                              </span>
+                            );
+                          })()}
                           <div className={`group relative flex items-center gap-1.5 max-w-full min-w-0 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                             <div
                               onTouchStart={() => handleMsgTouchStart(msg.id)}
@@ -5603,19 +5601,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             const replyObj = parseReplyBody(msg.body);
                             return (
                               <div 
-                                className={`chat-bubble rounded-[18px] text-[15px] sm:text-base leading-[1.45] shadow-sm select-text text-left ${
+                                className={`chat-bubble inline-block rounded-[18px] text-[15px] sm:text-base leading-[1.45] shadow-sm select-text text-left ${
                                   isMe 
                                     ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-medium rounded-br-[4px]' 
                                     : 'bg-[var(--card)] border border-[var(--card-border)] text-[var(--text)] rounded-bl-[4px]'
                                 }`}
                                 style={{
-                                  width: 'fit-content',
                                   minWidth: '56px',
                                   maxWidth: '100%',
                                   padding: '10px 14px',
                                   lineHeight: '1.45',
                                   whiteSpace: 'pre-wrap',
-                                  overflowWrap: 'anywhere',
+                                  overflowWrap: 'break-word',
+                                  wordBreak: 'normal',
                                 }}
                               >
                                 {replyObj && (
