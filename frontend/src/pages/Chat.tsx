@@ -180,13 +180,11 @@ const renderFormattedMessageText = (content: string) => {
 
   return (
     <span
-      className="break-words whitespace-pre-wrap select-text block w-full min-w-0"
+      className="break-words select-text inline leading-relaxed"
       style={{
-        overflowWrap: 'anywhere',
         wordBreak: 'break-word',
+        overflowWrap: 'break-word',
         whiteSpace: 'pre-wrap',
-        minWidth: 0,
-        maxWidth: '100%',
       }}
     >
       {parts.map((part, index) => {
@@ -198,11 +196,10 @@ const renderFormattedMessageText = (content: string) => {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:opacity-80 transition-opacity font-medium cursor-pointer"
+              className="underline underline-offset-2 hover:opacity-80 transition-opacity font-medium cursor-pointer inline break-all"
               style={{
                 color: 'inherit',
-                overflowWrap: 'anywhere',
-                wordBreak: 'break-word',
+                wordBreak: 'break-all',
                 display: 'inline',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -217,6 +214,55 @@ const renderFormattedMessageText = (content: string) => {
   );
 };
 /* CHAT OVERFLOW FIX END */
+
+// Extensive categorized emojis for reaction keypad
+const EMOJI_REACTION_CATEGORIES: Record<string, { label: string; icon: string; emojis: string[] }> = {
+  smileys: {
+    label: 'Smileys',
+    icon: '😀',
+    emojis: [
+      '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+      '🥰', '😍', '🤩', '😘', '😗', '😚', '😙', '😋', '😛', '😜',
+      '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '😐',
+      '😑', '😶', '😏', '😒', '🙄', '😬', '🤥', '😌', '😔', '😪',
+      '🤤', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶',
+      '🥴', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟',
+      '😮', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢',
+      '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '😤', '😡',
+      '😠', '🤬', '💀', '☠️', '💩', '🤡', '👻', '👽', '👾', '🤖'
+    ]
+  },
+  gestures: {
+    label: 'Hands',
+    icon: '👍',
+    emojis: [
+      '👍', '👎', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✌️', '🤞',
+      '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '☝️', '✋', '🤚',
+      '🖐️', '🖖', '👋', '👊', '✊', '🤛', '🤜', '✍️', '💅', '🤳',
+      '💪', '🦾', '🫀', '🧠', '👀', '👁️', '👅', '👄'
+    ]
+  },
+  hearts: {
+    label: 'Hearts',
+    icon: '❤️',
+    emojis: [
+      '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔',
+      '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '💯',
+      '🔥', '⭐', '🌟', '✨', '⚡', '💥', '💫', '🪐', '🌙', '☀️',
+      '🌈', '🌸', '🌹', '🍀', '🎉', '🎊', '🎈', '🎁'
+    ]
+  },
+  fun: {
+    label: 'Fun',
+    icon: '🎮',
+    emojis: [
+      '🏆', '🥇', '🥈', '🥉', '⚽', '🏀', '🏈', '⚾', '🎾', '🏐',
+      '🎱', '🎮', '🕹️', '🎲', '🎯', '🎨', '🎭', '🎬', '🎤', '🎧',
+      '🎷', '🎸', '🎹', '🎳', '🎪', '🎫', '💎', '👑', '🚀', '🛸',
+      '🥂', '🍻', '🍕', '🍔', '🍟', '☕', '🍩', '🍦'
+    ]
+  }
+};
 
 interface ChatInputProps {
   draftText?: string;
@@ -523,17 +569,27 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   const typingTimersRef = useRef<Record<string, any>>({});
   const lastTypingSentRef = useRef<number>(0);
-    const [activeMsgActionMenuId, setActiveMsgActionMenuId] = useState<string | null>(null);
+  const [activeMsgActionMenuId, setActiveMsgActionMenuId] = useState<string | null>(null);
+  const [expandedEmojiPickerMsgId, setExpandedEmojiPickerMsgId] = useState<string | null>(null);
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState<string>('smileys');
+  const [emojiSearchQuery, setEmojiSearchQuery] = useState<string>('');
+
+  const isLongPressingRef = useRef<boolean>(false);
+  const ignoreNextClickUntilRef = useRef<number>(0);
   const msgLongPressTimerRef = useRef<any>(null);
 
   const handleMsgTouchStart = useCallback((msgId: string) => {
+    isLongPressingRef.current = false;
     if (msgLongPressTimerRef.current) clearTimeout(msgLongPressTimerRef.current);
     msgLongPressTimerRef.current = setTimeout(() => {
+      isLongPressingRef.current = true;
+      ignoreNextClickUntilRef.current = Date.now() + 600;
       setActiveMsgActionMenuId(msgId);
+      setExpandedEmojiPickerMsgId(null);
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(35); } catch {}
+        try { navigator.vibrate(40); } catch {}
       }
-    }, 380);
+    }, 400);
   }, []);
 
   const handleMsgTouchEnd = useCallback(() => {
@@ -541,15 +597,21 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       clearTimeout(msgLongPressTimerRef.current);
       msgLongPressTimerRef.current = null;
     }
+    if (isLongPressingRef.current) {
+      ignoreNextClickUntilRef.current = Date.now() + 600;
+      isLongPressingRef.current = false;
+    }
   }, []);
 
   useEffect(() => {
     const handleCloseMsgMenu = () => {
+      if (Date.now() < ignoreNextClickUntilRef.current) return;
       if (activeMsgActionMenuId) setActiveMsgActionMenuId(null);
+      if (expandedEmojiPickerMsgId) setExpandedEmojiPickerMsgId(null);
     };
     window.addEventListener('click', handleCloseMsgMenu);
     return () => window.removeEventListener('click', handleCloseMsgMenu);
-  }, [activeMsgActionMenuId]);
+  }, [activeMsgActionMenuId, expandedEmojiPickerMsgId]);
 
   // Chat Profile & Shared Media Details Modal
   const [showChatProfileModal, setShowChatProfileModal] = useState<boolean>(false);
@@ -5271,8 +5333,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     <div 
                       key={msg.id} 
                       id={`msg-${msg.id}`} 
-                      className={`flex flex-col gap-1.5 w-full min-w-0 max-w-[min(78%,520px)] ${isMe ? 'ml-auto items-end' : 'items-start'}`}
-                      style={{ maxWidth: 'min(78%, 520px)', minWidth: 0 }}
+                      className={`flex flex-col gap-1 w-fit max-w-[85%] sm:max-w-[75%] md:max-w-[560px] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}
                     >
                       {/* Group Chat: sender name label */}
                       {activeConvo?.is_group && !isMe && (() => {
@@ -5292,8 +5353,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
                       {/* Message Sender and Profile */}
                       <div 
-                        className={`w-full min-w-0 max-w-full flex items-start gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}
-                        style={{ maxWidth: '100%', minWidth: 0 }}
+                        className={`w-fit max-w-full flex items-start gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
                       >
                         {!isMe && (
                           <div 
@@ -5310,8 +5370,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
                         {/* Speech Bubble Container */}
                         <div 
-                          className={`flex flex-col min-w-0 max-w-full flex-1 ${isMe ? 'items-end' : 'items-start'}`}
-                          style={{ maxWidth: '100%', minWidth: 0 }}
+                          className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full`}
                         >
                           <div className={`group relative flex items-center gap-1.5 max-w-full ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                             <div
@@ -5323,7 +5382,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                 e.preventDefault();
                                 setActiveMsgActionMenuId(prev => prev === msg.id ? null : msg.id);
                               }}
-                              className="relative max-w-full min-w-0"
+                              className="relative max-w-full cursor-pointer"
                             >
                           {/* Secure Media Rendering */}
                           {secureMedia ? (
@@ -5518,16 +5577,14 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             const replyObj = parseReplyBody(msg.body);
                             return (
                               <div 
-                                className={`chat-bubble px-4 py-2.5 rounded-[18px] text-xs sm:text-sm leading-relaxed shadow-sm break-words whitespace-pre-wrap min-w-0 max-w-full ${
+                                className={`chat-bubble px-4 py-2.5 rounded-[18px] text-xs sm:text-sm leading-relaxed shadow-sm whitespace-pre-wrap break-words w-fit max-w-full text-left ${
                                   isMe 
                                     ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-br-[4px]' 
                                     : 'bg-[var(--card)] border border-[var(--card-border)] text-[var(--text)] rounded-bl-[4px]'
                                 }`}
                                 style={{
-                                  maxWidth: 'min(78%, 520px)',
-                                  minWidth: 0,
-                                  overflowWrap: 'anywhere',
                                   wordBreak: 'break-word',
+                                  overflowWrap: 'break-word',
                                   whiteSpace: 'pre-wrap',
                                 }}
                               >
@@ -5640,107 +5697,222 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
                             {/* Floating Popover Action Menu */}
                             {activeMsgActionMenuId === msg.id && (
-                              <div 
-                                onClick={(e) => e.stopPropagation()}
-                                className={`absolute z-50 bottom-full mb-1.5 ${isMe ? 'right-0' : 'left-0'} w-52 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 space-y-1 animate-scale-up select-none`}
-                              >
-                                {/* Quick Reactions bar */}
-                                <div className="flex items-center justify-between px-1.5 py-1 border-b border-white/5 pb-1.5">
-                                  {['❤️', '👍', '😂', '🔥', '😮', '👏'].map(emoji => (
-                                    <button
-                                      key={emoji}
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleReaction(msg.id, emoji);
-                                        setActiveMsgActionMenuId(null);
-                                      }}
-                                      className="w-7 h-7 flex items-center justify-center text-sm rounded-full hover:bg-white/15 active:scale-125 transition-transform"
-                                      title={`React ${emoji}`}
-                                    >
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                </div>
-
-                                {/* Reply */}
-                                <button
-                                  type="button"
+                              <>
+                                <div 
+                                  className="fixed inset-0 z-40 bg-transparent"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleInitiateReply(msg);
                                     setActiveMsgActionMenuId(null);
+                                    setExpandedEmojiPickerMsgId(null);
                                   }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                />
+
+                                <div 
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`absolute z-50 bottom-full mb-2 ${isMe ? 'right-0' : 'left-0'} ${
+                                    expandedEmojiPickerMsgId === msg.id ? 'w-72 sm:w-80' : 'w-56'
+                                  } bg-slate-900/98 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2 space-y-1.5 animate-scale-up select-none max-w-[calc(100vw-2rem)]`}
                                 >
-                                  <CornerUpLeft className="w-3.5 h-3.5 text-teal-400" />
-                                  <span>Reply</span>
-                                </button>
+                                  {expandedEmojiPickerMsgId === msg.id ? (
+                                    /* Full Emoji Reactions Keypad */
+                                    <div className="space-y-2">
+                                      {/* Header with back button & search */}
+                                      <div className="flex items-center gap-1.5 pb-1.5 border-b border-white/10">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedEmojiPickerMsgId(null);
+                                          }}
+                                          className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                                          title="Back to options"
+                                        >
+                                          <ArrowLeft className="w-3.5 h-3.5" />
+                                        </button>
+                                        <div className="flex-1 relative">
+                                          <input
+                                            type="text"
+                                            placeholder="Search emoji..."
+                                            value={emojiSearchQuery}
+                                            onChange={(e) => setEmojiSearchQuery(e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="w-full bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1 text-[11px] text-white placeholder-slate-500 outline-none focus:border-teal-400/60 transition-colors"
+                                            autoFocus
+                                          />
+                                          {emojiSearchQuery && (
+                                            <button
+                                              type="button"
+                                              onClick={() => setEmojiSearchQuery('')}
+                                              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
 
-                                {/* Forward */}
-                                {(!secureMedia || secureMedia.allow_forward) && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setForwardingMessageBody(msg.body);
-                                      setShowForwardModal(true);
-                                      setActiveMsgActionMenuId(null);
-                                    }}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
-                                  >
-                                    <Forward className="w-3.5 h-3.5 text-teal-400" />
-                                    <span>Forward</span>
-                                  </button>
-                                )}
+                                      {/* Category Tabs */}
+                                      {!emojiSearchQuery && (
+                                        <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+                                          {Object.entries(EMOJI_REACTION_CATEGORIES).map(([catKey, cat]) => (
+                                            <button
+                                              key={catKey}
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveEmojiCategory(catKey);
+                                              }}
+                                              className={`px-2 py-0.5 rounded-lg text-xs flex items-center gap-1 font-semibold transition-all whitespace-nowrap ${
+                                                activeEmojiCategory === catKey
+                                                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40'
+                                                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                              }`}
+                                            >
+                                              <span>{cat.icon}</span>
+                                              <span className="text-[10px]">{cat.label}</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
 
-                                {/* Sender Control Toggles */}
-                                {isMe && secureMedia && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'save');
-                                        setActiveMsgActionMenuId(null);
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
-                                    >
-                                      {secureMedia.allow_save ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
-                                      <span>{secureMedia.allow_save ? 'Block Save' : 'Allow Save'}</span>
-                                    </button>
+                                      {/* Emoji Grid */}
+                                      <div className="grid grid-cols-7 gap-1 max-h-48 overflow-y-auto p-0.5 scrollbar-thin">
+                                        {(emojiSearchQuery
+                                          ? Object.values(EMOJI_REACTION_CATEGORIES).flatMap(c => c.emojis).filter((em, idx, arr) => arr.indexOf(em) === idx)
+                                          : EMOJI_REACTION_CATEGORIES[activeEmojiCategory]?.emojis || []
+                                        ).map((emoji) => (
+                                          <button
+                                            key={emoji}
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleToggleReaction(msg.id, emoji);
+                                              setActiveMsgActionMenuId(null);
+                                              setExpandedEmojiPickerMsgId(null);
+                                            }}
+                                            className="w-8 h-8 flex items-center justify-center text-lg rounded-xl hover:bg-white/15 active:scale-125 transition-all select-none"
+                                            title={emoji}
+                                          >
+                                            {emoji}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    /* Standard Message Actions Popover */
+                                    <>
+                                      {/* Quick Reactions bar with + More Reactions Button */}
+                                      <div className="flex items-center justify-between gap-1 px-1 py-1 border-b border-white/10 pb-1.5">
+                                        {['❤️', '👍', '😂', '🔥', '😮', '👏'].map(emoji => (
+                                          <button
+                                            key={emoji}
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleToggleReaction(msg.id, emoji);
+                                              setActiveMsgActionMenuId(null);
+                                            }}
+                                            className="w-7 h-7 flex items-center justify-center text-sm rounded-full hover:bg-white/15 active:scale-125 transition-transform"
+                                            title={`React ${emoji}`}
+                                          >
+                                            {emoji}
+                                          </button>
+                                        ))}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setExpandedEmojiPickerMsgId(msg.id);
+                                            setEmojiSearchQuery('');
+                                          }}
+                                          className="w-7 h-7 flex items-center justify-center text-xs rounded-full bg-white/5 hover:bg-white/15 text-slate-300 hover:text-white transition-all active:scale-110 ml-0.5 border border-white/10"
+                                          title="More emoji reactions"
+                                        >
+                                          <Plus className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
 
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'forward');
-                                        setActiveMsgActionMenuId(null);
-                                      }}
-                                      className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
-                                    >
-                                      {secureMedia.allow_forward ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
-                                      <span>{secureMedia.allow_forward ? 'Block Forward' : 'Allow Forward'}</span>
-                                    </button>
-                                  </>
-                                )}
+                                      {/* Reply */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleInitiateReply(msg);
+                                          setActiveMsgActionMenuId(null);
+                                        }}
+                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                      >
+                                        <CornerUpLeft className="w-3.5 h-3.5 text-teal-400" />
+                                        <span>Reply</span>
+                                      </button>
 
-                                {/* Unsend */}
-                                {(isMe || user?.is_top_admin) && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUnsend(msg.id);
-                                      setActiveMsgActionMenuId(null);
-                                    }}
-                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-colors text-left border-t border-white/5"
-                                  >
-                                    <Trash className="w-3.5 h-3.5" />
-                                    <span>Unsend</span>
-                                  </button>
-                                )}
-                              </div>
+                                      {/* Forward */}
+                                      {(!secureMedia || secureMedia.allow_forward) && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setForwardingMessageBody(msg.body);
+                                            setShowForwardModal(true);
+                                            setActiveMsgActionMenuId(null);
+                                          }}
+                                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                        >
+                                          <Forward className="w-3.5 h-3.5 text-teal-400" />
+                                          <span>Forward</span>
+                                        </button>
+                                      )}
+
+                                      {/* Sender Control Toggles */}
+                                      {isMe && secureMedia && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'save');
+                                              setActiveMsgActionMenuId(null);
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                          >
+                                            {secureMedia.allow_save ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
+                                            <span>{secureMedia.allow_save ? 'Block Save' : 'Allow Save'}</span>
+                                          </button>
+
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleToggleAccess(msg.id, secureMedia.allow_save, secureMedia.allow_forward, 'forward');
+                                              setActiveMsgActionMenuId(null);
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left"
+                                          >
+                                            {secureMedia.allow_forward ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-amber-400" />}
+                                            <span>{secureMedia.allow_forward ? 'Block Forward' : 'Allow Forward'}</span>
+                                          </button>
+                                        </>
+                                      )}
+
+                                      {/* Unsend */}
+                                      {(isMe || user?.is_top_admin) && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleUnsend(msg.id);
+                                            setActiveMsgActionMenuId(null);
+                                          }}
+                                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl transition-colors text-left border-t border-white/5"
+                                        >
+                                          <Trash className="w-3.5 h-3.5" />
+                                          <span>Unsend</span>
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </>
                             )}
                           </div>
 
