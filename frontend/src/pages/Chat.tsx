@@ -25,6 +25,7 @@ import {
   Lock,
   Unlock,
   Volume2,
+  VolumeX,
   Trash,
   Forward,
   Shield,
@@ -2123,6 +2124,64 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // ─── Mute User State & Handlers ──────────────────────────────────────────
+  const [mutedUserIds, setMutedUserIds] = useState<Set<string>>(new Set());
+
+  const fetchMutedUsers = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/users/muted', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const ids = new Set<string>((data.users || []).map((u: any) => u.id));
+        setMutedUserIds(ids);
+      }
+    } catch (_) {}
+  }, [token]);
+
+  useEffect(() => {
+    fetchMutedUsers();
+  }, [fetchMutedUsers]);
+
+  const activePartner = activeConvo && !activeConvo.is_group
+    ? activeConvo.members?.find((m: any) => m.id !== user?.id)
+    : null;
+
+  const isPartnerMuted = activePartner ? mutedUserIds.has(activePartner.id) : false;
+
+  const handleToggleMutePartner = async () => {
+    if (!activePartner || !token) return;
+    const targetId = activePartner.id;
+    const username = activePartner.display_name || activePartner.username || 'user';
+    const currentlyMuted = mutedUserIds.has(targetId);
+
+    try {
+      const res = await fetch(`/api/users/${targetId}/mute-user`, {
+        method: currentlyMuted ? 'DELETE' : 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setMutedUserIds(prev => {
+          const next = new Set(prev);
+          if (currentlyMuted) {
+            next.delete(targetId);
+          } else {
+            next.add(targetId);
+          }
+          return next;
+        });
+        toast.success(currentlyMuted ? `Unmuted @${username}` : `Muted @${username}`);
+      } else {
+        toast.error(currentlyMuted ? 'Failed to unmute user' : 'Failed to mute user');
+      }
+    } catch {
+      toast.error('Network error updating mute status');
     }
   };
 
@@ -4915,25 +4974,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
               {/* Header Right: Call & Three-dot menu */}
               <div className="relative flex items-center gap-1.5" ref={headerMenuRef}>
-                {!activeConvo.is_group && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const otherMember = activeConvo.members?.find((m: any) => m.id !== user?.id);
-                      onNavigate?.('arcade', JSON.stringify({
-                        conversationId: activeConvo.id,
-                        opponentId: otherMember?.id,
-                        opponentName: otherMember?.display_name || otherMember?.username,
-                        opponentAvatar: otherMember?.avatar_url
-                      }));
-                    }}
-                    className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-teal-500/40 text-teal-400 hover:text-teal-300 active:scale-95 shadow-sm"
-                    title="Play Game in Arcade 🎮"
-                    aria-label="Play Game in Arcade 🎮"
-                  >
-                    <Gamepad2 className="w-4 h-4" />
-                  </button>
-                )}
+
 
                 {!activeConvo.is_group && (
                   <button
@@ -4974,23 +5015,27 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       <span>{activeConvo.is_group ? 'Group Details & Media' : 'Contact Info & Media'}</span>
                     </button>
 
-                    {/* Play Game — 1:1 DM only */}
-                    {!activeConvo.is_group && (
+                    {/* Mute User — 1:1 DM only */}
+                    {!activeConvo.is_group && activePartner && (
                       <button
+                        type="button"
                         onClick={() => {
                           setShowHeaderMenu(false);
-                          const otherMember = activeConvo.members?.find((m: any) => m.id !== user?.id);
-                          onNavigate?.('arcade', JSON.stringify({
-                            conversationId: activeConvo.id,
-                            opponentId: otherMember?.id,
-                            opponentName: otherMember?.display_name || otherMember?.username,
-                            opponentAvatar: otherMember?.avatar_url
-                          }));
+                          handleToggleMutePartner();
                         }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-[var(--text)] hover:bg-[var(--hover)] transition-all"
                       >
-                        <Gamepad2 className="w-4 h-4 text-teal-400" />
-                        <span>Play Game in Arcade 🎮</span>
+                        {isPartnerMuted ? (
+                          <>
+                            <Volume2 className="w-4 h-4 text-emerald-400" />
+                            <span>Unmute User</span>
+                          </>
+                        ) : (
+                          <>
+                            <VolumeX className="w-4 h-4 text-amber-400" />
+                            <span>Mute User</span>
+                          </>
+                        )}
                       </button>
                     )}
 
