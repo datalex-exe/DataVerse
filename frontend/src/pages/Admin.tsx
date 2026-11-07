@@ -3082,7 +3082,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               </div>
 
               {/* Metric Summary Strip: Interactive Filtering Tiles */}
-              <div className="flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 overflow-x-auto pb-1 scrollbar-none">
+              <div className="flex sm:grid sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3 overflow-x-auto pb-2 scrollbar-none snap-x touch-pan-x -mx-1 px-1 sm:mx-0 sm:px-0">
                 {/* Total Assets */}
                 <button
                   type="button"
@@ -3090,7 +3090,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     setMediaStatusFilter('all');
                     setMediaTypeFilter('all');
                   }}
-                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                  className={`flex-shrink-0 min-w-[135px] sm:min-w-0 sm:w-auto snap-start p-3 sm:p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
                     mediaStatusFilter === 'all' && mediaTypeFilter === 'all'
                       ? 'bg-[var(--card)] border-2 border-[var(--accent-2)] shadow-lg shadow-[var(--shadow-accent)]'
                       : 'bg-[var(--card)] border border-[var(--line)] hover:border-[var(--card-border)]'
@@ -3108,7 +3108,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setMediaStatusFilter(mediaStatusFilter === 'active' ? 'all' : 'active')}
-                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                  className={`flex-shrink-0 min-w-[135px] sm:min-w-0 sm:w-auto snap-start p-3 sm:p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
                     mediaStatusFilter === 'active'
                       ? 'bg-emerald-500/15 border-2 border-emerald-400 shadow-lg shadow-emerald-500/20'
                       : 'bg-[var(--card)] border border-emerald-500/20 hover:border-emerald-500/40'
@@ -3129,7 +3129,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setMediaStatusFilter(mediaStatusFilter === 'deleted' ? 'all' : 'deleted')}
-                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                  className={`flex-shrink-0 min-w-[135px] sm:min-w-0 sm:w-auto snap-start p-3 sm:p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
                     mediaStatusFilter === 'deleted'
                       ? 'bg-rose-500/15 border-2 border-rose-400 shadow-lg shadow-rose-500/20'
                       : 'bg-[var(--card)] border border-rose-500/20 hover:border-rose-500/40'
@@ -3150,7 +3150,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setMediaTypeFilter(mediaTypeFilter === 'image' ? 'all' : 'image')}
-                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                  className={`flex-shrink-0 min-w-[135px] sm:min-w-0 sm:w-auto snap-start p-3 sm:p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
                     mediaTypeFilter === 'image'
                       ? 'bg-[var(--card)] border-2 border-cyan-400 shadow-lg shadow-cyan-500/20'
                       : 'bg-[var(--card)] border border-[var(--line)] hover:border-cyan-500/40'
@@ -3168,7 +3168,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setMediaTypeFilter(mediaTypeFilter === 'video' ? 'all' : 'video')}
-                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                  className={`flex-shrink-0 min-w-[135px] sm:min-w-0 sm:w-auto snap-start p-3 sm:p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
                     mediaTypeFilter === 'video'
                       ? 'bg-[var(--card)] border-2 border-indigo-400 shadow-lg shadow-indigo-500/20'
                       : 'bg-[var(--card)] border border-[var(--line)] hover:border-indigo-500/40'
@@ -3186,7 +3186,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setMediaTypeFilter(mediaTypeFilter === 'audio' ? 'all' : 'audio')}
-                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                  className={`flex-shrink-0 min-w-[135px] sm:min-w-0 sm:w-auto snap-start p-3 sm:p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
                     mediaTypeFilter === 'audio'
                       ? 'bg-[var(--card)] border-2 border-purple-400 shadow-lg shadow-purple-500/20'
                       : 'bg-[var(--card)] border border-[var(--line)] hover:border-purple-500/40'
@@ -3204,7 +3204,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setMediaTypeFilter(mediaTypeFilter === 'file' ? 'all' : 'file')}
-                  className={`p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
+                  className={`flex-shrink-0 min-w-[135px] sm:min-w-0 sm:w-auto snap-start p-3 sm:p-3.5 rounded-2xl text-left transition-all relative overflow-hidden group active:scale-95 cursor-pointer ${
                     mediaTypeFilter === 'file'
                       ? 'bg-[var(--card)] border-2 border-amber-400 shadow-lg shadow-amber-500/20'
                       : 'bg-[var(--card)] border border-[var(--line)] hover:border-amber-500/40'
@@ -3230,7 +3230,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       type="text"
                       value={mediaUserSearch}
                       onChange={(e) => setMediaUserSearch(e.target.value)}
-                      placeholder="Search @user, display name, file..."
+                      placeholder="Search @user, file, text..."
                       className="w-full bg-[var(--input)] border border-[var(--line)] rounded-xl pl-9 pr-8 py-2 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-teal-400 transition-all"
                     />
                     {mediaUserSearch && (
