@@ -5382,7 +5382,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                 e.preventDefault();
                                 setActiveMsgActionMenuId(prev => prev === msg.id ? null : msg.id);
                               }}
-                              className="relative max-w-full cursor-pointer"
+                              className="relative max-w-full flex-shrink-0 cursor-pointer select-text"
                             >
                           {/* Secure Media Rendering */}
                           {secureMedia ? (
@@ -5577,7 +5577,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             const replyObj = parseReplyBody(msg.body);
                             return (
                               <div 
-                                className={`chat-bubble px-4 py-2.5 rounded-[18px] text-xs sm:text-sm leading-relaxed shadow-sm whitespace-pre-wrap break-words w-fit max-w-full text-left ${
+                                className={`chat-bubble px-4 py-2.5 rounded-[18px] text-xs sm:text-sm leading-relaxed shadow-sm whitespace-pre-wrap break-words w-fit min-w-[36px] max-w-full text-left select-text ${
                                   isMe 
                                     ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-br-[4px]' 
                                     : 'bg-[var(--card)] border border-[var(--card-border)] text-[var(--text)] rounded-bl-[4px]'

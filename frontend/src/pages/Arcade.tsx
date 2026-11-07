@@ -1841,7 +1841,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     <div className="w-full flex-1 flex flex-col items-center bg-[var(--bg)] min-h-[calc(100vh-64px)] p-3 sm:p-6 animate-fade-in select-none">
       
       {/* Top Header Bar */}
-      <div className="w-full max-w-4xl flex items-center justify-between mb-4 sm:mb-6">
+      <div className="w-full max-w-4xl flex flex-wrap items-center justify-between gap-2.5 mb-3 sm:mb-6">
         <button
           type="button"
           onClick={() => onNavigate('feed')}
@@ -1908,7 +1908,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
       <div
         ref={containerRef}
         className={`w-full max-w-4xl flex flex-col rounded-2xl sm:rounded-3xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl overflow-hidden relative ${
-          isFullscreen ? 'fixed inset-0 z-50 rounded-none max-w-none h-screen bg-[#040b0d]' : 'min-h-[580px] sm:min-h-[640px]'
+          isFullscreen ? 'fixed inset-0 z-50 rounded-none max-w-none h-screen bg-[#040b0d]' : 'min-h-[480px] sm:min-h-[640px]'
         }`}
       >
         {/* Retro Header Strip */}

@@ -665,6 +665,17 @@ const AppContent: React.FC = () => {
           </div>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => navigate('arcade')}
+              className={`p-2 text-[var(--muted)] hover:text-[var(--accent-2)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)] min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer relative ${
+                activeView === 'arcade' ? 'text-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent)_14%,transparent)]' : ''
+              }`}
+              aria-label="Arcade Games"
+              title="Arcade 🎮"
+            >
+              <Gamepad2 className="w-5 h-5 stroke-[1.8]" />
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
+            <button
               onClick={() => navigate('search')}
               className="p-2 text-[var(--muted)] hover:text-[var(--text)] active:scale-95 transition-all rounded-full hover:bg-[var(--hover)] min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer"
               aria-label="Search"
@@ -1059,7 +1070,24 @@ const AppContent: React.FC = () => {
           aria-label="Explore"
         >
           <Search className="w-5 h-5 stroke-[1.8]" />
-          <span className="text-[11px] tracking-tight mt-0.5">Explore</span>
+          <span className="text-[10px] tracking-tight mt-0.5">Explore</span>
+        </button>
+
+        {/* Arcade */}
+        <button
+          onClick={() => navigate('arcade')}
+          className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all relative ${
+            activeView === 'arcade'
+              ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
+              : 'text-[var(--muted)] hover:text-[var(--text)] font-medium'
+          }`}
+          aria-label="Arcade"
+        >
+          <div className="relative">
+            <Gamepad2 className="w-5 h-5 stroke-[1.8]" />
+            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+          </div>
+          <span className="text-[10px] tracking-tight mt-0.5">Arcade</span>
         </button>
 
         {/* Messages */}
