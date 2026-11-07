@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -197,6 +198,546 @@ const AdminAvatar: React.FC<AdminAvatarProps> = ({
 };
 /* AVATAR FIX END */
 
+export interface AdminMediaItem {
+  id: string;
+  raw_id: string;
+  source: 'chat' | 'post';
+  source_name: string;
+  source_id: string;
+  user: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url: string | null;
+  };
+  url: string;
+  media_type: 'image' | 'video' | 'audio' | 'file';
+  file_name: string;
+  allow_save: boolean;
+  status: 'active' | 'deleted';
+  created_at: number;
+  context: string;
+}
+
+export interface AdminMediaCounts {
+  total: number;
+  active: number;
+  deleted: number;
+  images: number;
+  videos: number;
+  audio: number;
+  files: number;
+}
+
+interface AdminMediaLightboxProps {
+  item: AdminMediaItem;
+  adminMedia: AdminMediaItem[];
+  isOffline: boolean;
+  previewTextContent: string | null;
+  previewTextLoading: boolean;
+  onClose: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+  onPurge: (item: AdminMediaItem) => void;
+  onFilterUser: (username: string) => void;
+}
+
+export const AdminMediaLightbox: React.FC<AdminMediaLightboxProps> = ({
+  item,
+  adminMedia,
+  previewTextContent,
+  previewTextLoading,
+  onClose,
+  onNext,
+  onPrev,
+  onPurge,
+  onFilterUser,
+}) => {
+  // Lock body scroll and restore previous scroll offset on unmount
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const origOverflow = document.body.style.overflow;
+    const origPosition = document.body.style.position;
+    const origTop = document.body.style.top;
+    const origWidth = document.body.style.width;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+
+    return () => {
+      document.body.style.overflow = origOverflow;
+      document.body.style.position = origPosition;
+      document.body.style.top = origTop;
+      document.body.style.width = origWidth;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  // Ghost click protection: ignore backdrop clicks during the first 350ms of display/switch
+  const mountTimeRef = useRef<number>(Date.now());
+  useEffect(() => {
+    mountTimeRef.current = Date.now();
+  }, [item.id]);
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target !== e.currentTarget) return;
+    if (Date.now() - mountTimeRef.current < 350) return;
+    onClose();
+  };
+
+  // Touch swipe gesture detection (left: next, right: prev, down: close)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.changedTouches.length === 0) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    // Horizontal swipe
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) {
+        onNext();
+      } else {
+        onPrev();
+      }
+      return;
+    }
+
+    // Vertical swipe down to close
+    if (dy > 80 && dy > Math.abs(dx) * 1.5) {
+      onClose();
+    }
+  };
+
+  // State management for asset loading & retries
+  const [imgLoading, setImgLoading] = useState(true);
+  const [imgError, setImgError] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [videoError, setVideoError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    setImgLoading(true);
+    setImgError(false);
+    setVideoLoading(true);
+    setVideoError(false);
+  }, [item.id, retryCount]);
+
+  // Neighbor preloading for images
+  useEffect(() => {
+    if (adminMedia.length <= 1) return;
+    const currIdx = adminMedia.findIndex((m) => m.id === item.id);
+    if (currIdx === -1) return;
+
+    const nextIdx = (currIdx + 1) % adminMedia.length;
+    const prevIdx = (currIdx - 1 + adminMedia.length) % adminMedia.length;
+
+    const preloadItem = (m: AdminMediaItem) => {
+      if (!m || m.status === 'deleted') return;
+      const isImg = m.media_type === 'image' || (!m.media_type && m.file_name?.match(/\.(jpe?g|png|gif|webp|svg)$/i));
+      if (isImg) {
+        const u = m.url.startsWith('http') || m.url.startsWith('/') ? m.url : `/api/media/file/${m.url}?inline=1`;
+        const img = new Image();
+        img.src = u;
+      }
+    };
+
+    preloadItem(adminMedia[nextIdx]);
+    preloadItem(adminMedia[prevIdx]);
+  }, [item.id, adminMedia]);
+
+  // URL resolution
+  const rawUrl = item.url.startsWith('http') || item.url.startsWith('/') 
+    ? item.url 
+    : `/api/media/file/${item.url}?inline=1`;
+  const fileUrl = retryCount > 0 
+    ? (rawUrl.includes('?') ? `${rawUrl}&retry=${retryCount}` : `${rawUrl}?retry=${retryCount}`)
+    : rawUrl;
+
+  const isDeleted = item.status === 'deleted';
+  const isVideo = item.media_type === 'video' || item.file_name?.toLowerCase().match(/\.(mp4|webm|mov|m4v|ogg)$/);
+  const isAudio = item.media_type === 'audio' || item.file_name?.toLowerCase().match(/\.(mp3|wav|ogg|m4a|aac)$/);
+  const isText = (item.file_name || '').toLowerCase().match(/\.(txt|json|csv|log|md|js|ts|html|xml|py|css|env|yml|yaml)$/);
+  const isImage = !isVideo && !isAudio && !isText && (item.media_type === 'image' || item.file_name?.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/) || true);
+
+  const currIdx = adminMedia.findIndex((m) => m.id === item.id);
+  const positionText = currIdx >= 0 ? `${currIdx + 1} / ${adminMedia.length}` : '';
+  const extMatch = item.file_name?.split('.').pop()?.toUpperCase() || (isVideo ? 'MP4' : isAudio ? 'AUDIO' : 'IMG');
+
+  // Tactile button styling with 4 distinct shadows + 1 linear gradient
+  const btnStyle = "min-w-[44px] min-h-[44px] p-2.5 rounded-xl text-slate-200 border border-white/10 hover:border-teal-500/50 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-[0_2px_4px_rgba(0,0,0,0.5),0_4px_8px_rgba(0,0,0,0.3),0_8px_16px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.12)] bg-gradient-to-b from-slate-800 to-slate-900 hover:from-slate-750 hover:to-slate-850";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Media preview: ${item.file_name}`}
+      onClick={handleBackdropClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        height: '100dvh',
+        minHeight: '100vh',
+        width: '100vw',
+        paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))',
+        paddingLeft: 'max(0.75rem, env(safe-area-inset-left, 0px))',
+        paddingRight: 'max(0.75rem, env(safe-area-inset-right, 0px))',
+      }}
+      className="fixed inset-0 z-[999999] bg-slate-950/95 backdrop-blur-xl flex flex-col justify-between items-center p-3 sm:p-5 select-none animate-fade-in overflow-hidden touch-manipulation"
+    >
+      {/* Top Toolbar */}
+      <header
+        className="w-full max-w-5xl flex items-center justify-between gap-3 text-white z-20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Left: Position & File Badges */}
+        <div className="flex items-center gap-2 min-w-0">
+          {positionText && (
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 border border-white/10 text-xs font-mono font-bold text-teal-400 shrink-0 shadow-inner">
+              {positionText}
+            </div>
+          )}
+          <div className="min-w-0 hidden sm:block">
+            <div className="text-xs font-bold text-white truncate max-w-[200px] md:max-w-xs" title={item.file_name}>
+              {item.file_name}
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+              <span className="uppercase text-teal-300 font-bold">{extMatch}</span>
+              <span>•</span>
+              <span className="capitalize">{item.source} file</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Actions (Open in tab, Download, Purge, Close) */}
+        <div className="flex items-center gap-2">
+          {!isDeleted && (
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={btnStyle}
+              title="Open full resolution in new browser tab"
+              aria-label="Open in new tab"
+            >
+              <ExternalLink className="w-4 h-4 text-teal-400" />
+            </a>
+          )}
+
+          {!isDeleted && (
+            <a
+              href={fileUrl}
+              download={item.file_name}
+              className={btnStyle}
+              title="Download file"
+              aria-label="Download media"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+            </a>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onPurge(item)}
+            className="min-w-[44px] min-h-[44px] p-2.5 rounded-xl text-rose-300 border border-rose-500/30 hover:border-rose-500/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-[0_2px_4px_rgba(0,0,0,0.5),0_4px_8px_rgba(0,0,0,0.3),0_8px_16px_rgba(0,0,0,0.2),inset_0_1px_1px_rgba(255,255,255,0.12)] bg-gradient-to-b from-rose-950/80 to-slate-900 hover:from-rose-900/90 hover:to-slate-850"
+            title="Permanently purge asset"
+            aria-label="Purge media"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className={btnStyle}
+            title="Close viewer (Esc)"
+            aria-label="Close viewer"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main
+        className="relative w-full max-w-5xl flex-1 flex items-center justify-center my-2 sm:my-4 min-h-0 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Navigation Arrow Left */}
+        {adminMedia.length > 1 && (
+          <button
+            type="button"
+            onClick={onPrev}
+            aria-label="Previous media"
+            className="absolute left-1 sm:left-4 z-30 min-w-[44px] min-h-[44px] w-11 h-11 rounded-2xl bg-slate-900/80 hover:bg-slate-800 text-white border border-white/10 hover:border-teal-500/50 flex items-center justify-center transition-all active:scale-95 shadow-xl backdrop-blur-md cursor-pointer"
+          >
+            <ChevronLeft className="w-6 h-6 text-teal-400" />
+          </button>
+        )}
+
+        {/* Content Switcher */}
+        {isDeleted ? (
+          /* Purged / Deleted Asset Card */
+          <div className="bg-slate-950/90 border border-rose-500/30 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-4 text-center backdrop-blur-xl animate-fade-in mx-4">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-3xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-xl">
+              <Trash2 className="w-8 h-8 sm:w-10 sm:h-10" />
+            </div>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 font-mono text-[11px] font-bold tracking-wider mb-2 border border-rose-500/30">
+                <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                <span>ASSET FILE PURGED</span>
+              </div>
+              <h4 className="text-base font-black text-white truncate max-w-xs">{item.file_name || 'Purged File'}</h4>
+              <p className="text-xs text-slate-400 mt-1">Uploader: @{item.user.username}</p>
+            </div>
+            <p className="text-xs text-slate-300 max-w-xs leading-relaxed bg-black/40 p-3 rounded-xl border border-white/5 font-mono text-[11px]">
+              The binary file for this asset was permanently purged from storage or unsent. The metadata record is retained for audit logging.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center gap-2 w-full pt-1">
+              <button
+                type="button"
+                onClick={() => onPurge(item)}
+                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs border border-rose-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Purge Metadata Record</span>
+              </button>
+            </div>
+          </div>
+        ) : isVideo ? (
+          /* Video Viewer */
+          <div className="relative flex items-center justify-center w-full h-full max-h-[calc(100dvh-180px)]">
+            {videoLoading && !videoError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-teal-400 gap-2">
+                <Loader2 className="w-8 h-8 animate-spin" />
+                <span className="text-xs font-mono text-slate-400">Loading video stream...</span>
+              </div>
+            )}
+            {videoError ? (
+              <div className="bg-slate-900/90 border border-white/10 p-6 rounded-2xl flex flex-col items-center gap-3 text-center max-w-sm">
+                <AlertTriangle className="w-8 h-8 text-amber-400" />
+                <p className="text-xs text-slate-300">Unable to stream video preview directly.</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRetryCount((c) => c + 1)}
+                    className="px-3 py-1.5 rounded-xl bg-teal-500/20 text-teal-300 text-xs font-bold border border-teal-500/30"
+                  >
+                    Retry
+                  </button>
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold border border-white/10"
+                  >
+                    Open in Tab
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <video
+                src={fileUrl}
+                controls
+                playsInline
+                autoPlay={false}
+                preload="metadata"
+                onLoadedData={() => setVideoLoading(false)}
+                onError={() => {
+                  setVideoLoading(false);
+                  setVideoError(true);
+                }}
+                className={`max-w-full max-h-full object-contain rounded-2xl shadow-2xl border border-white/15 transition-opacity duration-300 ${
+                  videoLoading ? 'opacity-0' : 'opacity-100'
+                }`}
+              />
+            )}
+          </div>
+        ) : isAudio ? (
+          /* Audio Viewer */
+          <div className="bg-slate-950/90 border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-5 text-center backdrop-blur-xl">
+            <div className="w-20 h-20 rounded-3xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-400 shadow-xl">
+              <Mic className="w-10 h-10" />
+            </div>
+            <div>
+              <h4 className="text-base font-black text-white truncate max-w-xs">{item.file_name}</h4>
+              <p className="text-xs text-slate-400 mt-1">Audio Recording by @{item.user.username}</p>
+            </div>
+            <audio src={fileUrl} controls className="w-full mt-2" />
+          </div>
+        ) : isText ? (
+          /* Text / Code File Inspector */
+          <div className="bg-slate-950/90 border border-white/15 rounded-2xl shadow-2xl w-full max-w-3xl max-h-full flex flex-col overflow-hidden">
+            <div className="px-4 py-2.5 bg-slate-900 border-b border-white/10 flex items-center justify-between text-xs font-mono text-slate-300">
+              <div className="flex items-center gap-2">
+                <FileCode className="w-4 h-4 text-teal-400" />
+                <span className="font-bold text-white">{item.file_name}</span>
+              </div>
+              <span className="text-[10px] text-slate-400">Live Inspector</span>
+            </div>
+            <div className="p-4 overflow-auto max-h-[60vh] font-mono text-xs text-slate-300 bg-black/60">
+              {previewTextLoading ? (
+                <div className="flex items-center justify-center py-8 gap-2 text-teal-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading file text...</span>
+                </div>
+              ) : previewTextContent ? (
+                <pre className="whitespace-pre-wrap">{previewTextContent}</pre>
+              ) : (
+                <p className="text-slate-500 italic">No text content available.</p>
+              )}
+            </div>
+          </div>
+        ) : isImage ? (
+          /* Image Viewer with Skeleton, Retry & Dimension Resilience */
+          <div className="relative flex items-center justify-center w-full h-full max-h-[calc(100dvh-180px)]">
+            {imgLoading && !imgError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-teal-400 gap-2">
+                <Loader2 className="w-8 h-8 animate-spin" />
+                <span className="text-xs font-mono text-slate-400">Loading media...</span>
+              </div>
+            )}
+            {imgError ? (
+              <div className="bg-slate-900/90 border border-white/10 p-6 rounded-2xl flex flex-col items-center gap-3 text-center max-w-sm animate-fade-in">
+                <AlertTriangle className="w-8 h-8 text-amber-400" />
+                <div>
+                  <h4 className="text-sm font-bold text-white">Unable to load image</h4>
+                  <p className="text-xs text-slate-400 mt-1">The image file could not be rendered.</p>
+                </div>
+                <div className="flex gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setRetryCount((c) => c + 1)}
+                    className="min-h-[44px] px-4 py-2 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 text-xs font-bold border border-teal-500/30 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Retry</span>
+                  </button>
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[44px] px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-all active:scale-95"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open in Tab</span>
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <img
+                src={fileUrl}
+                alt={item.file_name}
+                loading="eager"
+                decoding="async"
+                onLoad={() => setImgLoading(false)}
+                onError={() => {
+                  setImgLoading(false);
+                  setImgError(true);
+                }}
+                className={`max-w-full max-h-full object-contain rounded-2xl shadow-2xl border border-white/15 select-none transition-opacity duration-300 ${
+                  imgLoading ? 'opacity-0' : 'opacity-100'
+                }`}
+                style={{ maxHeight: 'calc(100dvh - 180px)' }}
+              />
+            )}
+          </div>
+        ) : (
+          /* Generic Document / File Card */
+          <div className="bg-slate-950/90 border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-5 text-center backdrop-blur-xl">
+            <div className="w-20 h-20 rounded-3xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-xl">
+              <FileText className="w-10 h-10" />
+            </div>
+            <div>
+              <h4 className="text-base font-black text-white truncate max-w-xs">{item.file_name}</h4>
+              <p className="text-xs text-slate-400 mt-1">Uploaded by @{item.user.username}</p>
+            </div>
+            <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+              This file format can be viewed directly in your browser or inspected in a new tab without downloading.
+            </p>
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-h-[44px] px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 transition-all shadow-lg active:scale-95"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>View / Open in Browser Tab</span>
+            </a>
+          </div>
+        )}
+
+        {/* Navigation Arrow Right */}
+        {adminMedia.length > 1 && (
+          <button
+            type="button"
+            onClick={onNext}
+            aria-label="Next media"
+            className="absolute right-1 sm:right-4 z-30 min-w-[44px] min-h-[44px] w-11 h-11 rounded-2xl bg-slate-900/80 hover:bg-slate-800 text-white border border-white/10 hover:border-teal-500/50 flex items-center justify-center transition-all active:scale-95 shadow-xl backdrop-blur-md cursor-pointer"
+          >
+            <ChevronRight className="w-6 h-6 text-teal-400" />
+          </button>
+        )}
+      </main>
+
+      {/* Bottom Metadata Bar */}
+      <footer
+        className="w-full max-w-5xl px-4 py-2.5 rounded-2xl bg-slate-950/85 backdrop-blur-md border border-white/10 text-white flex items-center justify-between gap-3 text-xs flex-wrap z-20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => onFilterUser(item.user.username)}
+          title={`Filter all media by @${item.user.username}`}
+        >
+          <div className="w-6 h-6 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center text-[10px] font-bold text-teal-400 border border-white/10">
+            {item.user.avatar_url ? (
+              <img
+                src={item.user.avatar_url.startsWith('http') || item.user.avatar_url.startsWith('/') ? item.user.avatar_url : `/api/media/file/${item.user.avatar_url}`}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+              />
+            ) : (
+              item.user.username.substring(0, 1).toUpperCase()
+            )}
+          </div>
+          <span className="font-bold text-teal-300">@{item.user.username}</span>
+        </div>
+
+        <div className="flex items-center gap-3 text-slate-400 text-[11px] font-mono">
+          <span className="text-white/80">{item.source_name}</span>
+          <span className="text-white/20">•</span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              isDeleted ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+            }`}
+          >
+            {isDeleted ? 'Purged' : 'Live'}
+          </span>
+          <span className="text-white/20 hidden sm:inline">•</span>
+          <span className="hidden sm:inline text-slate-400">
+            {new Date(item.created_at).toLocaleString()}
+          </span>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
 export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const { token, user: currentUser } = useAuth();
   const { toast } = useToast();
@@ -210,37 +751,6 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const [error, setError] = useState<string | null>(null);
 
   // System Media Platform States (All media access from sent to deleted)
-  interface AdminMediaItem {
-    id: string;
-    raw_id: string;
-    source: 'chat' | 'post';
-    source_name: string;
-    source_id: string;
-    user: {
-      id: string;
-      username: string;
-      display_name: string;
-      avatar_url: string | null;
-    };
-    url: string;
-    media_type: 'image' | 'video' | 'audio' | 'file';
-    file_name: string;
-    allow_save: boolean;
-    status: 'active' | 'deleted';
-    created_at: number;
-    context: string;
-  }
-
-  interface AdminMediaCounts {
-    total: number;
-    active: number;
-    deleted: number;
-    images: number;
-    videos: number;
-    audio: number;
-    files: number;
-  }
-
   const [adminMedia, setAdminMedia] = useState<AdminMediaItem[]>([]);
   const [adminMediaCounts, setAdminMediaCounts] = useState<AdminMediaCounts>({
     total: 0,
@@ -3461,7 +3971,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     return (
                       <div
                         key={item.id}
-                        onClick={() => setActiveMediaPreview(item)}
+                        onClick={(e) => { e.stopPropagation(); setActiveMediaPreview(item); }}
                         className={`group p-2.5 sm:p-3 rounded-2xl bg-[var(--card)] border transition-all flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer shadow-md hover:shadow-lg active:scale-[0.99] ${
                           isDeleted
                             ? 'border-rose-500/30 hover:border-rose-500/60 bg-rose-950/10'
@@ -3470,7 +3980,12 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       >
                         {/* Left: Thumbnail */}
                         <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-slate-950 border border-white/10 flex-shrink-0 relative flex items-center justify-center shadow-inner group-hover:scale-102 transition-transform">
-                          {isVideo ? (
+                          {isDeleted ? (
+                            <div className="w-full h-full bg-rose-950/40 flex flex-col items-center justify-center text-rose-400">
+                              <Trash2 className="w-5 h-5 sm:w-6 sm:h-6 opacity-80" />
+                              <span className="text-[7px] font-mono font-black mt-0.5 tracking-wider">PURGED</span>
+                            </div>
+                          ) : isVideo ? (
                             <div className="w-full h-full relative bg-black flex items-center justify-center">
                               <video src={fileUrl} className="w-full h-full object-cover" preload="none" />
                               <div className="w-6 h-6 rounded-full bg-teal-500 text-slate-950 flex items-center justify-center absolute shadow-md">
@@ -3492,7 +4007,9 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                               src={fileUrl}
                               alt={item.file_name}
                               loading="lazy"
+                              decoding="async"
                               className="w-full h-full object-cover"
+                              onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
                             />
                           )}
 
@@ -3552,7 +4069,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                         <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
-                            onClick={() => setActiveMediaPreview(item)}
+                            onClick={(e) => { e.stopPropagation(); setActiveMediaPreview(item); }}
                             className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 font-bold text-xs border border-teal-500/30 flex items-center gap-1 active:scale-95 shadow-sm"
                             title="View without downloading"
                           >
@@ -3586,7 +4103,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     return (
                       <div
                         key={item.id}
-                        onClick={() => setActiveMediaPreview(item)}
+                        onClick={(e) => { e.stopPropagation(); setActiveMediaPreview(item); }}
                         className={`group rounded-3xl bg-[var(--card)] border transition-all duration-300 overflow-hidden flex flex-col shadow-lg hover:shadow-2xl hover:-translate-y-1 relative cursor-pointer ${
                           isDeleted 
                             ? 'border-rose-500/30 hover:border-rose-500/70 hover:shadow-rose-500/10' 
@@ -3613,15 +4130,21 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                         {/* Thumbnail / Media Box */}
                         <div
                           className="relative aspect-square w-full bg-[#03060a] overflow-hidden cursor-pointer flex items-center justify-center select-none"
-                          onClick={() => {
-                            if (isFile) {
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isFile && !isDeleted) {
                               window.open(fileUrl, '_blank');
                             } else {
                               setActiveMediaPreview(item);
                             }
                           }}
                         >
-                          {isVideo ? (
+                          {isDeleted ? (
+                            <div className="w-full h-full bg-rose-950/40 flex flex-col items-center justify-center text-rose-400 p-4 text-center">
+                              <Trash2 className="w-10 h-10 opacity-70 mb-1" />
+                              <span className="text-[9px] font-mono font-black tracking-wider">PURGED ASSET</span>
+                            </div>
+                          ) : isVideo ? (
                             <div className="w-full h-full relative bg-black flex items-center justify-center">
                               <video src={fileUrl} className="w-full h-full object-cover opacity-80" preload="none" />
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/20 transition-colors">
@@ -3763,10 +4286,15 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                             {/* Preview */}
                             <td className="py-2.5 px-4">
                               <div
-                                onClick={() => setActiveMediaPreview(item)}
+                                onClick={(e) => { e.stopPropagation(); setActiveMediaPreview(item); }}
                                 className="w-12 h-12 rounded-xl bg-[var(--input)] border border-[var(--line)] overflow-hidden cursor-pointer flex items-center justify-center relative flex-shrink-0 group shadow-sm"
                               >
-                                {item.media_type === 'video' ? (
+                                {isDeleted ? (
+                                  <div className="w-full h-full bg-rose-950/40 flex flex-col items-center justify-center text-rose-400">
+                                    <Trash2 className="w-4 h-4 opacity-80" />
+                                    <span className="text-[6px] font-mono font-black mt-0.5">PURGED</span>
+                                  </div>
+                                ) : item.media_type === 'video' ? (
                                   <div className="w-full h-full relative bg-black flex items-center justify-center">
                                     <video src={fileUrl} className="w-full h-full object-cover" preload="none" />
                                     <Play className="w-3.5 h-3.5 text-teal-400 absolute fill-current" />
@@ -3849,7 +4377,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => setActiveMediaPreview(item)}
+                                  onClick={(e) => { e.stopPropagation(); setActiveMediaPreview(item); }}
                                   className="p-1.5 rounded-lg bg-[var(--input)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] transition-colors"
                                   title="View Preview"
                                 >
@@ -4163,13 +4691,14 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
       )}
 
       {/* State 9 / Action Confirmation: In-App Accessible Alert Dialog */}
-      {confirmDialog && (
+      {confirmDialog && createPortal(
         <div 
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="admin-confirm-title"
           aria-describedby="admin-confirm-desc"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          style={{ height: '100dvh', minHeight: '100vh' }}
+          className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
         >
           <div className="bg-[var(--card)] border border-[var(--line)] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
@@ -4204,7 +4733,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Moderation Action Modal for Reports */}
@@ -4553,255 +5083,24 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
       )}
 
       {/* ADMIN MEDIA FULLSCREEN LIGHTBOX / UNIVERSAL IN-APP PREVIEW MODAL */}
-      {activeMediaPreview && (() => {
-        const fileUrl = `/api/media/file/${activeMediaPreview.url}?inline=1`;
-        const fname = (activeMediaPreview.file_name || '').toLowerCase();
-        const isPdf = fname.endsWith('.pdf');
-        const isTextFile = fname.endsWith('.txt') || fname.endsWith('.json') || fname.endsWith('.csv') || 
-          fname.endsWith('.log') || fname.endsWith('.md') || fname.endsWith('.js') || fname.endsWith('.ts') || 
-          fname.endsWith('.html') || fname.endsWith('.xml') || fname.endsWith('.py') || fname.endsWith('.css') ||
-          fname.endsWith('.env') || fname.endsWith('.yml') || fname.endsWith('.yaml');
-        const isAudio = activeMediaPreview.media_type === 'audio' || fname.endsWith('.webm') || fname.endsWith('.mp3') || fname.endsWith('.wav') || fname.endsWith('.ogg') || fname.endsWith('.m4a');
-        const isVideo = activeMediaPreview.media_type === 'video' || fname.endsWith('.mp4') || fname.endsWith('.mov') || fname.endsWith('.mkv');
-        const isImage = !isPdf && !isTextFile && !isAudio && !isVideo && (activeMediaPreview.media_type === 'image' || fname.endsWith('.jpg') || fname.endsWith('.jpeg') || fname.endsWith('.png') || fname.endsWith('.gif') || fname.endsWith('.webp') || fname.endsWith('.svg'));
-        const currIdx = adminMedia.findIndex(m => m.id === activeMediaPreview.id);
-
-        return (
-          <div 
-            role="dialog"
-            aria-modal="true"
-            aria-label="Media preview"
-            onClick={() => setActiveMediaPreview(null)}
-            className="fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-between p-3 sm:p-6 animate-fade-in select-none"
-          >
-            {/* Top Navigation & Action Controls Bar */}
-            <div 
-              className="w-full max-w-5xl flex items-center justify-between gap-1.5 z-20 pb-2 border-b border-white/10" 
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Asset counter & Carousel arrows */}
-              <div className="flex items-center gap-1.5 text-white">
-                <span className="text-[11px] font-black text-teal-400 bg-teal-500/20 px-2 py-0.5 rounded-lg border border-teal-500/30 font-mono">
-                  {currIdx >= 0 ? `${currIdx + 1}/${adminMedia.length}` : 'Asset'}
-                </span>
-
-                {adminMedia.length > 1 && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={handlePrevMedia}
-                      className="p-1.5 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg border border-white/10 active:scale-90 transition-all"
-                      title="Previous Asset"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleNextMedia}
-                      className="p-1.5 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg border border-white/10 active:scale-90 transition-all"
-                      title="Next Asset"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                
-                <span className="text-xs text-slate-300 font-bold truncate max-w-[100px] sm:max-w-xs hidden sm:inline" title={activeMediaPreview.file_name}>
-                  {activeMediaPreview.file_name}
-                </span>
-              </div>
-
-              {/* Right Action buttons */}
-              <div className="flex items-center gap-1.5">
-                {/* Direct Open in new tab without downloading */}
-                <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 sm:px-3 sm:py-1.5 bg-slate-900/90 hover:bg-slate-800 text-teal-300 rounded-lg sm:rounded-xl transition-all border border-teal-500/30 active:scale-95 flex items-center gap-1 text-xs font-bold"
-                  title="Open in new browser tab"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Open</span>
-                </a>
-
-                {/* Optional Download */}
-                <a
-                  href={`/api/media/file/${activeMediaPreview.url}`}
-                  download={activeMediaPreview.file_name}
-                  className="p-1.5 sm:px-3 sm:py-1.5 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg sm:rounded-xl transition-all border border-white/10 active:scale-95 flex items-center gap-1 text-xs font-semibold"
-                  title="Download File"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Download</span>
-                </a>
-
-                {/* Purge button */}
-                <button
-                  type="button"
-                  onClick={() => handlePurgeMedia(activeMediaPreview)}
-                  className="p-1.5 sm:px-3 sm:py-1.5 bg-rose-600/30 hover:bg-rose-600/50 text-rose-300 rounded-lg sm:rounded-xl transition-all border border-rose-500/40 active:scale-95 flex items-center gap-1 text-xs font-bold"
-                  title="Purge Asset"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Purge</span>
-                </button>
-
-                {/* Close modal */}
-                <button
-                  type="button"
-                  onClick={() => setActiveMediaPreview(null)}
-                  className="p-1.5 sm:p-2 bg-slate-900/90 hover:bg-slate-800 text-white rounded-lg sm:rounded-xl transition-all border border-white/15 active:scale-95 flex items-center justify-center"
-                  title="Close (Esc)"
-                >
-                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Central Stage: Universal In-App Viewer (View without Downloading) */}
-            <div 
-              className="relative w-full max-w-5xl flex-1 flex items-center justify-center my-3 overflow-hidden" 
-              onClick={(e) => e.stopPropagation()}
-            >
-              {isVideo ? (
-                /* Video Player */
-                <video
-                  src={fileUrl}
-                  controls
-                  autoPlay
-                  playsInline
-                  controlsList="nodownload"
-                  className="max-w-full max-h-[72vh] rounded-2xl shadow-2xl border border-white/15 bg-black"
-                />
-              ) : isAudio ? (
-                /* Audio / Voice Note Player */
-                <div className="bg-slate-950/90 border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-5 text-center backdrop-blur-xl">
-                  <div className="w-20 h-20 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shadow-xl">
-                    <Mic className="w-10 h-10 animate-pulse" />
-                  </div>
-                  <div>
-                    <h4 className="text-base font-black text-white truncate max-w-xs">{activeMediaPreview.file_name}</h4>
-                    <p className="text-xs text-slate-400 mt-1">Sent by @{activeMediaPreview.user.username} in {activeMediaPreview.source_name}</p>
-                  </div>
-                  <audio src={fileUrl} controls autoPlay className="w-full mt-2" />
-                </div>
-              ) : isPdf ? (
-                /* Embedded PDF Viewer (Page-by-page viewing without download) */
-                <div className="w-full h-[72vh] flex flex-col bg-slate-950 rounded-2xl overflow-hidden border border-white/15 shadow-2xl">
-                  <div className="px-4 py-2.5 bg-slate-900 border-b border-white/10 flex items-center justify-between text-xs text-white">
-                    <span className="font-bold flex items-center gap-2 truncate">
-                      <FileText className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                      <span className="truncate">{activeMediaPreview.file_name}</span>
-                    </span>
-                    <span className="text-[10px] text-teal-300 font-mono font-bold bg-teal-500/15 px-2 py-0.5 rounded border border-teal-500/30">
-                      Inline PDF Viewer
-                    </span>
-                  </div>
-                  <iframe
-                    src={fileUrl}
-                    title={activeMediaPreview.file_name}
-                    className="w-full flex-1 border-0 bg-white"
-                  />
-                </div>
-              ) : isTextFile ? (
-                /* Text / Code / Log Viewer */
-                <div className="w-full max-w-4xl h-[72vh] flex flex-col bg-slate-950 rounded-2xl overflow-hidden border border-white/15 shadow-2xl">
-                  <div className="px-4 py-2.5 bg-slate-900/90 border-b border-white/10 flex items-center justify-between text-xs text-white">
-                    <span className="font-bold flex items-center gap-2 truncate font-mono">
-                      <FileCode className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                      <span className="truncate">{activeMediaPreview.file_name}</span>
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30">
-                      Live Text Inspector
-                    </span>
-                  </div>
-                  <div className="p-4 overflow-auto flex-1 font-mono text-xs text-slate-200 whitespace-pre-wrap select-text bg-[#030708] leading-relaxed">
-                    {previewTextLoading ? (
-                      <div className="flex items-center gap-2 text-slate-400 py-12 justify-center">
-                        <Loader2 className="w-5 h-5 animate-spin text-teal-400" />
-                        <span>Loading document preview...</span>
-                      </div>
-                    ) : (
-                      previewTextContent || 'No text content available in file.'
-                    )}
-                  </div>
-                </div>
-              ) : isImage ? (
-                /* High-Res Image Viewer */
-                <div className="relative flex items-center justify-center max-h-[72vh] w-full">
-                  <img
-                    src={fileUrl}
-                    alt={activeMediaPreview.file_name}
-                    className="max-w-full max-h-[72vh] object-contain rounded-2xl shadow-2xl border border-white/15"
-                  />
-                </div>
-              ) : (
-                /* Generic Document / File Card */
-                <div className="bg-slate-950/90 border border-white/15 p-6 sm:p-8 rounded-3xl shadow-2xl w-full max-w-md flex flex-col items-center gap-5 text-center backdrop-blur-xl">
-                  <div className="w-20 h-20 rounded-3xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-xl">
-                    <FileText className="w-10 h-10" />
-                  </div>
-                  <div>
-                    <h4 className="text-base font-black text-white truncate max-w-xs">{activeMediaPreview.file_name}</h4>
-                    <p className="text-xs text-slate-400 mt-1">Uploaded by @{activeMediaPreview.user.username}</p>
-                  </div>
-                  <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
-                    This file format can be viewed directly in your browser or inspected in a new tab without downloading.
-                  </p>
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 transition-all shadow-lg active:scale-95"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>View / Open in Browser Tab</span>
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom Metadata Bar */}
-            <div 
-              className="w-full max-w-5xl px-4 py-2.5 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-white/10 text-white flex items-center justify-between gap-3 text-xs flex-wrap" 
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div 
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => {
-                  setMediaUserSearch(activeMediaPreview.user.username);
-                  setActiveMediaPreview(null);
-                }}
-                title={`Filter all media by @${activeMediaPreview.user.username}`}
-              >
-                <div className="w-5 h-5 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center text-[9px] font-bold text-teal-400">
-                  {activeMediaPreview.user.avatar_url ? (
-                    <img src={`/api/media/file/${activeMediaPreview.user.avatar_url}`} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    activeMediaPreview.user.username.substring(0, 1).toUpperCase()
-                  )}
-                </div>
-                <span className="font-bold text-teal-300">@{activeMediaPreview.user.username}</span>
-              </div>
-
-              <div className="flex items-center gap-3 text-slate-400 text-[11px] font-mono">
-                <span className="text-white/80">{activeMediaPreview.source_name}</span>
-                <span className="text-white/20">•</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                  activeMediaPreview.status === 'deleted' ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'
-                }`}>
-                  {activeMediaPreview.status === 'deleted' ? 'Deleted' : 'Live'}
-                </span>
-                <span className="text-white/20 hidden sm:inline">•</span>
-                <span className="hidden sm:inline">
-                  {new Date(activeMediaPreview.created_at).toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {activeMediaPreview && createPortal(
+        <AdminMediaLightbox
+          item={activeMediaPreview}
+          adminMedia={adminMedia}
+          isOffline={isOffline}
+          previewTextContent={previewTextContent}
+          previewTextLoading={previewTextLoading}
+          onClose={() => setActiveMediaPreview(null)}
+          onNext={handleNextMedia}
+          onPrev={handlePrevMedia}
+          onPurge={handlePurgeMedia}
+          onFilterUser={(u) => {
+            setMediaUserSearch(u);
+            setActiveMediaPreview(null);
+          }}
+        />,
+        document.body
+      )}
 
     </div>
   );
