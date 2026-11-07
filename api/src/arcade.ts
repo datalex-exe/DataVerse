@@ -17,7 +17,14 @@ const GAME_NAMES: Record<string, string> = {
   'runner': 'Runner',
   'snake': 'Snake',
   'flappy': 'Flappy',
-  'breakout': 'Breakout'
+  'breakout': 'Breakout',
+  'closest-guess': 'Closest Guess',
+  'dots-boxes': 'Dots and Boxes',
+  'connect-four': 'Connect Four',
+  'word-duel': 'Word Duel',
+  'number-guess': 'Number Guess',
+  'reaction-race': 'Reaction Race',
+  'checkers': 'Checkers'
 };
 
 // Send a game challenge / request to another user

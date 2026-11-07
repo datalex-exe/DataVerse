@@ -1,8 +1,28 @@
 import { DurableObjectState } from '@cloudflare/workers-types';
 import { Bindings } from './types';
+import {
+  ClosestGuessState,
+  DotsBoxesState,
+  ConnectFourState,
+  WordDuelState,
+  NumberGuessState,
+  ReactionRaceState,
+  CheckersState,
+  initClosestGuess,
+  initDotsBoxes,
+  initConnectFour,
+  initWordDuel,
+  initNumberGuess,
+  initReactionRace,
+  initCheckers,
+  getLegalCheckersMoves,
+  checkConnectFourWin,
+  isValidDictionaryWord,
+  generateWordDuelLetters
+} from './arcadeGames';
 
 interface GameState {
-  gameType?: 'tic-tac-toe' | 'chess' | 'rps' | 'higher-lower' | 'whack-a-mole' | 'coin-toss' | 'spin-wheel';
+  gameType?: string;
   board?: (string | null)[]; // 9 cells, containing null, 'X', or 'O'
   chessBoard?: (string | null)[]; // 64 cells, containing chess piece codes
   chessFen?: string;
@@ -20,6 +40,13 @@ interface GameState {
   playerO: string | null; // userId of Player O
   turn: string | null; // userId of whose turn it is
   winner: string | null; // userId of winner
+  closestGuess?: ClosestGuessState;
+  dotsBoxes?: DotsBoxesState;
+  connectFour?: ConnectFourState;
+  wordDuel?: WordDuelState;
+  numberGuess?: NumberGuessState;
+  reactionRace?: ReactionRaceState;
+  checkers?: CheckersState;
 }
 
 export class ChatRoom {
@@ -503,7 +530,8 @@ export class ChatRoom {
       // CASE B: RETRIEVE GAME STATE (On component mount)
       if (data.type === 'get_game_state') {
         const game = await this.getGame();
-        ws.send(JSON.stringify({ type: 'game_state', game }));
+        const userGame = this.maskGameForUser(game, userId);
+        ws.send(JSON.stringify({ type: 'game_state', game: userGame }));
         return;
       }
 
@@ -546,6 +574,20 @@ export class ChatRoom {
         } else if (gameType === 'spin-wheel') {
           game.wheelOptions = ['Coffee ☕', 'Pizza 🍕', 'Gaming 🎮', 'Walk 🚶', 'Code 💻', 'Sleep 😴'];
           game.wheelResultIndex = null;
+        } else if (gameType === 'closest-guess') {
+          game.closestGuess = initClosestGuess(userId, opponentId || '');
+        } else if (gameType === 'dots-boxes') {
+          game.dotsBoxes = initDotsBoxes(userId, opponentId || '');
+        } else if (gameType === 'connect-four') {
+          game.connectFour = initConnectFour();
+        } else if (gameType === 'word-duel') {
+          game.wordDuel = initWordDuel(userId, opponentId || '');
+        } else if (gameType === 'number-guess') {
+          game.numberGuess = initNumberGuess(userId, opponentId || '');
+        } else if (gameType === 'reaction-race') {
+          game.reactionRace = initReactionRace(userId, opponentId || '');
+        } else if (gameType === 'checkers') {
+          game.checkers = initCheckers();
         }
 
         await this.putGame(game);
@@ -600,6 +642,513 @@ export class ChatRoom {
         return;
       }
 
+      // CASE D2: AUTHORITATIVE ACTIONS FOR 1v1 ARCADE GAMES
+      if (data.type === 'game_action') {
+        const game = await this.getGame();
+        if (!game || game.status !== 'playing') return;
+        const subType = data.subType;
+
+        // 1. CLOSEST GUESS
+        if (game.gameType === 'closest-guess' && game.closestGuess) {
+          if (subType === 'closest_guess_submit') {
+            const guess = parseInt(data.guess);
+            if (isNaN(guess) || guess < 1 || guess > 100) return;
+            if (userId !== game.playerX && userId !== game.playerO) return;
+            if (game.closestGuess.roundComplete) return;
+            if (game.closestGuess.guesses[userId] !== null) return;
+
+            game.closestGuess.guesses[userId] = guess;
+
+            // Check if both players submitted
+            const pX = game.playerX!;
+            const pO = game.playerO!;
+            if (game.closestGuess.guesses[pX] !== null && game.closestGuess.guesses[pO] !== null) {
+              const diffX = Math.abs(game.closestGuess.guesses[pX]! - game.closestGuess.target);
+              const diffO = Math.abs(game.closestGuess.guesses[pO]! - game.closestGuess.target);
+              let winnerId: string | null = null;
+              if (diffX < diffO) {
+                winnerId = pX;
+                game.closestGuess.scores[pX] = (game.closestGuess.scores[pX] || 0) + 1;
+              } else if (diffO < diffX) {
+                winnerId = pO;
+                game.closestGuess.scores[pO] = (game.closestGuess.scores[pO] || 0) + 1;
+              }
+
+              game.closestGuess.roundHistory.push({
+                round: game.closestGuess.round,
+                target: game.closestGuess.target,
+                guesses: {
+                  [pX]: game.closestGuess.guesses[pX]!,
+                  [pO]: game.closestGuess.guesses[pO]!
+                },
+                winnerId
+              });
+              game.closestGuess.roundComplete = true;
+
+              const sX = game.closestGuess.scores[pX] || 0;
+              const sO = game.closestGuess.scores[pO] || 0;
+              if (sX >= 3 || sO >= 3 || game.closestGuess.round >= game.closestGuess.maxRounds) {
+                if (sX > sO) {
+                  game.status = 'won';
+                  game.winner = pX;
+                } else if (sO > sX) {
+                  game.status = 'won';
+                  game.winner = pO;
+                } else {
+                  game.status = 'draw';
+                }
+              }
+            }
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+
+          if (subType === 'closest_guess_next') {
+            if (!game.closestGuess.roundComplete || game.status !== 'playing') return;
+            game.closestGuess.round++;
+            game.closestGuess.target = Math.floor(Math.random() * 100) + 1;
+            game.closestGuess.guesses = { [game.playerX!]: null, [game.playerO!]: null };
+            game.closestGuess.roundComplete = false;
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+        }
+
+        // 2. DOTS AND BOXES
+        if (game.gameType === 'dots-boxes' && game.dotsBoxes) {
+          if (subType === 'dots_boxes_draw') {
+            if (game.turn !== userId) return;
+            const line = String(data.line || '');
+            if (!line || game.dotsBoxes.drawnLines.includes(line)) return;
+
+            game.dotsBoxes.drawnLines.push(line);
+            game.dotsBoxes.lastLine = line;
+
+            let claimedNewBox = false;
+            for (let r = 0; r < 3; r++) {
+              for (let c = 0; c < 3; c++) {
+                const bKey = `b-${r}-${c}`;
+                if (!game.dotsBoxes.boxes[bKey]) {
+                  const top = `h-${r}-${c}`;
+                  const bottom = `h-${r + 1}-${c}`;
+                  const left = `v-${r}-${c}`;
+                  const right = `v-${r}-${c + 1}`;
+                  if (
+                    game.dotsBoxes.drawnLines.includes(top) &&
+                    game.dotsBoxes.drawnLines.includes(bottom) &&
+                    game.dotsBoxes.drawnLines.includes(left) &&
+                    game.dotsBoxes.drawnLines.includes(right)
+                  ) {
+                    game.dotsBoxes.boxes[bKey] = userId;
+                    game.dotsBoxes.scores[userId] = (game.dotsBoxes.scores[userId] || 0) + 1;
+                    claimedNewBox = true;
+                  }
+                }
+              }
+            }
+
+            if (!claimedNewBox) {
+              game.turn = game.turn === game.playerX ? game.playerO : game.playerX;
+            }
+
+            if (Object.keys(game.dotsBoxes.boxes).length === 9) {
+              const sX = game.dotsBoxes.scores[game.playerX!] || 0;
+              const sO = game.dotsBoxes.scores[game.playerO!] || 0;
+              if (sX > sO) {
+                game.status = 'won';
+                game.winner = game.playerX;
+              } else if (sO > sX) {
+                game.status = 'won';
+                game.winner = game.playerO;
+              } else {
+                game.status = 'draw';
+              }
+              game.turn = null;
+            }
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+        }
+
+        // 3. CONNECT FOUR
+        if (game.gameType === 'connect-four' && game.connectFour) {
+          if (subType === 'connect_four_drop') {
+            if (game.turn !== userId) return;
+            const col = parseInt(data.col);
+            if (isNaN(col) || col < 0 || col > 6) return;
+            if (game.connectFour.board[0][col] !== null) return; // Column full
+
+            let dropRow = -1;
+            for (let r = 5; r >= 0; r--) {
+              if (game.connectFour.board[r][col] === null) {
+                dropRow = r;
+                break;
+              }
+            }
+            if (dropRow === -1) return;
+
+            const mark = userId === game.playerX ? 'R' : 'Y';
+            game.connectFour.board[dropRow][col] = mark;
+            game.connectFour.lastMove = { row: dropRow, col };
+
+            const win = checkConnectFourWin(game.connectFour.board);
+            if (win) {
+              game.connectFour.winningCells = win.cells;
+              game.status = 'won';
+              game.winner = userId;
+              game.turn = null;
+            } else if (game.connectFour.board[0].every(c => c !== null)) {
+              game.status = 'draw';
+              game.turn = null;
+            } else {
+              game.turn = game.turn === game.playerX ? game.playerO : game.playerX;
+            }
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+        }
+
+        // 4. WORD DUEL
+        if (game.gameType === 'word-duel' && game.wordDuel) {
+          if (subType === 'word_duel_submit') {
+            if (userId !== game.playerX && userId !== game.playerO) return;
+            if (game.wordDuel.roundComplete) return;
+            if (game.wordDuel.submissions[userId] !== null) return;
+
+            const rawWord = String(data.word || '').trim().toUpperCase();
+            const avail = [...game.wordDuel.letters];
+            let canSpell = rawWord.length >= 3;
+            for (const char of rawWord) {
+              const idx = avail.indexOf(char);
+              if (idx === -1) {
+                canSpell = false;
+                break;
+              }
+              avail.splice(idx, 1);
+            }
+            const isValid = canSpell && isValidDictionaryWord(rawWord);
+            game.wordDuel.submissions[userId] = {
+              word: rawWord,
+              isValid,
+              length: isValid ? rawWord.length : 0
+            };
+
+            const pX = game.playerX!;
+            const pO = game.playerO!;
+            if (game.wordDuel.submissions[pX] !== null && game.wordDuel.submissions[pO] !== null) {
+              game.wordDuel.roundComplete = true;
+              const subX = game.wordDuel.submissions[pX]!;
+              const subO = game.wordDuel.submissions[pO]!;
+              const sX = subX.isValid ? subX.length : 0;
+              const sO = subO.isValid ? subO.length : 0;
+
+              let roundWinnerId: string | null = null;
+              if (sX > sO) {
+                roundWinnerId = pX;
+                game.wordDuel.scores[pX] = (game.wordDuel.scores[pX] || 0) + 1;
+              } else if (sO > sX) {
+                roundWinnerId = pO;
+                game.wordDuel.scores[pO] = (game.wordDuel.scores[pO] || 0) + 1;
+              }
+
+              game.wordDuel.roundHistory.push({
+                round: game.wordDuel.round,
+                letters: game.wordDuel.letters,
+                submissions: {
+                  [pX]: subX,
+                  [pO]: subO
+                },
+                winnerId: roundWinnerId
+              });
+
+              if (game.wordDuel.round >= game.wordDuel.maxRounds) {
+                const totalX = game.wordDuel.scores[pX] || 0;
+                const totalO = game.wordDuel.scores[pO] || 0;
+                if (totalX > totalO) {
+                  game.status = 'won';
+                  game.winner = pX;
+                } else if (totalO > totalX) {
+                  game.status = 'won';
+                  game.winner = pO;
+                } else {
+                  game.status = 'draw';
+                }
+              }
+            }
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+
+          if (subType === 'word_duel_next') {
+            if (!game.wordDuel.roundComplete || game.status !== 'playing') return;
+            game.wordDuel.round++;
+            game.wordDuel.letters = generateWordDuelLetters();
+            game.wordDuel.submissions = { [game.playerX!]: null, [game.playerO!]: null };
+            game.wordDuel.roundComplete = false;
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+        }
+
+        // 5. NUMBER GUESS
+        if (game.gameType === 'number-guess' && game.numberGuess) {
+          if (subType === 'number_guess_set_secret') {
+            if (userId !== game.numberGuess.chooserId) return;
+            if (game.numberGuess.secretNumber !== null) return;
+            const sec = parseInt(data.secret);
+            if (isNaN(sec) || sec < 1 || sec > 100) return;
+
+            game.numberGuess.secretNumber = sec;
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+
+          if (subType === 'number_guess_guess') {
+            if (userId !== game.numberGuess.guesserId) return;
+            if (game.numberGuess.secretNumber === null || game.numberGuess.roundComplete) return;
+            const g = parseInt(data.guess);
+            if (isNaN(g) || g < 1 || g > 100) return;
+
+            let hint: 'HIGHER' | 'LOWER' | 'CORRECT';
+            if (g === game.numberGuess.secretNumber) {
+              hint = 'CORRECT';
+            } else if (g < game.numberGuess.secretNumber) {
+              hint = 'HIGHER';
+            } else {
+              hint = 'LOWER';
+            }
+
+            game.numberGuess.guesses.push({ guess: g, hint });
+
+            if (hint === 'CORRECT') {
+              game.numberGuess.roundComplete = true;
+              game.numberGuess.roundWinnerId = game.numberGuess.guesserId;
+              game.numberGuess.scores[game.numberGuess.guesserId] = (game.numberGuess.scores[game.numberGuess.guesserId] || 0) + 1;
+            } else if (game.numberGuess.guesses.length >= game.numberGuess.maxGuesses) {
+              game.numberGuess.roundComplete = true;
+              game.numberGuess.roundWinnerId = game.numberGuess.chooserId;
+              game.numberGuess.scores[game.numberGuess.chooserId] = (game.numberGuess.scores[game.numberGuess.chooserId] || 0) + 1;
+            }
+
+            if (game.numberGuess.roundComplete && game.numberGuess.round >= game.numberGuess.maxRounds) {
+              const sX = game.numberGuess.scores[game.playerX!] || 0;
+              const sO = game.numberGuess.scores[game.playerO!] || 0;
+              if (sX > sO) {
+                game.status = 'won';
+                game.winner = game.playerX;
+              } else if (sO > sX) {
+                game.status = 'won';
+                game.winner = game.playerO;
+              } else {
+                game.status = 'draw';
+              }
+            }
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+
+          if (subType === 'number_guess_next') {
+            if (!game.numberGuess.roundComplete || game.status !== 'playing') return;
+            const prevChooser = game.numberGuess.chooserId;
+            game.numberGuess.chooserId = game.numberGuess.guesserId;
+            game.numberGuess.guesserId = prevChooser;
+            game.numberGuess.round++;
+            game.numberGuess.secretNumber = null;
+            game.numberGuess.guesses = [];
+            game.numberGuess.roundComplete = false;
+            game.numberGuess.roundWinnerId = null;
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+        }
+
+        // 6. REACTION RACE
+        if (game.gameType === 'reaction-race' && game.reactionRace) {
+          if (subType === 'reaction_race_ready') {
+            if (userId !== game.playerX && userId !== game.playerO) return;
+            game.reactionRace.readyPlayers[userId] = true;
+
+            const pX = game.playerX!;
+            const pO = game.playerO!;
+            if (game.reactionRace.readyPlayers[pX] && game.reactionRace.readyPlayers[pO]) {
+              game.reactionRace.state = 'waiting_go';
+              // Authoritative go timestamp 1.5 - 3.5 seconds ahead
+              game.reactionRace.goTimestamp = Date.now() + Math.floor(Math.random() * 2000) + 1500;
+            }
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+
+          if (subType === 'reaction_race_tap') {
+            if (userId !== game.playerX && userId !== game.playerO) return;
+            if (game.reactionRace.reactionTimes[userId] !== null) return; // Prevent duplicate taps
+
+            const now = Date.now();
+            const goTime = game.reactionRace.goTimestamp;
+
+            if (!goTime || now < goTime) {
+              // False start! Tapped before GO
+              game.reactionRace.reactionTimes[userId] = -1;
+            } else {
+              game.reactionRace.reactionTimes[userId] = Math.max(1, now - goTime);
+            }
+
+            const pX = game.playerX!;
+            const pO = game.playerO!;
+            const timeX = game.reactionRace.reactionTimes[pX];
+            const timeO = game.reactionRace.reactionTimes[pO];
+
+            if (timeX !== null && timeO !== null) {
+              let roundWinner: string | null = null;
+              if (timeX > 0 && timeO > 0) {
+                roundWinner = timeX < timeO ? pX : timeO < timeX ? pO : null;
+              } else if (timeX > 0 && timeO <= 0) {
+                roundWinner = pX;
+              } else if (timeO > 0 && timeX <= 0) {
+                roundWinner = pO;
+              }
+
+              if (roundWinner) {
+                game.reactionRace.scores[roundWinner] = (game.reactionRace.scores[roundWinner] || 0) + 1;
+              }
+
+              game.reactionRace.roundHistory.push({
+                round: game.reactionRace.round,
+                reactionTimes: { [pX]: timeX, [pO]: timeO },
+                winnerId: roundWinner
+              });
+              game.reactionRace.state = 'round_complete';
+
+              const sX = game.reactionRace.scores[pX] || 0;
+              const sO = game.reactionRace.scores[pO] || 0;
+              if (sX >= 3 || sO >= 3 || game.reactionRace.round >= game.reactionRace.maxRounds) {
+                if (sX > sO) {
+                  game.status = 'won';
+                  game.winner = pX;
+                } else if (sO > sX) {
+                  game.status = 'won';
+                  game.winner = pO;
+                } else {
+                  game.status = 'draw';
+                }
+              }
+            }
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+
+          if (subType === 'reaction_race_next') {
+            if (game.reactionRace.state !== 'round_complete' || game.status !== 'playing') return;
+            game.reactionRace.round++;
+            game.reactionRace.readyPlayers = { [game.playerX!]: false, [game.playerO!]: false };
+            game.reactionRace.state = 'waiting_ready';
+            game.reactionRace.goTimestamp = null;
+            game.reactionRace.reactionTimes = { [game.playerX!]: null, [game.playerO!]: null };
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+        }
+
+        // 7. CHECKERS
+        if (game.gameType === 'checkers' && game.checkers) {
+          if (subType === 'checkers_move') {
+            if (game.turn !== userId) return;
+            const from = parseInt(data.from);
+            const to = parseInt(data.to);
+            if (isNaN(from) || isNaN(to) || from < 0 || from > 63 || to < 0 || to > 63) return;
+
+            const legalMoves = getLegalCheckersMoves(
+              game.checkers.board,
+              userId,
+              game.playerX!,
+              game.checkers.mustContinueWith
+            );
+
+            const move = legalMoves.find(m => m.from === from && m.to === to);
+            if (!move) return; // Illegal move or skipped mandatory capture
+
+            const piece = game.checkers.board[from]!;
+            game.checkers.board[from] = null;
+
+            const isRed = userId === game.playerX;
+            const reachesKingRow = (isRed && to >= 56 && to <= 63) || (!isRed && to >= 0 && to <= 7);
+            let finalPiece = piece;
+            let justPromoted = false;
+            if (reachesKingRow && (piece === 'r' || piece === 'b')) {
+              finalPiece = isRed ? 'R' : 'B';
+              justPromoted = true;
+            }
+            game.checkers.board[to] = finalPiece;
+            game.checkers.lastMove = { from, to };
+
+            if (move.isCapture && move.capturedSquare !== undefined) {
+              game.checkers.board[move.capturedSquare] = null;
+              if (isRed) {
+                game.checkers.capturedX++;
+              } else {
+                game.checkers.capturedO++;
+              }
+              game.checkers.halfMovesWithoutCapture = 0;
+
+              if (!justPromoted) {
+                const nextCaptures = getLegalCheckersMoves(game.checkers.board, userId, game.playerX!, to).filter(m => m.isCapture);
+                if (nextCaptures.length > 0) {
+                  game.checkers.mustContinueWith = to;
+                } else {
+                  game.checkers.mustContinueWith = null;
+                  game.turn = game.turn === game.playerX ? game.playerO : game.playerX;
+                }
+              } else {
+                game.checkers.mustContinueWith = null;
+                game.turn = game.turn === game.playerX ? game.playerO : game.playerX;
+              }
+            } else {
+              game.checkers.halfMovesWithoutCapture++;
+              game.checkers.mustContinueWith = null;
+              game.turn = game.turn === game.playerX ? game.playerO : game.playerX;
+            }
+
+            // Check if next player has any legal moves left
+            const oppId = game.turn!;
+            const oppMoves = getLegalCheckersMoves(game.checkers.board, oppId, game.playerX!);
+            if (oppMoves.length === 0) {
+              game.status = 'won';
+              game.winner = userId;
+              game.turn = null;
+            } else if (game.checkers.halfMovesWithoutCapture >= 40) {
+              game.status = 'draw';
+              game.turn = null;
+            }
+
+            await this.putGame(game);
+            this.broadcastGame(sockets, game);
+            return;
+          }
+        }
+      }
+
       // CASE E: GAME RESET (Play again)
       if (data.type === 'game_reset') {
         const game = await this.getGame();
@@ -640,6 +1189,20 @@ export class ChatRoom {
         } else if (gameType === 'spin-wheel') {
           newGame.wheelOptions = game.wheelOptions || ['Coffee ☕', 'Pizza 🍕', 'Gaming 🎮', 'Walk 🚶', 'Code 💻', 'Sleep 😴'];
           newGame.wheelResultIndex = null;
+        } else if (gameType === 'closest-guess') {
+          newGame.closestGuess = initClosestGuess(nextPlayerX, nextPlayerO);
+        } else if (gameType === 'dots-boxes') {
+          newGame.dotsBoxes = initDotsBoxes(nextPlayerX, nextPlayerO);
+        } else if (gameType === 'connect-four') {
+          newGame.connectFour = initConnectFour();
+        } else if (gameType === 'word-duel') {
+          newGame.wordDuel = initWordDuel(nextPlayerX, nextPlayerO);
+        } else if (gameType === 'number-guess') {
+          newGame.numberGuess = initNumberGuess(nextPlayerX, nextPlayerO);
+        } else if (gameType === 'reaction-race') {
+          newGame.reactionRace = initReactionRace(nextPlayerX, nextPlayerO);
+        } else if (gameType === 'checkers') {
+          newGame.checkers = initCheckers();
         }
 
         await this.putGame(newGame);
@@ -722,15 +1285,82 @@ export class ChatRoom {
       case 'whack-a-mole': return 'Whack-a-Mole';
       case 'coin-toss': return 'Coin Toss';
       case 'spin-wheel': return 'Spin the Wheel';
+      case 'closest-guess': return 'Closest Guess';
+      case 'dots-boxes': return 'Dots and Boxes';
+      case 'connect-four': return 'Connect Four';
+      case 'word-duel': return 'Word Duel';
+      case 'number-guess': return 'Number Guess';
+      case 'reaction-race': return 'Reaction Race';
+      case 'checkers': return 'Checkers';
       default: return 'Tic-Tac-Toe';
     }
   }
 
-  // Broadcast helper
+  // Mask private choices before reveal so users cannot inspect WS frames
+  private maskGameForUser(game: GameState, userId: string): GameState {
+    if (!game) return game;
+    try {
+      const masked: GameState = JSON.parse(JSON.stringify(game));
+
+      // Closest Guess: mask secret target and opponent's guess until roundComplete
+      if (masked.closestGuess && !masked.closestGuess.roundComplete) {
+        masked.closestGuess.target = 0;
+        for (const p of Object.keys(masked.closestGuess.guesses)) {
+          if (p !== userId && masked.closestGuess.guesses[p] !== null) {
+            masked.closestGuess.guesses[p] = -999;
+          }
+        }
+      }
+
+      // Word Duel: mask opponent's submitted word until roundComplete
+      if (masked.wordDuel && !masked.wordDuel.roundComplete) {
+        for (const p of Object.keys(masked.wordDuel.submissions)) {
+          if (p !== userId && masked.wordDuel.submissions[p] !== null) {
+            masked.wordDuel.submissions[p] = {
+              word: '••••',
+              isValid: true,
+              length: masked.wordDuel.submissions[p]!.length
+            };
+          }
+        }
+      }
+
+      // Number Guess: mask secret number from guesser until roundComplete
+      if (masked.numberGuess && !masked.numberGuess.roundComplete) {
+        if (userId === masked.numberGuess.guesserId) {
+          masked.numberGuess.secretNumber = null;
+        }
+      }
+
+      // RPS: mask opponent move until both submitted
+      if (masked.rpsPlayerMoves && masked.playerX && masked.playerO) {
+        const pXMove = masked.rpsPlayerMoves[masked.playerX];
+        const pOMove = masked.rpsPlayerMoves[masked.playerO];
+        if (!pXMove || !pOMove) {
+          for (const p of Object.keys(masked.rpsPlayerMoves)) {
+            if (p !== userId && masked.rpsPlayerMoves[p]) {
+              (masked.rpsPlayerMoves as any)[p] = 'ready';
+            }
+          }
+        }
+      }
+
+      return masked;
+    } catch {
+      return game;
+    }
+  }
+
+  // Broadcast helper with authoritative per-player masking
   private broadcastGame(sockets: WebSocket[], game: GameState) {
-    const payload = JSON.stringify({ type: 'game_state', game });
     for (const socket of sockets) {
-      socket.send(payload);
+      try {
+        const [socketUserId] = this.state.getTags(socket);
+        const userGame = socketUserId ? this.maskGameForUser(game, socketUserId) : game;
+        socket.send(JSON.stringify({ type: 'game_state', game: userGame }));
+      } catch (err) {
+        console.error('Failed to send game_state to socket:', err);
+      }
     }
   }
 

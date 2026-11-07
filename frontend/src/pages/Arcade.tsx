@@ -46,6 +46,13 @@ interface GameItem {
 const MULTIPLAYER_GAMES: GameItem[] = [
   { id: 'tic-tac-toe', name: 'Tic-Tac-Toe', desc: 'Classic 3x3 alignment battle', emoji: '❌⭕', multiplayer: true },
   { id: 'chess', name: 'Sandbox Chess', desc: 'Move pieces and capture kings', emoji: '♟️', multiplayer: true },
+  { id: 'checkers', name: 'Checkers', desc: '8x8 board, diagonal moves & mandatory jumps', emoji: '🏁', multiplayer: true },
+  { id: 'connect-four', name: 'Connect Four', desc: 'Gravity token drop, align 4 discs to win', emoji: '🔴🟡', multiplayer: true },
+  { id: 'dots-boxes', name: 'Dots & Boxes', desc: 'Draw lines, capture 3x3 boxes with bonus turns', emoji: '📐', multiplayer: true },
+  { id: 'closest-guess', name: 'Closest Guess', desc: 'Secret target range, nearest number wins', emoji: '🎯', multiplayer: true },
+  { id: 'word-duel', name: 'Word Duel', desc: 'Shared 9 letters, craft longest dictionary word', emoji: '🔤', multiplayer: true },
+  { id: 'number-guess', name: 'Number Guess', desc: 'Codebreaker vs Keeper: higher/lower clues', emoji: '🔢', multiplayer: true },
+  { id: 'reaction-race', name: 'Reaction Race', desc: 'Reflex sprint: tap on GO, avoid false starts', emoji: '⚡', multiplayer: true },
   { id: 'rps', name: 'Rock Paper Scissors', desc: 'Hidden choices, real-time reveal', emoji: '✊✋✌️', multiplayer: true },
   { id: 'memory-match', name: 'Memory Match', desc: 'Turn cards to find emoji pairs', emoji: '🃏', multiplayer: true },
   { id: 'spin-wheel', name: 'Spin Wheel', desc: 'Spin & decide together in real-time', emoji: '🎡', multiplayer: true },
@@ -151,6 +158,23 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
   // Chess square selection
   const [selectedChessSquare, setSelectedChessSquare] = useState<number | null>(null);
+
+  // 7 1v1 Multiplayer Games Local State
+  const [closestGuessInput, setClosestGuessInput] = useState('');
+  const [wordDuelInput, setWordDuelInput] = useState('');
+  const [numberGuessSecretInput, setNumberGuessSecretInput] = useState('');
+  const [numberGuessInput, setNumberGuessInput] = useState('');
+  const [selectedCheckersSquare, setSelectedCheckersSquare] = useState<number | null>(null);
+  const [reactionNow, setReactionNow] = useState(Date.now());
+
+  // Real-time tick for Reaction Race countdown/trigger
+  useEffect(() => {
+    if (activeSession?.gameType !== 'reaction-race') return;
+    const interval = setInterval(() => {
+      setReactionNow(Date.now());
+    }, 50);
+    return () => clearInterval(interval);
+  }, [activeSession?.gameType]);
 
   // 100% OFFLINE SOLO GAMES STATE & LOCALSTORAGE PERSISTENCE
   // Higher-Lower
@@ -392,11 +416,22 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }
   };
 
+  const sendGameAction = (subType: string, payload: Record<string, any> = {}) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'game_action', subType, ...payload }));
+    }
+  };
+
   const handleResetGame = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'game_reset' }));
     }
     setSelectedChessSquare(null);
+    setSelectedCheckersSquare(null);
+    setClosestGuessInput('');
+    setWordDuelInput('');
+    setNumberGuessSecretInput('');
+    setNumberGuessInput('');
   };
 
   const handleCloseSession = () => {
@@ -406,6 +441,70 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     setActiveSession(null);
     setGameState(null);
     setSelectedChessSquare(null);
+    setSelectedCheckersSquare(null);
+    setClosestGuessInput('');
+    setWordDuelInput('');
+    setNumberGuessSecretInput('');
+    setNumberGuessInput('');
+  };
+
+  // Checkers legal move calculation for client highlights
+  const getClientCheckersMoves = (
+    board: (string | null)[],
+    userId: string,
+    playerX: string,
+    mustContinueWith: number | null = null
+  ) => {
+    const isRed = userId === playerX;
+    const myPiece = isRed ? 'r' : 'b';
+    const myKing = isRed ? 'R' : 'B';
+    const oppPiece = isRed ? 'b' : 'r';
+    const oppKing = isRed ? 'B' : 'R';
+
+    const captures: Array<{ from: number; to: number; isCapture: boolean }> = [];
+    const normalMoves: Array<{ from: number; to: number; isCapture: boolean }> = [];
+
+    const squaresToCheck = mustContinueWith !== null ? [mustContinueWith] : Array.from({ length: 64 }, (_, i) => i);
+
+    for (const sq of squaresToCheck) {
+      const piece = board[sq];
+      if (!piece || (piece !== myPiece && piece !== myKing)) continue;
+
+      const r = Math.floor(sq / 8);
+      const c = sq % 8;
+      const isKing = piece === myKing;
+
+      const rowDirs = isKing ? [-1, 1] : isRed ? [1] : [-1];
+      const colDirs = [-1, 1];
+
+      for (const rDir of rowDirs) {
+        for (const cDir of colDirs) {
+          const nr = r + rDir;
+          const nc = c + cDir;
+          if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+            const toSq = nr * 8 + nc;
+            if (board[toSq] === null && mustContinueWith === null) {
+              normalMoves.push({ from: sq, to: toSq, isCapture: false });
+            }
+          }
+
+          const jr = r + 2 * rDir;
+          const jc = c + 2 * cDir;
+          if (jr >= 0 && jr < 8 && jc >= 0 && jc < 8) {
+            const jumpSq = jr * 8 + jc;
+            const midSq = (r + rDir) * 8 + (c + cDir);
+            const midPiece = board[midSq];
+
+            if (board[jumpSq] === null && midPiece && (midPiece === oppPiece || midPiece === oppKing)) {
+              captures.push({ from: sq, to: jumpSq, isCapture: true });
+            }
+          }
+        }
+      }
+    }
+
+    if (captures.length > 0) return captures;
+    return mustContinueWith === null ? normalMoves : [];
   };
 
   // Chess Move Validation
@@ -1916,6 +2015,1064 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 )}
               </div>
             </div>
+          </div>
+        );
+      }
+
+      // 1. CLOSEST GUESS
+      case 'closest-guess': {
+        const isPlayerX = user?.id === gameState?.playerX;
+        const oppId = isPlayerX ? gameState?.playerO : gameState?.playerX;
+        const myGuess = gameState?.closestGuess?.guesses?.[user?.id || ''];
+        const oppGuess = oppId ? gameState?.closestGuess?.guesses?.[oppId] : null;
+        const myScore = gameState?.closestGuess?.scores?.[user?.id || ''] || 0;
+        const oppScore = oppId ? (gameState?.closestGuess?.scores?.[oppId] || 0) : 0;
+        const round = gameState?.closestGuess?.round || 1;
+        const maxRounds = gameState?.closestGuess?.maxRounds || 5;
+        const roundComplete = !!gameState?.closestGuess?.roundComplete;
+        const target = gameState?.closestGuess?.target || 0;
+        const hasSubmitted = myGuess !== null && myGuess !== undefined;
+        const oppHasSubmitted = oppGuess !== null && oppGuess !== undefined;
+
+        const handleClosestSubmit = () => {
+          const val = parseInt(closestGuessInput, 10);
+          if (isNaN(val) || val < 1 || val > 100) {
+            showToast('Enter a number between 1 and 100', 'info');
+            return;
+          }
+          sendGameAction('closest_guess_submit', { guess: val });
+          setClosestGuessInput('');
+        };
+
+        return (
+          <div className="w-full max-w-md flex flex-col items-center gap-4 p-5 bg-slate-950/80 border border-teal-500/20 rounded-3xl shadow-2xl animate-zoom">
+            {/* Header info */}
+            <div className="w-full flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎯</span>
+                <div>
+                  <h4 className="text-xs font-black text-white">Closest Guess</h4>
+                  <span className="text-[10px] text-teal-400 font-bold">Round {round} of {maxRounds}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-black">
+                <span className="text-teal-400">You: {myScore}</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-amber-400">{activeSession?.opponentName || 'Opp'}: {oppScore}</span>
+              </div>
+            </div>
+
+            {/* Target Display */}
+            <div className="w-full flex flex-col items-center justify-center p-4 rounded-2xl bg-slate-900/60 border border-white/5 text-center">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Secret Target Range: 1 – 100</span>
+              <div className="text-3xl sm:text-4xl font-black mt-1 text-teal-300 tracking-wider">
+                {roundComplete ? target : '???'}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {roundComplete ? 'Target revealed! Nearest guess took the point.' : 'Both players choose secretly. Reveal is simultaneous.'}
+              </p>
+            </div>
+
+            {/* Active Round Controls */}
+            {!roundComplete ? (
+              <div className="w-full space-y-3">
+                {!hasSubmitted ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={closestGuessInput}
+                        onChange={(e) => setClosestGuessInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleClosestSubmit()}
+                        placeholder="Guess (1–100)..."
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-400 text-center font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleClosestSubmit}
+                        className="px-5 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase rounded-xl active:scale-95 transition-all shadow-md shadow-teal-500/20"
+                      >
+                        Lock Guess
+                      </button>
+                    </div>
+                    {/* Quick Preset Buttons */}
+                    <div className="flex justify-center gap-1.5 pt-1">
+                      {[10, 25, 50, 75, 90].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setClosestGuessInput(String(num))}
+                          className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-[10px] font-bold text-slate-300 border border-white/5"
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 text-center rounded-xl bg-teal-500/10 border border-teal-500/30">
+                    <span className="text-xs font-black text-teal-300 block">🔒 Your Guess: {myGuess}</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      {oppHasSubmitted ? 'Opponent locked their guess! Calculating...' : `Waiting for ${activeSession?.opponentName || 'opponent'} to guess...`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Round Complete Reveal */
+              <div className="w-full space-y-3 animate-fade-in">
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="p-3 rounded-xl bg-slate-900 border border-teal-500/30">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Your Guess</span>
+                    <span className="text-xl font-black text-teal-300">{myGuess}</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Diff: |{Math.abs((myGuess || 0) - target)}|</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/30">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">{activeSession?.opponentName || 'Opponent'}</span>
+                    <span className="text-xl font-black text-amber-300">{oppGuess}</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">Diff: |{Math.abs((oppGuess || 0) - target)}|</span>
+                  </div>
+                </div>
+
+                {gameState?.status === 'playing' && (
+                  <button
+                    type="button"
+                    onClick={() => sendGameAction('closest_guess_next')}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider active:scale-95 transition-all"
+                  >
+                    Next Round ➡️
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* End Game Status */}
+            {gameState?.status === 'won' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-xs animate-bounce">
+                🎉 {gameState.winner === user?.id ? 'You won the match!' : `${activeSession?.opponentName || 'Opponent'} won!`}
+              </div>
+            )}
+            {gameState?.status === 'draw' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black text-xs">
+                🤝 Match tied!
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // 2. DOTS AND BOXES
+      case 'dots-boxes': {
+        const isPlayerX = user?.id === gameState?.playerX;
+        const oppId = isPlayerX ? gameState?.playerO : gameState?.playerX;
+        const drawnLines = gameState?.dotsBoxes?.drawnLines || [];
+        const boxes = gameState?.dotsBoxes?.boxes || {};
+        const myScore = gameState?.dotsBoxes?.scores?.[user?.id || ''] || 0;
+        const oppScore = oppId ? (gameState?.dotsBoxes?.scores?.[oppId] || 0) : 0;
+        const isMyTurn = gameState?.status === 'playing' && gameState?.turn === user?.id;
+
+        const handleLineClick = (lineKey: string) => {
+          if (!isMyTurn || drawnLines.includes(lineKey)) return;
+          sendGameAction('dots_boxes_draw', { line: lineKey });
+        };
+
+        // Render Dots and Lines in SVG
+        const gridSize = 4;
+        const dotGap = 66;
+        const padding = 35;
+
+        const hLines = [];
+        for (let r = 0; r < gridSize; r++) {
+          for (let c = 0; c < gridSize - 1; c++) {
+            const lineKey = `h-${r}-${c}`;
+            const isDrawn = drawnLines.includes(lineKey);
+            const x1 = padding + c * dotGap;
+            const y1 = padding + r * dotGap;
+            const x2 = padding + (c + 1) * dotGap;
+            const y2 = y1;
+            hLines.push(
+              <g key={lineKey}>
+                {/* Wider invisible click target */}
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="transparent"
+                  strokeWidth="18"
+                  className={!isDrawn && isMyTurn ? 'cursor-pointer' : ''}
+                  onClick={() => handleLineClick(lineKey)}
+                />
+                {/* Visual line */}
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={isDrawn ? '#14b8a6' : '#1e293b'}
+                  strokeWidth={isDrawn ? '4.5' : '2'}
+                  strokeLinecap="round"
+                  className={`transition-colors pointer-events-none ${!isDrawn && isMyTurn ? 'hover:stroke-teal-400' : ''}`}
+                />
+              </g>
+            );
+          }
+        }
+
+        const vLines = [];
+        for (let r = 0; r < gridSize - 1; r++) {
+          for (let c = 0; c < gridSize; c++) {
+            const lineKey = `v-${r}-${c}`;
+            const isDrawn = drawnLines.includes(lineKey);
+            const x1 = padding + c * dotGap;
+            const y1 = padding + r * dotGap;
+            const x2 = x1;
+            const y2 = padding + (r + 1) * dotGap;
+            vLines.push(
+              <g key={lineKey}>
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="transparent"
+                  strokeWidth="18"
+                  className={!isDrawn && isMyTurn ? 'cursor-pointer' : ''}
+                  onClick={() => handleLineClick(lineKey)}
+                />
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={isDrawn ? '#14b8a6' : '#1e293b'}
+                  strokeWidth={isDrawn ? '4.5' : '2'}
+                  strokeLinecap="round"
+                  className={`transition-colors pointer-events-none ${!isDrawn && isMyTurn ? 'hover:stroke-teal-400' : ''}`}
+                />
+              </g>
+            );
+          }
+        }
+
+        // Render Claimed Boxes
+        const boxElements = [];
+        for (let r = 0; r < gridSize - 1; r++) {
+          for (let c = 0; c < gridSize - 1; c++) {
+            const bKey = `b-${r}-${c}`;
+            const owner = boxes[bKey];
+            if (owner) {
+              const x = padding + c * dotGap + 4;
+              const y = padding + r * dotGap + 4;
+              const isMine = owner === user?.id;
+              boxElements.push(
+                <g key={bKey} className="animate-zoom">
+                  <rect
+                    x={x}
+                    y={y}
+                    width={dotGap - 8}
+                    height={dotGap - 8}
+                    rx="10"
+                    fill={isMine ? 'rgba(20, 184, 166, 0.25)' : 'rgba(245, 158, 11, 0.25)'}
+                    stroke={isMine ? 'rgba(20, 184, 166, 0.5)' : 'rgba(245, 158, 11, 0.5)'}
+                  />
+                  <text
+                    x={x + (dotGap - 8) / 2}
+                    y={y + (dotGap - 8) / 2 + 5}
+                    textAnchor="middle"
+                    fill={isMine ? '#2dd4bf' : '#fbbf24'}
+                    fontSize="12"
+                    fontWeight="900"
+                  >
+                    {isMine ? 'YOU' : 'OPP'}
+                  </text>
+                </g>
+              );
+            }
+          }
+        }
+
+        // Render Dots
+        const dots = [];
+        for (let r = 0; r < gridSize; r++) {
+          for (let c = 0; c < gridSize; c++) {
+            dots.push(
+              <circle
+                key={`dot-${r}-${c}`}
+                cx={padding + c * dotGap}
+                cy={padding + r * dotGap}
+                r="4.5"
+                fill="#f8fafc"
+              />
+            );
+          }
+        }
+
+        return (
+          <div className="w-full max-w-sm flex flex-col items-center gap-4 p-5 bg-slate-950/80 border border-teal-500/20 rounded-3xl shadow-2xl animate-zoom">
+            {/* Header */}
+            <div className="w-full flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📐</span>
+                <div>
+                  <h4 className="text-xs font-black text-white">Dots & Boxes</h4>
+                  <span className="text-[10px] text-teal-400 font-bold">3x3 Grid (9 Boxes)</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-black">
+                <span className="text-teal-400">You: {myScore}</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-amber-400">{activeSession?.opponentName || 'Opp'}: {oppScore}</span>
+              </div>
+            </div>
+
+            {/* Turn status */}
+            <div className="text-center h-5">
+              <span className={`text-[11px] font-bold ${isMyTurn ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`}>
+                {gameState?.status === 'playing'
+                  ? isMyTurn
+                    ? 'Your Turn! Click a line to draw.'
+                    : `Waiting for ${activeSession?.opponentName || 'opponent'} move…`
+                  : 'Game Over!'}
+              </span>
+            </div>
+
+            {/* SVG Board */}
+            <div className="p-2 bg-slate-900/60 rounded-2xl border border-white/10 flex items-center justify-center">
+              <svg width="270" height="270" viewBox="0 0 270 270" className="select-none">
+                {boxElements}
+                {hLines}
+                {vLines}
+                {dots}
+              </svg>
+            </div>
+
+            {/* End Game Status */}
+            {gameState?.status === 'won' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-xs animate-bounce">
+                🎉 {gameState.winner === user?.id ? 'You won the match!' : `${activeSession?.opponentName || 'Opponent'} won!`}
+              </div>
+            )}
+            {gameState?.status === 'draw' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black text-xs">
+                🤝 Match ended in a draw!
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // 3. CONNECT FOUR
+      case 'connect-four': {
+        const board = gameState?.connectFour?.board || Array(6).fill(null).map(() => Array(7).fill(null));
+        const isPlayerX = user?.id === gameState?.playerX;
+        const myDisc = isPlayerX ? 'R' : 'Y';
+        const isMyTurn = gameState?.status === 'playing' && gameState?.turn === user?.id;
+        const winningCells = gameState?.connectFour?.winningCells || [];
+        const lastMove = gameState?.connectFour?.lastMove;
+
+        const handleDrop = (col: number) => {
+          if (!isMyTurn || board[0][col] !== null) return;
+          sendGameAction('connect_four_drop', { col });
+        };
+
+        const isWinningCell = (r: number, c: number) => {
+          return winningCells.some(([wr, wc]: [number, number]) => wr === r && wc === c);
+        };
+
+        return (
+          <div className="w-full max-w-md flex flex-col items-center gap-4 p-5 bg-slate-950/80 border border-teal-500/20 rounded-3xl shadow-2xl animate-zoom">
+            {/* Header */}
+            <div className="w-full flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔴🟡</span>
+                <div>
+                  <h4 className="text-xs font-black text-white">Connect Four</h4>
+                  <span className="text-[10px] text-teal-400 font-bold">
+                    Playing as {myDisc === 'R' ? '🔴 Red' : '🟡 Yellow'}
+                  </span>
+                </div>
+              </div>
+              <div className="text-[11px] font-bold">
+                {isMyTurn ? (
+                  <span className="text-emerald-400 font-black animate-pulse">Your Turn!</span>
+                ) : (
+                  <span className="text-slate-400">Waiting for {activeSession?.opponentName || 'opp'}…</span>
+                )}
+              </div>
+            </div>
+
+            {/* Drop Column Buttons */}
+            <div className="grid grid-cols-7 gap-1.5 w-full max-w-[340px] px-2">
+              {Array.from({ length: 7 }).map((_, col) => {
+                const canDrop = isMyTurn && board[0][col] === null;
+                return (
+                  <button
+                    key={col}
+                    type="button"
+                    disabled={!canDrop}
+                    onClick={() => handleDrop(col)}
+                    className={`h-7 rounded-lg flex items-center justify-center font-black text-xs transition-all active:scale-90 ${canDrop
+                        ? 'bg-teal-500/20 hover:bg-teal-500/40 text-teal-300 border border-teal-500/30 cursor-pointer'
+                        : 'bg-transparent text-transparent cursor-not-allowed'
+                      }`}
+                  >
+                    ⬇️
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Connect 4 Board */}
+            <div className="bg-blue-950/80 p-3 rounded-2xl border-2 border-blue-600/40 shadow-2xl w-full max-w-[340px]">
+              <div className="grid grid-cols-7 gap-2">
+                {board.map((row: (string | null)[], rIdx: number) =>
+                  row.map((cell: string | null, cIdx: number) => {
+                    const isWin = isWinningCell(rIdx, cIdx);
+                    const isLast = lastMove && lastMove.row === rIdx && lastMove.col === cIdx;
+                    return (
+                      <div
+                        key={`${rIdx}-${cIdx}`}
+                        onClick={() => handleDrop(cIdx)}
+                        className={`aspect-square rounded-full flex items-center justify-center transition-all cursor-pointer ${cell === 'R'
+                            ? 'bg-rose-500 shadow-md shadow-rose-500/50'
+                            : cell === 'Y'
+                              ? 'bg-amber-400 shadow-md shadow-amber-400/50'
+                              : 'bg-slate-950/80 border border-blue-900/40'
+                          } ${isWin ? 'ring-4 ring-white animate-pulse' : ''} ${isLast && !isWin ? 'ring-2 ring-white/60' : ''}`}
+                      >
+                        {isWin && <span className="text-[10px]">⭐</span>}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* End Game Status */}
+            {gameState?.status === 'won' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-xs animate-bounce">
+                🎉 {gameState.winner === user?.id ? 'You connected 4 and won!' : `${activeSession?.opponentName || 'Opponent'} connected 4!`}
+              </div>
+            )}
+            {gameState?.status === 'draw' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black text-xs">
+                🤝 Board is full! Match draw!
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // 4. WORD DUEL
+      case 'word-duel': {
+        const isPlayerX = user?.id === gameState?.playerX;
+        const oppId = isPlayerX ? gameState?.playerO : gameState?.playerX;
+        const round = gameState?.wordDuel?.round || 1;
+        const maxRounds = gameState?.wordDuel?.maxRounds || 3;
+        const letters = gameState?.wordDuel?.letters || [];
+        const mySub = gameState?.wordDuel?.submissions?.[user?.id || ''];
+        const oppSub = oppId ? gameState?.wordDuel?.submissions?.[oppId] : null;
+        const myScore = gameState?.wordDuel?.scores?.[user?.id || ''] || 0;
+        const oppScore = oppId ? (gameState?.wordDuel?.scores?.[oppId] || 0) : 0;
+        const roundComplete = !!gameState?.wordDuel?.roundComplete;
+        const hasSubmitted = mySub !== null && mySub !== undefined;
+
+        const handleWordSubmit = () => {
+          if (!wordDuelInput.trim()) return;
+          sendGameAction('word_duel_submit', { word: wordDuelInput });
+          setWordDuelInput('');
+        };
+
+        const handleAddLetter = (char: string) => {
+          if (hasSubmitted || roundComplete) return;
+          setWordDuelInput(prev => prev + char);
+        };
+
+        return (
+          <div className="w-full max-w-md flex flex-col items-center gap-4 p-5 bg-slate-950/80 border border-teal-500/20 rounded-3xl shadow-2xl animate-zoom">
+            {/* Header */}
+            <div className="w-full flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔤</span>
+                <div>
+                  <h4 className="text-xs font-black text-white">Word Duel</h4>
+                  <span className="text-[10px] text-teal-400 font-bold">Round {round} of {maxRounds}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-black">
+                <span className="text-teal-400">You: {myScore}</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-amber-400">{activeSession?.opponentName || 'Opp'}: {oppScore}</span>
+              </div>
+            </div>
+
+            {/* Letter Rack */}
+            <div className="w-full space-y-2">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block text-center">Available 9 Letters</span>
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {letters.map((char: string, idx: number) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    disabled={hasSubmitted || roundComplete}
+                    onClick={() => handleAddLetter(char)}
+                    className="w-9 h-10 rounded-xl bg-slate-900 hover:bg-teal-500/20 border border-white/10 hover:border-teal-400 text-white font-black text-sm active:scale-95 transition-all shadow-md"
+                  >
+                    {char}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Input & Action */}
+            {!roundComplete ? (
+              <div className="w-full space-y-3">
+                {!hasSubmitted ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={wordDuelInput}
+                        onChange={(e) => setWordDuelInput(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && handleWordSubmit()}
+                        placeholder="Craft best word (min 3 letters)..."
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-teal-400 text-center font-bold tracking-widest uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setWordDuelInput('')}
+                        className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-bold rounded-xl"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleWordSubmit}
+                        className="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase rounded-xl active:scale-95 transition-all shadow-md shadow-teal-500/20"
+                      >
+                        Submit
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 text-center rounded-xl bg-teal-500/10 border border-teal-500/30">
+                    <span className="text-xs font-black text-teal-300 block">🔒 Locked: {mySub.word} ({mySub.length} pts)</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">
+                      {oppSub ? 'Opponent submitted! Revealing...' : `Waiting for ${activeSession?.opponentName || 'opponent'} word...`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Round Reveal */
+              <div className="w-full space-y-3 animate-fade-in">
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="p-3 rounded-xl bg-slate-900 border border-teal-500/30">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Your Word</span>
+                    <span className="text-base font-black text-teal-300">{mySub?.word || 'None'}</span>
+                    <span className={`text-[10px] block mt-0.5 ${mySub?.isValid ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {mySub?.isValid ? `Valid! (${mySub.length} letters)` : 'Not in Dictionary'}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/30">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">{activeSession?.opponentName || 'Opponent'}</span>
+                    <span className="text-base font-black text-amber-300">{oppSub?.word || 'None'}</span>
+                    <span className={`text-[10px] block mt-0.5 ${oppSub?.isValid ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {oppSub?.isValid ? `Valid! (${oppSub.length} letters)` : 'Not in Dictionary'}
+                    </span>
+                  </div>
+                </div>
+
+                {gameState?.status === 'playing' && (
+                  <button
+                    type="button"
+                    onClick={() => sendGameAction('word_duel_next')}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider active:scale-95 transition-all"
+                  >
+                    Next Round ➡️
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* End Game Status */}
+            {gameState?.status === 'won' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-xs animate-bounce">
+                🎉 {gameState.winner === user?.id ? 'You won the word duel!' : `${activeSession?.opponentName || 'Opponent'} won!`}
+              </div>
+            )}
+            {gameState?.status === 'draw' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black text-xs">
+                🤝 Match tied!
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // 5. NUMBER GUESS
+      case 'number-guess': {
+        const isPlayerX = user?.id === gameState?.playerX;
+        const oppId = isPlayerX ? gameState?.playerO : gameState?.playerX;
+        const round = gameState?.numberGuess?.round || 1;
+        const maxRounds = gameState?.numberGuess?.maxRounds || 4;
+        const chooserId = gameState?.numberGuess?.chooserId;
+        const isChooser = user?.id === chooserId;
+        const secretNumber = gameState?.numberGuess?.secretNumber;
+        const guesses = gameState?.numberGuess?.guesses || [];
+        const maxGuesses = gameState?.numberGuess?.maxGuesses || 7;
+        const roundComplete = !!gameState?.numberGuess?.roundComplete;
+        const myScore = gameState?.numberGuess?.scores?.[user?.id || ''] || 0;
+        const oppScore = oppId ? (gameState?.numberGuess?.scores?.[oppId] || 0) : 0;
+
+        const handleSetSecret = () => {
+          const s = parseInt(numberGuessSecretInput, 10);
+          if (isNaN(s) || s < 1 || s > 100) {
+            showToast('Enter a secret number between 1 and 100', 'info');
+            return;
+          }
+          sendGameAction('number_guess_set_secret', { secret: s });
+          setNumberGuessSecretInput('');
+        };
+
+        const handleMakeNumberGuess = () => {
+          const g = parseInt(numberGuessInput, 10);
+          if (isNaN(g) || g < 1 || g > 100) {
+            showToast('Enter a guess between 1 and 100', 'info');
+            return;
+          }
+          sendGameAction('number_guess_guess', { guess: g });
+          setNumberGuessInput('');
+        };
+
+        return (
+          <div className="w-full max-w-md flex flex-col items-center gap-4 p-5 bg-slate-950/80 border border-teal-500/20 rounded-3xl shadow-2xl animate-zoom">
+            {/* Header */}
+            <div className="w-full flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔢</span>
+                <div>
+                  <h4 className="text-xs font-black text-white">Number Guess</h4>
+                  <span className="text-[10px] text-teal-400 font-bold">
+                    Round {round} of {maxRounds} • {isChooser ? 'Secret Keeper 🛡️' : 'Codebreaker 🕵️'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-black">
+                <span className="text-teal-400">You: {myScore}</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-amber-400">{activeSession?.opponentName || 'Opp'}: {oppScore}</span>
+              </div>
+            </div>
+
+            {/* Role & Clues Panel */}
+            <div className="w-full space-y-3">
+              {isChooser ? (
+                /* Chooser View */
+                secretNumber === null ? (
+                  <div className="p-4 rounded-2xl bg-slate-900/70 border border-white/10 space-y-2 text-center">
+                    <span className="text-xs font-bold text-white block">Pick a secret number (1–100) for your opponent:</span>
+                    <div className="flex gap-2 justify-center">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={numberGuessSecretInput}
+                        onChange={(e) => setNumberGuessSecretInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSetSecret()}
+                        placeholder="Secret (1–100)..."
+                        className="w-36 bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-sm text-white text-center font-bold focus:outline-none focus:border-teal-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSetSecret}
+                        className="px-4 py-1.5 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase rounded-xl active:scale-95"
+                      >
+                        Lock In
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-2xl bg-slate-900/70 border border-teal-500/30 text-center">
+                    <span className="text-xs font-black text-teal-300">Your Secret Number: {secretNumber}</span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5">
+                      Attempts used: {guesses.length} / {maxGuesses}
+                    </span>
+                  </div>
+                )
+              ) : (
+                /* Guesser View */
+                secretNumber === null ? (
+                  <div className="p-4 rounded-2xl bg-slate-900/70 border border-white/10 text-center">
+                    <span className="text-xs text-slate-300 font-bold">Waiting for Secret Keeper to set a number...</span>
+                  </div>
+                ) : !roundComplete ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={numberGuessInput}
+                        onChange={(e) => setNumberGuessInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleMakeNumberGuess()}
+                        placeholder={`Guess (Attempt ${guesses.length + 1} of ${maxGuesses})...`}
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white text-center font-bold focus:outline-none focus:border-teal-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleMakeNumberGuess}
+                        className="px-5 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase rounded-xl active:scale-95"
+                      >
+                        Guess
+                      </button>
+                    </div>
+                  </div>
+                ) : null
+              )}
+
+              {/* Guess History List */}
+              {guesses.length > 0 && (
+                <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                  {guesses.map((item: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-white/5 text-xs font-bold"
+                    >
+                      <span className="text-slate-300">#{idx + 1}: Guessed <strong className="text-white">{item.guess}</strong></span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${item.hint === 'CORRECT'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : item.hint === 'HIGHER'
+                            ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                        }`}>
+                        {item.hint === 'CORRECT' ? '🎯 Correct!' : item.hint === 'HIGHER' ? '🔺 Try Higher' : '🔻 Try Lower'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Round Complete Banner */}
+              {roundComplete && (
+                <div className="p-3 rounded-2xl bg-slate-900 border border-white/10 space-y-2 text-center animate-fade-in">
+                  <span className="text-xs font-bold text-slate-300 block">
+                    Round Complete! Secret was <strong className="text-teal-400">{secretNumber}</strong>.
+                  </span>
+                  {gameState?.status === 'playing' && (
+                    <button
+                      type="button"
+                      onClick={() => sendGameAction('number_guess_next')}
+                      className="w-full py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider active:scale-95"
+                    >
+                      Next Round (Swap Roles) 🔄
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* End Game Status */}
+            {gameState?.status === 'won' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-xs animate-bounce">
+                🎉 {gameState.winner === user?.id ? 'You won the match!' : `${activeSession?.opponentName || 'Opponent'} won!`}
+              </div>
+            )}
+            {gameState?.status === 'draw' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black text-xs">
+                🤝 Match tied!
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // 6. REACTION RACE
+      case 'reaction-race': {
+        const isPlayerX = user?.id === gameState?.playerX;
+        const oppId = isPlayerX ? gameState?.playerO : gameState?.playerX;
+        const round = gameState?.reactionRace?.round || 1;
+        const maxRounds = gameState?.reactionRace?.maxRounds || 5;
+        const readyPlayers = gameState?.reactionRace?.readyPlayers || {};
+        const state = gameState?.reactionRace?.state || 'waiting_ready';
+        const goTimestamp = gameState?.reactionRace?.goTimestamp;
+        const myTime = gameState?.reactionRace?.reactionTimes?.[user?.id || ''];
+        const oppTime = oppId ? gameState?.reactionRace?.reactionTimes?.[oppId] : null;
+        const myScore = gameState?.reactionRace?.scores?.[user?.id || ''] || 0;
+        const oppScore = oppId ? (gameState?.reactionRace?.scores?.[oppId] || 0) : 0;
+        const isReady = !!readyPlayers[user?.id || ''];
+        const isOppReady = oppId ? !!readyPlayers[oppId] : false;
+
+        const isGo = state === 'waiting_go' && goTimestamp !== null && reactionNow >= goTimestamp;
+
+        const handleTap = () => {
+          if (state !== 'waiting_go' || myTime !== null) return;
+          sendGameAction('reaction_race_tap');
+        };
+
+        return (
+          <div className="w-full max-w-md flex flex-col items-center gap-4 p-5 bg-slate-950/80 border border-teal-500/20 rounded-3xl shadow-2xl animate-zoom">
+            {/* Header */}
+            <div className="w-full flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚡</span>
+                <div>
+                  <h4 className="text-xs font-black text-white">Reaction Race</h4>
+                  <span className="text-[10px] text-teal-400 font-bold">Round {round} of {maxRounds}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-black">
+                <span className="text-teal-400">You: {myScore}</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-amber-400">{activeSession?.opponentName || 'Opp'}: {oppScore}</span>
+              </div>
+            </div>
+
+            {/* Interactive Race Area */}
+            <div className="w-full">
+              {state === 'waiting_ready' ? (
+                <div className="p-6 rounded-2xl bg-slate-900/60 border border-white/10 flex flex-col items-center gap-4 text-center">
+                  <div className="flex justify-around w-full text-xs font-bold">
+                    <span>You: {isReady ? '✅ Ready' : '⏳ Waiting...'}</span>
+                    <span>{activeSession?.opponentName || 'Opponent'}: {isOppReady ? '✅ Ready' : '⏳ Waiting...'}</span>
+                  </div>
+                  {!isReady ? (
+                    <button
+                      type="button"
+                      onClick={() => sendGameAction('reaction_race_ready')}
+                      className="py-3 px-8 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl active:scale-95 transition-all shadow-lg shadow-teal-500/20"
+                    >
+                      I'm Ready! ⚡
+                    </button>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">Waiting for opponent to click Ready...</p>
+                  )}
+                </div>
+              ) : state === 'waiting_go' ? (
+                <div
+                  onClick={handleTap}
+                  className={`w-full h-52 rounded-2xl flex flex-col items-center justify-center p-6 text-center cursor-pointer select-none transition-all duration-75 ${myTime !== null
+                      ? 'bg-slate-900 border border-slate-700'
+                      : isGo
+                        ? 'bg-emerald-500 border-4 border-white shadow-2xl shadow-emerald-500/80 animate-pulse'
+                        : 'bg-rose-950/80 border-2 border-rose-500/40 hover:bg-rose-900/80'
+                    }`}
+                >
+                  {myTime !== null ? (
+                    <div>
+                      <span className="text-3xl block">⏳</span>
+                      <span className="text-xs font-black text-slate-300 mt-2 block">
+                        {myTime === -1 ? '❌ FALSE START!' : `Your Time: ${myTime} ms`}
+                      </span>
+                      <span className="text-[10px] text-slate-500">Waiting for opponent...</span>
+                    </div>
+                  ) : isGo ? (
+                    <div>
+                      <span className="text-5xl block animate-bounce">⚡</span>
+                      <span className="text-2xl font-black text-slate-950 tracking-wider uppercase mt-1 block">
+                        TAP NOW!
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="text-3xl block">🛑</span>
+                      <span className="text-sm font-black text-rose-300 tracking-wider uppercase mt-1 block">
+                        WAIT FOR GREEN...
+                      </span>
+                      <span className="text-[10px] text-rose-400/80 mt-1 block">Tapping now = False start penalty!</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Round Complete */
+                <div className="p-4 rounded-2xl bg-slate-900/60 border border-white/10 space-y-3 animate-fade-in">
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="p-3 rounded-xl bg-slate-950 border border-teal-500/30">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Your Time</span>
+                      <span className={`text-lg font-black ${myTime === -1 ? 'text-rose-400' : 'text-teal-300'}`}>
+                        {myTime === -1 ? 'False Start ❌' : `${myTime} ms`}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/30">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">{activeSession?.opponentName || 'Opponent'}</span>
+                      <span className={`text-lg font-black ${oppTime === -1 ? 'text-rose-400' : 'text-amber-300'}`}>
+                        {oppTime === -1 ? 'False Start ❌' : `${oppTime} ms`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {gameState?.status === 'playing' && (
+                    <button
+                      type="button"
+                      onClick={() => sendGameAction('reaction_race_next')}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider active:scale-95"
+                    >
+                      Next Round ➡️
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* End Game Status */}
+            {gameState?.status === 'won' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-xs animate-bounce">
+                🎉 {gameState.winner === user?.id ? 'You won the reaction sprint!' : `${activeSession?.opponentName || 'Opponent'} won!`}
+              </div>
+            )}
+            {gameState?.status === 'draw' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black text-xs">
+                🤝 Match tied!
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // 7. CHECKERS
+      case 'checkers': {
+        const board = gameState?.checkers?.board || Array(64).fill(null);
+        const isPlayerRed = user?.id === gameState?.playerX;
+        const isPlayerBlack = user?.id === gameState?.playerO;
+        const shouldFlip = isPlayerBlack; // Black pieces at bottom
+        const isMyTurn = gameState?.status === 'playing' && gameState?.turn === user?.id;
+        const mustContinueWith = gameState?.checkers?.mustContinueWith ?? null;
+        const capturedX = gameState?.checkers?.capturedX || 0;
+        const capturedO = gameState?.checkers?.capturedO || 0;
+        const lastMove = gameState?.checkers?.lastMove;
+
+        const allLegalMoves = isMyTurn
+          ? getClientCheckersMoves(board, user?.id || '', gameState?.playerX || '', mustContinueWith)
+          : [];
+
+        const selectedDestinations = selectedCheckersSquare !== null
+          ? allLegalMoves.filter(m => m.from === selectedCheckersSquare).map(m => m.to)
+          : [];
+
+        const handleCheckersClick = (sq: number) => {
+          if (!isMyTurn) return;
+          const piece = board[sq];
+          const isMyPiece = piece && (isPlayerRed ? piece === 'r' || piece === 'R' : piece === 'b' || piece === 'B');
+
+          // If clicking destination of selected piece
+          if (selectedCheckersSquare !== null && selectedDestinations.includes(sq)) {
+            sendGameAction('checkers_move', { from: selectedCheckersSquare, to: sq });
+            setSelectedCheckersSquare(null);
+            return;
+          }
+
+          // If clicking one of your pieces that has a legal move
+          if (isMyPiece) {
+            const hasMoves = allLegalMoves.some(m => m.from === sq);
+            if (hasMoves) {
+              setSelectedCheckersSquare(sq);
+            }
+          }
+        };
+
+        const squares = [];
+        for (let row = 0; row < 8; row++) {
+          for (let col = 0; col < 8; col++) {
+            const idx = shouldFlip ? (63 - (row * 8 + col)) : (row * 8 + col);
+            const isDark = (row + col) % 2 === 1;
+            const piece = board[idx];
+            const isSelected = selectedCheckersSquare === idx;
+            const isDestination = selectedDestinations.includes(idx);
+            const isLast = lastMove && (lastMove.from === idx || lastMove.to === idx);
+
+            squares.push(
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleCheckersClick(idx)}
+                className={`w-full h-full flex items-center justify-center relative p-0 m-0 border border-transparent select-none transition-colors ${isSelected
+                    ? 'bg-teal-500/40 ring-2 ring-teal-400 z-10'
+                    : isLast
+                      ? 'bg-amber-400/20'
+                      : isDark
+                        ? 'bg-[#12282c] hover:bg-[#18353a]'
+                        : 'bg-[#224f52]'
+                  }`}
+              >
+                {/* Legal destination indicator */}
+                {isDestination && (
+                  <span className="w-3.5 h-3.5 rounded-full bg-teal-400 shadow-lg shadow-teal-400/80 animate-pulse pointer-events-none" />
+                )}
+
+                {/* Checker Piece */}
+                {piece && (
+                  <div
+                    className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-black text-sm select-none shadow-md transition-transform ${piece === 'r' || piece === 'R'
+                        ? 'bg-rose-600 border-2 border-rose-300 text-white shadow-rose-600/50'
+                        : 'bg-slate-900 border-2 border-slate-400 text-white shadow-black/80'
+                      } ${isSelected ? 'scale-110' : ''}`}
+                  >
+                    {(piece === 'R' || piece === 'B') && <span>👑</span>}
+                  </div>
+                )}
+              </button>
+            );
+          }
+        }
+
+        return (
+          <div className="w-full max-w-md flex flex-col items-center gap-3 animate-zoom">
+            {/* Header */}
+            <div className="w-full flex items-center justify-between border-b border-white/10 pb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🏁</span>
+                <div>
+                  <h4 className="text-xs font-black text-white">Checkers</h4>
+                  <span className="text-[10px] text-teal-400 font-bold">
+                    Playing as {isPlayerRed ? '🔴 Red' : '⚫ Black'}
+                  </span>
+                </div>
+              </div>
+              <div className="text-xs font-black">
+                <span className="text-teal-400">Captured: {isPlayerRed ? capturedX : capturedO}</span>
+              </div>
+            </div>
+
+            {/* Turn status */}
+            <div className="h-6 flex items-center justify-center text-[11px] font-bold">
+              {gameState?.status === 'playing' ? (
+                isMyTurn ? (
+                  <span className="text-emerald-400 font-black animate-pulse">
+                    Your Turn! {mustContinueWith !== null ? '⚡ Must continue jump!' : 'Select piece to move.'}
+                  </span>
+                ) : (
+                  <span className="text-slate-400">Waiting for {activeSession?.opponentName || 'opponent'} move…</span>
+                )
+              ) : (
+                <span className="text-amber-400 font-black">Game Over</span>
+              )}
+            </div>
+
+            {/* 8x8 Board */}
+            <div
+              className="w-full max-w-[360px] aspect-square grid grid-cols-8 grid-rows-8 border-2 border-teal-500/40 rounded-2xl overflow-hidden shadow-2xl bg-[#091518]"
+              style={{
+                width: 'min(100%, 360px)',
+                aspectRatio: '1 / 1'
+              }}
+            >
+              {squares}
+            </div>
+
+            {/* End Game Status */}
+            {gameState?.status === 'won' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-black text-xs animate-bounce">
+                🎉 {gameState.winner === user?.id ? 'You won the checkers match!' : `${activeSession?.opponentName || 'Opponent'} won!`}
+              </div>
+            )}
+            {gameState?.status === 'draw' && (
+              <div className="w-full text-center py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 font-black text-xs">
+                🤝 40 moves without capture! Match draw!
+              </div>
+            )}
           </div>
         );
       }
