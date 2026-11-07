@@ -422,11 +422,8 @@ app.get('/api/media/file/*', async (c) => {
       headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Content-Range', `bytes ${start}-${end}/${finalContent.byteLength}`);
       headers.set('Content-Length', chunk.byteLength.toString());
-      if (contentType.startsWith('image/') || contentType.startsWith('video/') || contentType.startsWith('audio/')) {
-        headers.set('Content-Disposition', 'inline');
-      } else {
-        headers.set('Content-Disposition', 'attachment');
-      }
+      const isInlineRequested = c.req.query('inline') === '1' || c.req.query('view') === '1' || contentType.startsWith('image/') || contentType.startsWith('video/') || contentType.startsWith('audio/') || contentType === 'application/pdf' || contentType.startsWith('text/');
+      headers.set('Content-Disposition', isInlineRequested ? 'inline' : 'attachment');
 
       return new Response(chunk, {
         status: 206,
@@ -440,11 +437,8 @@ app.get('/api/media/file/*', async (c) => {
       headers.set('Accept-Ranges', 'bytes');
       headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Content-Length', finalContent.byteLength.toString());
-      if (contentType.startsWith('image/') || contentType.startsWith('video/') || contentType.startsWith('audio/')) {
-        headers.set('Content-Disposition', 'inline');
-      } else {
-        headers.set('Content-Disposition', 'attachment');
-      }
+      const isInlineRequested = c.req.query('inline') === '1' || c.req.query('view') === '1' || contentType.startsWith('image/') || contentType.startsWith('video/') || contentType.startsWith('audio/') || contentType === 'application/pdf' || contentType.startsWith('text/');
+      headers.set('Content-Disposition', isInlineRequested ? 'inline' : 'attachment');
 
       return new Response(finalContent, {
         headers,
