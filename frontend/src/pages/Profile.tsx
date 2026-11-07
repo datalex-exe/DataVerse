@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { compressImage } from '../utils/compress';
@@ -6,6 +6,7 @@ import { uploadMediaFile, MAX_FILE_SIZE } from '../utils/upload';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 import { ImageCropper } from '../components/ImageCropper';
 import { ReportModal } from '../components/ReportModal';
+import { generateQRCodeSvgPath } from '../utils/qrCode';
 import { 
   Loader2, 
   Heart, 
@@ -146,6 +147,8 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [loadingSaved, setLoadingSaved] = useState<boolean>(false);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
+  const upiPaymentUri = 'upi://pay?pa=datalex@icici&pn=DataVerse&am=199&cu=INR&tn=Verification%20Badge';
+  const upiQrSvg = useMemo(() => generateQRCodeSvgPath(upiPaymentUri, 4), [upiPaymentUri]);
   const [collections, setCollections] = useState<any[]>([]);
   const [selectedCollection, setSelectedCollection] = useState<{ id: string; name: string } | null>(null);
   const [collectionPosts, setCollectionPosts] = useState<Post[]>([]);
@@ -2549,74 +2552,10 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                           {/* OPTION 2 CONTENT: QR CODE SCANNING */}
                           {paymentOption === 'qr' && (
                             <div className="p-6 rounded-[16px] bg-[var(--input)] border border-[var(--line)] space-y-4 text-center animate-fade-in">
-                              <div className="w-56 h-56 mx-auto bg-white p-3.5 rounded-[16px] shadow-lg flex flex-col items-center justify-center relative">
-                                <svg viewBox="0 0 100 100" className="w-full h-full">
-                                  <rect x="5" y="5" width="26" height="26" fill="#040b0d" rx="4" />
-                                  <rect x="9" y="9" width="18" height="18" fill="white" rx="2" />
-                                  <rect x="13" y="13" width="10" height="10" fill="#040b0d" rx="1" />
-
-                                  <rect x="69" y="5" width="26" height="26" fill="#040b0d" rx="4" />
-                                  <rect x="73" y="9" width="18" height="18" fill="white" rx="2" />
-                                  <rect x="77" y="13" width="10" height="10" fill="#040b0d" rx="1" />
-
-                                  <rect x="5" y="69" width="26" height="26" fill="#040b0d" rx="4" />
-                                  <rect x="9" y="73" width="18" height="18" fill="white" rx="2" />
-                                  <rect x="13" y="77" width="10" height="10" fill="#040b0d" rx="1" />
-
-                                  <rect x="36" y="8" width="5" height="5" fill="#040b0d" />
-                                  <rect x="46" y="8" width="5" height="5" fill="#040b0d" />
-                                  <rect x="56" y="8" width="5" height="5" fill="#040b0d" />
-                                  <rect x="36" y="18" width="5" height="5" fill="#040b0d" />
-                                  <rect x="46" y="18" width="5" height="5" fill="#040b0d" />
-                                  <rect x="56" y="18" width="5" height="5" fill="#040b0d" />
-                                  <rect x="8" y="36" width="5" height="5" fill="#040b0d" />
-                                  <rect x="18" y="36" width="5" height="5" fill="#040b0d" />
-                                  <rect x="28" y="36" width="5" height="5" fill="#040b0d" />
-                                  <rect x="38" y="36" width="6" height="6" fill="#0d9488" />
-                                  <rect x="48" y="36" width="6" height="6" fill="#0d9488" />
-                                  <rect x="58" y="36" width="6" height="6" fill="#040b0d" />
-                                  <rect x="68" y="36" width="5" height="5" fill="#040b0d" />
-                                  <rect x="78" y="36" width="5" height="5" fill="#040b0d" />
-                                  <rect x="88" y="36" width="5" height="5" fill="#040b0d" />
-                                  <rect x="8" y="46" width="5" height="5" fill="#040b0d" />
-                                  <rect x="18" y="46" width="5" height="5" fill="#040b0d" />
-                                  <rect x="28" y="46" width="5" height="5" fill="#040b0d" />
-                                  <rect x="38" y="46" width="6" height="6" fill="#0d9488" />
-                                  <rect x="48" y="46" width="6" height="6" fill="#0d9488" />
-                                  <rect x="58" y="46" width="6" height="6" fill="#040b0d" />
-                                  <rect x="68" y="46" width="5" height="5" fill="#040b0d" />
-                                  <rect x="78" y="46" width="5" height="5" fill="#040b0d" />
-                                  <rect x="88" y="46" width="5" height="5" fill="#040b0d" />
-                                  <rect x="8" y="56" width="5" height="5" fill="#040b0d" />
-                                  <rect x="18" y="56" width="5" height="5" fill="#040b0d" />
-                                  <rect x="28" y="56" width="5" height="5" fill="#040b0d" />
-                                  <rect x="38" y="56" width="6" height="6" fill="#040b0d" />
-                                  <rect x="48" y="56" width="6" height="6" fill="#040b0d" />
-                                  <rect x="58" y="56" width="6" height="6" fill="#040b0d" />
-                                  <rect x="68" y="56" width="5" height="5" fill="#040b0d" />
-                                  <rect x="78" y="56" width="5" height="5" fill="#040b0d" />
-                                  <rect x="88" y="56" width="5" height="5" fill="#040b0d" />
-                                  <rect x="36" y="68" width="5" height="5" fill="#040b0d" />
-                                  <rect x="46" y="68" width="5" height="5" fill="#040b0d" />
-                                  <rect x="56" y="68" width="5" height="5" fill="#040b0d" />
-                                  <rect x="68" y="68" width="5" height="5" fill="#040b0d" />
-                                  <rect x="78" y="68" width="5" height="5" fill="#040b0d" />
-                                  <rect x="88" y="68" width="5" height="5" fill="#040b0d" />
-                                  <rect x="36" y="78" width="5" height="5" fill="#040b0d" />
-                                  <rect x="46" y="78" width="5" height="5" fill="#040b0d" />
-                                  <rect x="56" y="78" width="5" height="5" fill="#040b0d" />
-                                  <rect x="68" y="78" width="5" height="5" fill="#040b0d" />
-                                  <rect x="78" y="78" width="5" height="5" fill="#040b0d" />
-                                  <rect x="88" y="78" width="5" height="5" fill="#040b0d" />
-                                  <rect x="36" y="88" width="5" height="5" fill="#040b0d" />
-                                  <rect x="46" y="88" width="5" height="5" fill="#040b0d" />
-                                  <rect x="56" y="88" width="5" height="5" fill="#040b0d" />
-                                  <rect x="68" y="88" width="5" height="5" fill="#040b0d" />
-                                  <rect x="78" y="88" width="5" height="5" fill="#040b0d" />
-                                  <rect x="88" y="88" width="5" height="5" fill="#040b0d" />
-
-                                  <circle cx="50" cy="50" r="10" fill="#0d9488" />
-                                  <path d="M47 50 L49 52 L54 47" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                              <div className="w-56 h-56 mx-auto bg-white p-3.5 rounded-2xl shadow-lg flex flex-col items-center justify-center relative border border-teal-500/20">
+                                <svg viewBox={`0 0 ${upiQrSvg.size} ${upiQrSvg.size}`} className="w-full h-full">
+                                  <rect width="100%" height="100%" fill="#ffffff" />
+                                  <path d={upiQrSvg.path} fill="#040b0d" />
                                 </svg>
                               </div>
                               <div className="space-y-1">

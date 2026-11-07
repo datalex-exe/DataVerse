@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { X, Copy, Check, Download, Share2 } from 'lucide-react';
 import { VerifiedBadge } from './VerifiedBadge';
+import { drawQRCodeToCanvas } from '../utils/qrCode';
 
 interface ProfileQrModalProps {
   isOpen: boolean;
@@ -23,97 +24,18 @@ export const ProfileQrModal: React.FC<ProfileQrModalProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const profileUrl = `${window.location.origin}/${username}`;
 
-  // Draw modern stylized QR on canvas
+  // Draw ISO/IEC 18004 scannable QR on canvas
   useEffect(() => {
     if (!isOpen || !canvasRef.current) return;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const size = 260;
-    canvas.width = size;
-    canvas.height = size;
-
-    // Background gradient
-    const grad = ctx.createLinearGradient(0, 0, size, size);
-    grad.addColorStop(0, '#040d0e');
-    grad.addColorStop(1, '#061a1c');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-
-    // Frame border
-    ctx.strokeStyle = '#2dd4bf33';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, size - 4, size - 4);
-
-    // Deterministic pseudo-random matrix based on username
-    let hash = 0;
-    for (let i = 0; i < profileUrl.length; i++) {
-      hash = (hash << 5) - hash + profileUrl.charCodeAt(i);
-      hash |= 0;
-    }
-
-    const grid = 21;
-    const cellSize = (size - 40) / grid;
-    const offsetX = 20;
-    const offsetY = 20;
-
-    // Helper for corner alignment markers
-    const drawMarker = (x: number, y: number) => {
-      ctx.fillStyle = '#2dd4bf';
-      ctx.fillRect(x, y, cellSize * 7, cellSize * 7);
-      ctx.fillStyle = '#040d0e';
-      ctx.fillRect(x + cellSize, y + cellSize, cellSize * 5, cellSize * 5);
-      ctx.fillStyle = '#2dd4bf';
-      ctx.fillRect(x + cellSize * 2, y + cellSize * 2, cellSize * 3, cellSize * 3);
-    };
-
-    drawMarker(offsetX, offsetY);
-    drawMarker(offsetX + cellSize * 14, offsetY);
-    drawMarker(offsetX, offsetY + cellSize * 14);
-
-    // Fill data grid
-    ctx.fillStyle = '#e0f2f1';
-    for (let r = 0; r < grid; r++) {
-      for (let c = 0; c < grid; c++) {
-        // Skip corner markers
-        if ((r < 8 && c < 8) || (r < 8 && c > 12) || (r > 12 && c < 8)) continue;
-        // Center area for logo
-        if (r >= 8 && r <= 12 && c >= 8 && c <= 12) continue;
-
-        const val = Math.abs(Math.sin((r * 31 + c * 17 + hash) * 0.1));
-        if (val > 0.45) {
-          ctx.beginPath();
-          ctx.arc(
-            offsetX + c * cellSize + cellSize / 2,
-            offsetY + r * cellSize + cellSize / 2,
-            cellSize / 2.3,
-            0,
-            Math.PI * 2
-          );
-          ctx.fill();
-        }
-      }
-    }
-
-    // Center circular badge for DataVerse Emblem
-    const centerX = size / 2;
-    const centerY = size / 2;
-    const centerRadius = cellSize * 2.8;
-
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, centerRadius + 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#040d0e';
-    ctx.fill();
-    ctx.strokeStyle = '#2dd4bf';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.font = 'bold 16px Outfit, sans-serif';
-    ctx.fillStyle = '#2dd4bf';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('DV', centerX, centerY);
+    canvas.width = 560;
+    canvas.height = 560;
+    drawQRCodeToCanvas(canvas, profileUrl, {
+      darkColor: '#040b0d',
+      lightColor: '#ffffff',
+      quietZone: 4,
+      centerText: 'DV'
+    });
   }, [isOpen, profileUrl]);
 
   if (!isOpen) return null;
@@ -176,13 +98,12 @@ export const ProfileQrModal: React.FC<ProfileQrModalProps> = ({
         </h3>
         <p className="text-xs text-[var(--accent-2)] font-semibold mt-0.5">@{username}</p>
 
-        {/* Canvas QR Code */}
-        <div className="my-5 p-2 rounded-2xl bg-[#040d0e] border border-teal-500/20 shadow-xl relative group">
+        {/* Canvas QR Code Card */}
+        <div className="my-5 p-3 rounded-2xl bg-white border border-teal-500/30 shadow-2xl relative flex flex-col items-center group">
           <canvas ref={canvasRef} className="rounded-xl block" style={{ width: 220, height: 220 }} />
-          <div className="absolute inset-x-0 bottom-3 flex justify-center pointer-events-none">
-            <span className="text-[9px] font-mono uppercase tracking-widest text-teal-400/90 bg-[#040d0e]/90 px-2 py-0.5 rounded-full border border-teal-500/30">
-              Scan to Connect
-            </span>
+          <div className="mt-2 text-[10px] font-mono uppercase tracking-widest text-slate-600 flex items-center gap-1.5 font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
+            <span>Scan with phone camera</span>
           </div>
         </div>
 
