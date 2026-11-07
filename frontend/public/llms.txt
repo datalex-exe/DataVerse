@@ -1,0 +1,27 @@
+# DataVerse
+
+> DataVerse is a modern, real-time social networking platform, creator community hub, and interactive web arcade crafted by Datalex.
+
+DataVerse provides users with seamless real-time messaging, encrypted chat sessions, rich multimedia post sharing, creator discovery, responsive dark-themed UI, offline-capable retro arcade gaming, and admin moderation tools.
+
+## Core Features
+- [Explore Feed](https://dataverse-datalex.pages.dev/explore): Browse trending public posts, photos, reels, and creators across the network.
+- [Arcade & Games](https://dataverse-datalex.pages.dev/arcade): 100% offline-capable retro arcade suites, mini-games, and 1v1 multiplayer friend battles.
+- [Public Profiles](https://dataverse-datalex.pages.dev/@datalex): Discover verified creators, follow user feeds, and view activity portfolios.
+- [Real-Time Messaging](https://dataverse-datalex.pages.dev/chat): Direct and group messaging with media sharing, voice recordings, and end-to-end user privacy.
+
+## Legal & Compliance
+- [Terms of Service](https://dataverse-datalex.pages.dev/terms): User agreement, rights, community standards, and platform usage terms.
+- [Privacy Policy](https://dataverse-datalex.pages.dev/privacy): Data protection practices, encryption standards, and user privacy guarantees.
+- [Cookie Policy](https://dataverse-datalex.pages.dev/cookies): Transparent disclosure of local storage, sessions, and cookie utilization.
+- [Refund Policy](https://dataverse-datalex.pages.dev/refund): Verification subscriptions and transaction policy.
+- [Contact Support](https://dataverse-datalex.pages.dev/contact): Official support channels, abuse reporting, and security contacts.
+
+## Technical Architecture
+- **Frontend**: React 18, TypeScript, Tailwind CSS, Vite, Cloudflare Pages Edge network.
+- **Backend**: Cloudflare Workers, Hono framework, Cloudflare D1 SQL database, Cloudflare KV, Durable Objects for WebSocket coordination.
+- **Security**: Content Security Policy, strict session tokens, input validation, role-based access control (RBAC).
+
+## Optional
+- [Sitemap](https://dataverse-datalex.pages.dev/sitemap.xml): Machine-readable XML index of public platform endpoints.
+- [Robots Policy](https://dataverse-datalex.pages.dev/robots.txt): Crawler indexing and retrieval instructions for search engines and AI assistants.

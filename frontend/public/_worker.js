@@ -122,6 +122,35 @@ export default {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // 3.1 LLMS.TXT (AI Context & Assistant Specification)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (url.pathname === '/llms.txt' || url.pathname === '/.well-known/llms.txt' || url.pathname === '/llms-full.txt') {
+      try {
+        const targetEndpoint = url.pathname.includes('full') ? '/api/seo/llms-full.txt' : '/api/seo/llms.txt';
+        const upstream = await fetch(`${WORKER_URL}${targetEndpoint}`);
+        if (upstream.ok) {
+          const body = await upstream.text();
+          return new Response(body, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/markdown; charset=utf-8',
+              'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+              'X-Robots-Tag': 'all',
+            },
+          });
+        }
+      } catch (_) {}
+      // Fallback to static asset in /public
+      const cleanAssetUrl = new URL(url.pathname, url.origin);
+      const asset = await env.ASSETS.fetch(new Request(cleanAssetUrl.toString(), request));
+      const newHeaders = new Headers(asset.headers);
+      newHeaders.set('Content-Type', 'text/markdown; charset=utf-8');
+      newHeaders.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+      newHeaders.set('X-Robots-Tag', 'all');
+      return new Response(asset.body, { status: asset.status, headers: newHeaders });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // 4. API PROXY (/api/*)
     // ──────────────────────────────────────────────────────────────────────────
     if (url.pathname.startsWith('/api/')) {

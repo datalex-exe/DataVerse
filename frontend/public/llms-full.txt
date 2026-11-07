@@ -1,0 +1,22 @@
+# DataVerse — Full Technical & Platform Overview
+
+> Comprehensive system documentation, features, user guides, and architecture for DataVerse by Datalex.
+
+## Platform Summary
+DataVerse is a full-featured real-time web application combining modern social networking, secure peer communications, and lightweight 1v1 multiplayer retro arcade gaming.
+
+## Core Capabilities
+- **Multimedia Sharing**: Upload and view photos, videos, and reels with adaptive client-side optimization and responsive streaming.
+- **Direct & Group Conversations**: Instant messaging powered by Cloudflare Durable Objects and WebSockets with encrypted payload storage.
+- **Arcade & Mini-Games**: Offline-first Retro Canvas Suite (Runner, Snake, Flappy, Breakout) and 1v1 Multiplayer Battles (Tic-Tac-Toe, Chess, Rock-Paper-Scissors, Memory Match, Spin Wheel, Closest Guess, Dots and Boxes, Connect Four, Word Duel, Number Guess, Reaction Race, Checkers).
+- **Super Admin Vault**: Comprehensive moderation queue, abuse report triage, user management, and real-time live and purged asset audit sync.
+
+## Endpoints & URLs
+- Homepage: https://dataverse-datalex.pages.dev/
+- Explore: https://dataverse-datalex.pages.dev/explore
+- Arcade: https://dataverse-datalex.pages.dev/arcade
+- Terms: https://dataverse-datalex.pages.dev/terms
+- Privacy: https://dataverse-datalex.pages.dev/privacy
+- Support: https://dataverse-datalex.pages.dev/contact
+- Sitemap: https://dataverse-datalex.pages.dev/sitemap.xml
+- Robots: https://dataverse-datalex.pages.dev/robots.txt

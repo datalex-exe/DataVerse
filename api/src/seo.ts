@@ -44,6 +44,8 @@ Allow: /logo.png
 Allow: /arcade.js
 Allow: /arcade-sw.js
 Allow: /arcade-offline.html
+Allow: /llms.txt
+Allow: /llms-full.txt
 
 # Prevent crawling of private/authenticated social network features
 Disallow: /api/
@@ -74,7 +76,8 @@ Allow: /privacy
 Allow: /cookies
 Allow: /refund
 Allow: /contact
-Disallow: /api/
+Allow: /llms.txt
+Allow: /llms-full.txt
 Disallow: /chat
 Disallow: /messages
 Disallow: /admin
@@ -246,6 +249,86 @@ seoApp.get(`/${INDEXNOW_KEY}.txt`, (c) => {
   return c.text(INDEXNOW_KEY, 200, {
     'Content-Type': 'text/plain; charset=utf-8',
     'Cache-Control': 'public, max-age=604800, s-maxage=604800'
+  });
+});
+
+const LLMS_TXT = `# DataVerse
+
+> DataVerse is a modern, real-time social networking platform, creator community hub, and interactive web arcade crafted by Datalex.
+
+DataVerse provides users with seamless real-time messaging, encrypted chat sessions, rich multimedia post sharing, creator discovery, responsive dark-themed UI, offline-capable retro arcade gaming, and admin moderation tools.
+
+## Core Features
+- [Explore Feed](https://dataverse-datalex.pages.dev/explore): Browse trending public posts, photos, reels, and creators across the network.
+- [Arcade & Games](https://dataverse-datalex.pages.dev/arcade): 100% offline-capable retro arcade suites, mini-games, and 1v1 multiplayer friend battles.
+- [Public Profiles](https://dataverse-datalex.pages.dev/@datalex): Discover verified creators, follow user feeds, and view activity portfolios.
+- [Real-Time Messaging](https://dataverse-datalex.pages.dev/chat): Direct and group messaging with media sharing, voice recordings, and end-to-end user privacy.
+
+## Legal & Compliance
+- [Terms of Service](https://dataverse-datalex.pages.dev/terms): User agreement, rights, community standards, and platform usage terms.
+- [Privacy Policy](https://dataverse-datalex.pages.dev/privacy): Data protection practices, encryption standards, and user privacy guarantees.
+- [Cookie Policy](https://dataverse-datalex.pages.dev/cookies): Transparent disclosure of local storage, sessions, and cookie utilization.
+- [Refund Policy](https://dataverse-datalex.pages.dev/refund): Verification subscriptions and transaction policy.
+- [Contact Support](https://dataverse-datalex.pages.dev/contact): Official support channels, abuse reporting, and security contacts.
+
+## Technical Architecture
+- **Frontend**: React 18, TypeScript, Tailwind CSS, Vite, Cloudflare Pages Edge network.
+- **Backend**: Cloudflare Workers, Hono framework, Cloudflare D1 SQL database, Cloudflare KV, Durable Objects for WebSocket coordination.
+- **Security**: Content Security Policy, strict session tokens, input validation, role-based access control (RBAC).
+
+## Optional
+- [Sitemap](https://dataverse-datalex.pages.dev/sitemap.xml): Machine-readable XML index of public platform endpoints.
+- [Robots Policy](https://dataverse-datalex.pages.dev/robots.txt): Crawler indexing and retrieval instructions for search engines and AI assistants.
+`;
+
+const LLMS_FULL_TXT = `# DataVerse — Full Technical & Platform Overview
+
+> Comprehensive system documentation, features, user guides, and architecture for DataVerse by Datalex.
+
+## Platform Summary
+DataVerse is a full-featured real-time web application combining modern social networking, secure peer communications, and lightweight 1v1 multiplayer retro arcade gaming.
+
+## Core Capabilities
+- **Multimedia Sharing**: Upload and view photos, videos, and reels with adaptive client-side optimization and responsive streaming.
+- **Direct & Group Conversations**: Instant messaging powered by Cloudflare Durable Objects and WebSockets with encrypted payload storage.
+- **Arcade & Mini-Games**: Offline-first Retro Canvas Suite (Runner, Snake, Flappy, Breakout) and 1v1 Multiplayer Battles (Tic-Tac-Toe, Chess, Rock-Paper-Scissors, Memory Match, Spin Wheel, Closest Guess, Dots and Boxes, Connect Four, Word Duel, Number Guess, Reaction Race, Checkers).
+- **Super Admin Vault**: Comprehensive moderation queue, abuse report triage, user management, and real-time live and purged asset audit sync.
+
+## Endpoints & URLs
+- Homepage: https://dataverse-datalex.pages.dev/
+- Explore: https://dataverse-datalex.pages.dev/explore
+- Arcade: https://dataverse-datalex.pages.dev/arcade
+- Terms: https://dataverse-datalex.pages.dev/terms
+- Privacy: https://dataverse-datalex.pages.dev/privacy
+- Support: https://dataverse-datalex.pages.dev/contact
+- Sitemap: https://dataverse-datalex.pages.dev/sitemap.xml
+- Robots: https://dataverse-datalex.pages.dev/robots.txt
+`;
+
+/**
+ * 5. LLMS.TXT & LLMS-FULL.TXT (Standard AI & Large Language Model Specification)
+ */
+seoApp.get('/llms.txt', (c) => {
+  return c.text(LLMS_TXT, 200, {
+    'Content-Type': 'text/markdown; charset=utf-8',
+    'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+    'X-Robots-Tag': 'all'
+  });
+});
+
+seoApp.get('/.well-known/llms.txt', (c) => {
+  return c.text(LLMS_TXT, 200, {
+    'Content-Type': 'text/markdown; charset=utf-8',
+    'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+    'X-Robots-Tag': 'all'
+  });
+});
+
+seoApp.get('/llms-full.txt', (c) => {
+  return c.text(LLMS_FULL_TXT, 200, {
+    'Content-Type': 'text/markdown; charset=utf-8',
+    'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+    'X-Robots-Tag': 'all'
   });
 });
 
