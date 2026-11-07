@@ -48,8 +48,10 @@ import {
   RefreshCw,
   WifiOff,
   Sparkles,
-    Phone,
-  Info
+  Phone,
+  Info,
+  AlertCircle,
+  ArrowDown
 } from 'lucide-react';
 import { AudioCallModal, CallState } from '../components/AudioCallModal';
 import { LinkPreviewCard } from '../components/LinkPreviewCard';
@@ -370,7 +372,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </span>
             <span 
               className="text-[var(--muted)] truncate max-w-full text-[11px] mt-0.5 line-clamp-1"
-              style={{ overflowWrap: 'anywhere' }}
+              style={{ overflowWrap: 'break-word', wordBreak: 'normal' }}
             >
               {getReplyBodyText(replyingToMessage)}
             </span>
@@ -909,6 +911,42 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const userSentMessageRef = useRef<boolean>(false);
   const prevConvoIdRef = useRef<string | null>(null);
   const [draftsByConvo, setDraftsByConvo] = useState<{ [convoId: string]: string }>({});
+  const [failedMsgIds, setFailedMsgIds] = useState<Set<string>>(new Set());
+  const [showNewMessagesPill, setShowNewMessagesPill] = useState<boolean>(false);
+  const [isAppOnline, setIsAppOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const offlineQueueRef = useRef<Array<{ type: string; body: string; id: string }>>([]);
+
+  // Listen to network status changes to flush queued messages
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsAppOnline(true);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && offlineQueueRef.current.length > 0) {
+        const queue = [...offlineQueueRef.current];
+        offlineQueueRef.current = [];
+        queue.forEach(item => {
+          try {
+            wsRef.current?.send(JSON.stringify({ type: item.type, body: item.body }));
+            setFailedMsgIds(prev => {
+              const next = new Set(prev);
+              next.delete(item.id);
+              return next;
+            });
+          } catch {
+            setFailedMsgIds(prev => new Set(prev).add(item.id));
+          }
+        });
+      }
+    };
+    const handleOffline = () => {
+      setIsAppOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Revoke object URLs on unmount to prevent memory leaks
   useEffect(() => {
@@ -1190,6 +1228,24 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             body: forwardPayload
           }));
         }
+
+        // Flush offline queued messages
+        if (offlineQueueRef.current.length > 0) {
+          const queue = [...offlineQueueRef.current];
+          offlineQueueRef.current = [];
+          queue.forEach(item => {
+            try {
+              ws.send(JSON.stringify({ type: item.type, body: item.body }));
+              setFailedMsgIds(prev => {
+                const next = new Set(prev);
+                next.delete(item.id);
+                return next;
+              });
+            } catch {
+              setFailedMsgIds(prev => new Set(prev).add(item.id));
+            }
+          });
+        }
       };
 
       ws.onmessage = (event) => {
@@ -1419,6 +1475,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               );
               let next: Message[];
               if (optimisticIdx !== -1) {
+                const optId = prev[optimisticIdx].id;
+                setFailedMsgIds(f => {
+                  const copy = new Set(f);
+                  copy.delete(optId);
+                  return copy;
+                });
                 next = [...prev];
                 next[optimisticIdx] = data.message;
               } else {
@@ -1429,6 +1491,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             });
 
             if (data.message.sender_id !== user?.id) {
+              if (!isNearBottomRef.current) {
+                setShowNewMessagesPill(true);
+              }
               fetch(`/api/conversations/${activeConvo.id}/read`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -1585,6 +1650,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     const threshold = 120; // px threshold from bottom
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     isNearBottomRef.current = distFromBottom <= threshold;
+    if (isNearBottomRef.current) {
+      setShowNewMessagesPill(false);
+    }
   }, [loadOlderMessages, hasMoreOlderMessages]);
 
   const handleInputFocus = useCallback(() => {
@@ -1607,6 +1675,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       prevConvoIdRef.current = activeConvo.id;
       isNearBottomRef.current = true;
       userSentMessageRef.current = false;
+      setShowNewMessagesPill(false);
     }
   }, [activeConvo?.id]);
 
@@ -2376,16 +2445,40 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   };
 
 
+  const handleRetryMessage = (msg: Message) => {
+    const secureMedia = parseMessageBody(msg.body);
+    if (secureMedia && pendingMediaMapRef.current.has(msg.id)) {
+      handleRetryUpload(msg.id);
+      return;
+    }
+    setFailedMsgIds(prev => {
+      const next = new Set(prev);
+      next.delete(msg.id);
+      return next;
+    });
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && navigator.onLine) {
+      try {
+        wsRef.current.send(JSON.stringify({ type: 'chat', body: msg.body }));
+      } catch {
+        setFailedMsgIds(prev => new Set(prev).add(msg.id));
+      }
+    } else {
+      offlineQueueRef.current.push({ type: 'chat', body: msg.body, id: msg.id });
+    }
+  };
+
   const handleSendMessage = (bodyText: string) => {
-    if (!bodyText.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!bodyText.trim()) return;
     if (!user || !activeConvo) return;
 
     userSentMessageRef.current = true;
+    setShowNewMessagesPill(false);
     const now = Date.now();
-    const optimisticId = `optimistic-${now}-${Math.random()}`;
+    const optimisticId = `optimistic-${now}-${Math.random().toString(36).substring(2, 7)}`;
 
+    let finalPayload: string;
     if (replyingToMessage) {
-      const replyPayload = JSON.stringify({
+      finalPayload = JSON.stringify({
         type: 'reply',
         reply_to: {
           id: replyingToMessage.id,
@@ -2395,54 +2488,49 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         },
         text: bodyText.trim()
       });
-
-      // Optimistically show message immediately
-      const optimisticMsg: Message = {
-        id: optimisticId,
-        conversation_id: activeConvo.id,
-        sender_id: user.id,
-        body: replyPayload,
-        created_at: now,
-        username: user.username,
-        display_name: user.display_name || null,
-        avatar_url: user.avatar_url || null,
-        is_verified: user.is_verified
-      };
-      setMessages(prev => {
-        const next = [...prev, optimisticMsg];
-        if (activeConvo) messagesCacheRef.current[activeConvo.id] = next;
-        return next;
-      });
-
-      wsRef.current.send(JSON.stringify({
-        type: 'chat',
-        body: replyPayload
-      }));
-
       setReplyingToMessage(null);
     } else {
-      // Optimistically show message immediately
-      const optimisticMsg: Message = {
-        id: optimisticId,
-        conversation_id: activeConvo.id,
-        sender_id: user.id,
-        body: bodyText.trim(),
-        created_at: now,
-        username: user.username,
-        display_name: user.display_name || null,
-        avatar_url: user.avatar_url || null,
-        is_verified: user.is_verified
-      };
-      setMessages(prev => {
-        const next = [...prev, optimisticMsg];
-        if (activeConvo) messagesCacheRef.current[activeConvo.id] = next;
-        return next;
-      });
+      finalPayload = bodyText.trim();
+    }
 
-      wsRef.current.send(JSON.stringify({
-        type: 'chat',
-        body: bodyText.trim()
-      }));
+    // Optimistically show message immediately
+    const optimisticMsg: Message = {
+      id: optimisticId,
+      conversation_id: activeConvo.id,
+      sender_id: user.id,
+      body: finalPayload,
+      created_at: now,
+      username: user.username,
+      display_name: user.display_name || null,
+      avatar_url: user.avatar_url || null,
+      is_verified: user.is_verified
+    };
+
+    setMessages(prev => {
+      const next = [...prev, optimisticMsg];
+      if (activeConvo) messagesCacheRef.current[activeConvo.id] = next;
+      return next;
+    });
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && navigator.onLine) {
+      try {
+        wsRef.current.send(JSON.stringify({
+          type: 'chat',
+          body: finalPayload
+        }));
+      } catch (err) {
+        console.error('WebSocket send error:', err);
+        setFailedMsgIds(prev => new Set(prev).add(optimisticId));
+      }
+    } else {
+      offlineQueueRef.current.push({ type: 'chat', body: finalPayload, id: optimisticId });
+      if (navigator.onLine) {
+        setTimeout(() => {
+          if (offlineQueueRef.current.some(q => q.id === optimisticId)) {
+            setFailedMsgIds(prev => new Set(prev).add(optimisticId));
+          }
+        }, 3000);
+      }
     }
   };
 
@@ -5179,13 +5267,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             </div>
 
             {/* State 4: Offline Connection Banner */}
-            {!navigator.onLine && (
+            {(!isAppOnline || !navigator.onLine) && (
               <div role="status" aria-live="polite" className="px-4 py-2 bg-[color-mix(in_srgb,var(--gold)_14%,var(--card))] border-b border-[var(--gold)]/30 flex items-center justify-between text-xs select-none animate-fade-in flex-shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <WifiOff className="w-4 h-4 text-[var(--gold)] shrink-0" />
-                  <span className="text-[var(--text)] truncate">
-                    <strong className="text-[var(--gold)] font-semibold mr-1">Offline:</strong>
-                    Showing cached messages. Messages you send will queue and dispatch automatically when reconnected.
+                  <span className="text-[var(--text)] font-medium truncate">
+                    You're offline. Messages will send when you're back
                   </span>
                 </div>
               </div>
@@ -5254,27 +5341,16 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               <>
 
             {/* Messages Bubbles Flow */}
-            {/* BUG 3 FIX: Message list flex:1 with min-height:0 and overflow-y:auto, overscroll-behavior: contain */}
             <div 
               key={activeConvo.id}
               ref={messagesContainerRef} 
               onScroll={handleMessagesScroll}
-              className="chat-messages-container flex-1 min-h-0 overflow-y-auto overflow-x-hidden w-full min-w-0 max-w-full p-3 sm:p-4 space-y-4 bg-transparent scrollbar-thin overscroll-contain"
-              style={{ 
-                flex: 1, 
-                minHeight: 0, 
-                overflowY: 'auto', 
-                overflowX: 'hidden', 
-                width: '100%', 
-                minWidth: 0, 
-                overscrollBehavior: 'contain', 
-                WebkitOverflowScrolling: 'touch', 
-                touchAction: 'pan-y' 
-              }}
+              className="message-list chat-messages-container flex-1 min-h-0 bg-transparent scrollbar-thin"
+              style={{ flex: 1, minHeight: 0 }}
             >
               {loadingOlderMessages && (
                 <div className="flex justify-center py-2 animate-fade-in">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--input)] text-[var(--accent-2)] text-[10px] font-bold shadow-sm">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--input)] text-teal-400 text-[10px] font-bold shadow-sm">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     <span>Loading older messages...</span>
                   </div>
@@ -5288,20 +5364,20 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     <div className="w-48 h-12 rounded-2xl rounded-tl-sm bg-[var(--input)]" />
                   </div>
                   <div className="flex justify-end">
-                    <div className="w-56 h-14 rounded-2xl rounded-tr-sm bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]" />
+                    <div className="w-56 h-14 rounded-2xl rounded-tr-sm bg-teal-500/20" />
                   </div>
                   <div className="flex items-start gap-2 max-w-[55%]">
                     <div className="w-8 h-8 rounded-full bg-[var(--input)] shrink-0" />
                     <div className="w-36 h-10 rounded-2xl rounded-tl-sm bg-[var(--input)]" />
                   </div>
                   <div className="flex justify-end">
-                    <div className="w-44 h-10 rounded-2xl rounded-tr-sm bg-[color-mix(in_srgb,var(--accent)_20%,transparent)]" />
+                    <div className="w-44 h-10 rounded-2xl rounded-tr-sm bg-teal-500/20" />
                   </div>
                 </div>
               ) : activeMessages.length === 0 ? (
                 /* State 1: Active Thread Empty State / Icebreaker */
                 <div className="my-auto py-12 px-4 text-center space-y-4 select-none animate-fade-in">
-                  <div className="w-16 h-16 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mx-auto text-base font-bold text-[var(--accent-2)] uppercase shadow-inner overflow-hidden">
+                  <div className="w-16 h-16 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center mx-auto text-base font-bold text-teal-400 uppercase shadow-inner overflow-hidden">
                     {getChatPartner(activeConvo)?.avatar_url ? (
                       <img src={`/api/media/file/${getChatPartner(activeConvo).avatar_url}`} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -5310,25 +5386,25 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   </div>
                   <div className="space-y-1.5 max-w-sm mx-auto">
                     <h3 className="text-base font-bold text-[var(--text)]">
-                      Say hello to {getChatPartner(activeConvo)?.display_name || `@${getChatPartner(activeConvo)?.username || 'friend'}`}!
+                      No messages yet
                     </h3>
                     <p className="text-xs text-[var(--muted)] leading-relaxed">
-                      This is the beginning of your encrypted conversation. Send a message, share photos, or tap wave below to break the ice.
+                      Say hi to {getChatPartner(activeConvo)?.display_name || `@${getChatPartner(activeConvo)?.username || 'Datalex'}`} to get the conversation started.
                     </p>
                   </div>
                   <div className="pt-2">
                     <button
                       type="button"
-                      onClick={() => handleSendMessage('Hello! 👋')}
-                      className="min-h-[40px] px-6 rounded-full bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] border border-[var(--accent-2)] text-[var(--accent-2)] hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)] text-xs font-semibold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+                      onClick={() => handleSendMessage(`Say hi to ${getChatPartner(activeConvo)?.display_name || getChatPartner(activeConvo)?.username || 'Datalex'} 👋`)}
+                      className="min-h-[40px] px-6 rounded-full bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-bold transition-all active:scale-95 cursor-pointer inline-flex items-center gap-1.5 shadow-md shadow-teal-950/30"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Send a Wave 👋</span>
+                      <span>Say hi to {getChatPartner(activeConvo)?.display_name || `@${getChatPartner(activeConvo)?.username || 'Datalex'}`}</span>
                     </button>
                   </div>
                 </div>
               ) : (
-                activeMessages.map((msg) => {
+                activeMessages.map((msg, index) => {
                   const isMe = msg.sender_id === user?.id;
                   const isSystem = msg.sender_id === 'system';
                   const isAdmin = user?.is_admin || user?.is_top_admin;
@@ -5336,78 +5412,87 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   if (isSystem) {
                     return (
                       <div key={msg.id} className="flex justify-center my-2 select-none">
-                        <span className="text-[9px] bg-slate-950 border border-white/5 text-slate-550 font-bold px-3.5 py-1 rounded-full uppercase tracking-wider">
+                        <span className="text-[9px] bg-slate-950 border border-white/5 text-slate-400 font-bold px-3.5 py-1 rounded-full uppercase tracking-wider">
                           {msg.body}
                         </span>
                       </div>
                     );
                   }
 
+                  // Group consecutive messages from the same sender (tighter gap, only last shows timestamp)
+                  const prevMsg = index > 0 ? activeMessages[index - 1] : null;
+                  const nextMsg = index < activeMessages.length - 1 ? activeMessages[index + 1] : null;
+                  const isFirstInGroup = !prevMsg || prevMsg.sender_id !== msg.sender_id || (Number(msg.created_at) - Number(prevMsg.created_at) > 5 * 60 * 1000);
+                  const isLastInGroup = !nextMsg || nextMsg.sender_id !== msg.sender_id || (Number(nextMsg.created_at) - Number(msg.created_at) > 5 * 60 * 1000);
+
                   // Check if body contains secure media details
                   const secureMedia = parseMessageBody(msg.body);
+                  const isFailed = failedMsgIds.has(msg.id) || (secureMedia && secureMedia.status === 'failed');
 
                   return (
                     <div 
                       key={msg.id} 
                       id={`msg-${msg.id}`} 
-                      className={`w-full flex ${isMe ? 'justify-end' : 'justify-start'} min-w-0 my-1`}
+                      className={`message-row ${isMe ? 'sent' : 'received'} ${isFirstInGroup ? 'mt-2' : 'mt-0.5'}`}
                     >
-                      {/* Message Sender and Profile */}
-                      <div 
-                        className={`flex items-end gap-2 max-w-[85%] sm:max-w-[70%] min-w-0 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
-                      >
-                        {!isMe && (
-                          <div className="relative flex-shrink-0 self-end mb-5">
-                            <div 
-                              onClick={() => onNavigate && onNavigate('profile', msg.username)}
-                              className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden text-[10px] font-bold text-slate-400 select-none cursor-pointer hover:opacity-80 transition-opacity"
-                            >
-                              {msg.avatar_url ? (
-                                <img src={`/api/media/file/${msg.avatar_url}`} alt={msg.username} className="w-full h-full object-cover" />
-                              ) : (
-                                msg.username.substring(0, 2).toUpperCase()
+                      {/* Received Avatar (shown on last in group cluster) */}
+                      {!isMe && (
+                        <div className="flex-shrink-0 self-end mb-1 mr-2 select-none">
+                          {isLastInGroup ? (
+                            <div className="relative">
+                              <div 
+                                onClick={() => onNavigate && onNavigate('profile', msg.username)}
+                                className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden text-[10px] font-bold text-slate-400 select-none cursor-pointer hover:opacity-80 transition-opacity"
+                              >
+                                {msg.avatar_url ? (
+                                  <img src={`/api/media/file/${msg.avatar_url}`} alt={msg.username} className="w-full h-full object-cover" />
+                                ) : (
+                                  msg.username.substring(0, 2).toUpperCase()
+                                )}
+                              </div>
+                              {(onlineUsers.has(msg.sender_id) || Boolean(activeConvo?.members?.find(m => m.id === msg.sender_id)?.is_online)) && (
+                                <span 
+                                  className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[var(--bg)] shadow-sm pointer-events-none" 
+                                  title="Active now" 
+                                />
                               )}
                             </div>
-                            {(onlineUsers.has(msg.sender_id) || Boolean(activeConvo?.members?.find(m => m.id === msg.sender_id)?.is_online)) && (
-                              <span 
-                                className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[var(--bg)] shadow-sm pointer-events-none" 
-                                title="Active now" 
-                              />
-                            )}
-                          </div>
-                        )}
+                          ) : (
+                            <div className="w-8 h-8" />
+                          )}
+                        </div>
+                      )}
 
-                        {/* Speech Bubble Container */}
-                        <div 
-                          className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full min-w-0`}
-                        >
-                          {/* Group Chat: sender name label */}
-                          {activeConvo?.is_group && !isMe && (() => {
-                            const member = activeConvo.members.find(m => m.id === msg.sender_id);
-                            const displayName = member?.nickname 
-                              ? `${member.nickname} (@${msg.username})`
-                              : (msg.display_name || msg.username);
-                            return (
-                              <span 
-                                onClick={() => onNavigate && onNavigate('profile', msg.username)}
-                                className="text-[9px] font-bold text-slate-550 mb-1 select-none cursor-pointer hover:text-white transition-colors"
-                              >
-                                {displayName}
-                              </span>
-                            );
-                          })()}
-                          <div className={`group relative flex items-center gap-1.5 max-w-full min-w-0 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                            <div
-                              onTouchStart={() => handleMsgTouchStart(msg.id)}
-                              onTouchEnd={handleMsgTouchEnd}
-                              onTouchMove={handleMsgTouchEnd}
-                              onTouchCancel={handleMsgTouchEnd}
-                              onContextMenu={(e) => {
-                                e.preventDefault();
-                                setActiveMsgActionMenuId(prev => prev === msg.id ? null : msg.id);
-                              }}
-                              className="relative max-w-full min-w-0 cursor-pointer select-text"
+                      {/* Message Stack */}
+                      <div className="message-stack">
+                        {/* Group Chat: sender name label on first in cluster */}
+                        {activeConvo?.is_group && !isMe && isFirstInGroup && (() => {
+                          const member = activeConvo.members.find(m => m.id === msg.sender_id);
+                          const displayName = member?.nickname 
+                            ? `${member.nickname} (@${msg.username})`
+                            : (msg.display_name || msg.username);
+                          return (
+                            <span 
+                              onClick={() => onNavigate && onNavigate('profile', msg.username)}
+                              className="text-[9px] font-bold text-slate-400 mb-1 select-none cursor-pointer hover:text-white transition-colors"
                             >
+                              {displayName}
+                            </span>
+                          );
+                        })()}
+
+                        <div className={`group relative flex items-center gap-1.5 max-w-full ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                          <div
+                            onTouchStart={() => handleMsgTouchStart(msg.id)}
+                            onTouchEnd={handleMsgTouchEnd}
+                            onTouchMove={handleMsgTouchEnd}
+                            onTouchCancel={handleMsgTouchEnd}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setActiveMsgActionMenuId(prev => prev === msg.id ? null : msg.id);
+                            }}
+                            className="relative max-w-full cursor-pointer select-text"
+                          >
                           {/* Secure Media Rendering */}
                           {secureMedia ? (
                             <div className="space-y-1.5 max-w-full min-w-0">
@@ -5601,33 +5686,22 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             const replyObj = parseReplyBody(msg.body);
                             return (
                               <div 
-                                className={`chat-bubble inline-block rounded-[18px] text-[15px] sm:text-base leading-[1.45] shadow-sm select-text text-left ${
-                                  isMe 
-                                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-medium rounded-br-[4px]' 
-                                    : 'bg-[var(--card)] border border-[var(--card-border)] text-[var(--text)] rounded-bl-[4px]'
-                                }`}
-                                style={{
-                                  minWidth: '56px',
-                                  maxWidth: '100%',
-                                  padding: '10px 14px',
-                                  lineHeight: '1.45',
-                                  whiteSpace: 'pre-wrap',
-                                  overflowWrap: 'break-word',
-                                  wordBreak: 'normal',
-                                }}
+                                className={`bubble ${
+                                  isMe ? 'bubble-sent' : 'bubble-received'
+                                } shadow-sm select-text text-left`}
                               >
                                 {replyObj && (
                                   <div 
                                     onClick={() => handleScrollToMessage(replyObj.reply_to.id)}
-                                    className="chat-reply-preview mb-1.5 bg-black/10 dark:bg-white/[0.04] hover:bg-black/15 dark:hover:bg-white/[0.08] border-l-2 border-[var(--accent-2)] rounded-r-lg px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors w-full min-w-0 max-w-full overflow-hidden text-left"
+                                    className="chat-reply-preview mb-1.5 bg-black/10 dark:bg-white/[0.04] hover:bg-black/15 dark:hover:bg-white/[0.08] border-l-2 border-teal-400 rounded-r-lg px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors w-full min-w-0 max-w-full overflow-hidden text-left"
                                     style={{ maxWidth: '100%', minWidth: 0 }}
                                   >
-                                    <span className="font-extrabold text-[var(--accent-2)] block mb-0.5 truncate max-w-full">
+                                    <span className="font-extrabold text-teal-400 block mb-0.5 truncate max-w-full">
                                       @{replyObj.reply_to.username}
                                     </span>
                                     <span 
                                       className="opacity-80 block text-[11px] truncate max-w-full line-clamp-2"
-                                      style={{ overflowWrap: 'anywhere' }}
+                                      style={{ overflowWrap: 'break-word', wordBreak: 'normal' }}
                                     >
                                       {getReplyPreviewText(replyObj.reply_to.body)}
                                     </span>
@@ -5655,7 +5729,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                       </div>
                                       <div className="space-y-0.5">
                                         <span className="text-[10px] font-extrabold text-[var(--text)] block truncate">@{username}</span>
-                                        <p className="text-[10px] text-[var(--muted)] line-clamp-2 leading-relaxed italic" style={{ overflowWrap: 'anywhere' }}>"{caption || 'Photo'}"</p>
+                                        <p className="text-[10px] text-[var(--muted)] line-clamp-2 leading-relaxed italic" style={{ overflowWrap: 'break-word', wordBreak: 'normal' }}>"{caption || 'Photo'}"</p>
                                       </div>
                                       <button
                                         onClick={() => {
@@ -5981,25 +6055,30 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             );
                           })()}
 
-                          {/* Compact Timestamp and sending status row */}
-                          <div 
-                            className={`chat-meta-row flex items-center gap-1.5 px-1 mt-0.5 text-[10px] text-[var(--muted)] select-none ${isMe ? 'justify-end text-right' : 'justify-start text-left'}`}
+                        {/* Status / Failed / Retry / Timestamp Row inside message-stack */}
+                        {isFailed ? (
+                          <button
+                            type="button"
+                            onClick={() => handleRetryMessage(msg)}
+                            className="inline-flex items-center gap-1 mt-1 text-[11px] font-semibold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer select-none"
                           >
-                            <span className="text-[var(--muted)] font-normal flex-shrink-0 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>Not sent. Tap to retry</span>
+                          </button>
+                        ) : isLastInGroup ? (
+                          <div 
+                            className={`chat-meta-row flex items-center gap-1.5 px-1 mt-1 text-[10px] text-slate-400 select-none ${isMe ? 'justify-end text-right' : 'justify-start text-left'}`}
+                          >
+                            <span className="font-normal flex-shrink-0 flex items-center gap-1">
                               {formatTime(msg.created_at)}
                               {isMe && msg.id.startsWith('optimistic-') && (
-                                secureMedia?.status === 'failed' ? (
-                                  <span className="text-red-400 font-bold text-[9px] ml-0.5">Failed</span>
-                                ) : (
-                                  <span className="text-[var(--accent-2)] flex items-center gap-0.5 text-[9px] ml-0.5" title="Sending...">
-                                    <Clock className="w-2.5 h-2.5 animate-spin" />
-                                  </span>
-                                )
+                                <span className="text-teal-400 flex items-center gap-0.5 text-[9px] ml-0.5" title="Sending...">
+                                  <Clock className="w-2.5 h-2.5 animate-spin" />
+                                </span>
                               )}
                             </span>
                           </div>
-
-                        </div>
+                        ) : null}
 
                       </div>
 
@@ -6009,6 +6088,26 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* New messages pill when scrolled up */}
+            {showNewMessagesPill && (
+              <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 animate-fade-in pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    messagesContainerRef.current?.scrollTo({
+                      top: messagesContainerRef.current.scrollHeight,
+                      behavior: 'smooth'
+                    });
+                    setShowNewMessagesPill(false);
+                  }}
+                  className="px-4 py-1.5 rounded-full bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-teal-950/40 flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                >
+                  <span>New messages</span>
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             {/* CHAT OVERFLOW FIX END */}
 
             {/* Input Form Box (Recording Waveform & Secure Uploader) */}
