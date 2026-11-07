@@ -50,6 +50,24 @@ export class ChatRoom {
     const upgradeHeader = request.headers.get('Upgrade');
     if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
       const url = new URL(request.url);
+      if (url.pathname.endsWith('/broadcast_reaction')) {
+        try {
+          const payload = await request.json<any>();
+          const sockets = this.state.getWebSockets();
+          const broadcastMsg = JSON.stringify({
+            type: 'reaction_update',
+            ...payload
+          });
+          for (const socket of sockets) {
+            try { socket.send(broadcastMsg); } catch {}
+          }
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        }
+      }
       if (url.pathname.endsWith('/broadcast_access_update')) {
         try {
           const { messageId, body } = await request.json<any>();
@@ -216,6 +234,26 @@ export class ChatRoom {
     // Accept and tag the socket connection
     this.state.acceptWebSocket(server, [userId, conversationId]);
 
+    // Broadcast user presence to others in the room
+    try {
+      const sockets = this.state.getWebSockets();
+      const joinMsg = JSON.stringify({
+        type: 'user_presence',
+        userId,
+        conversationId,
+        status: 'online'
+      });
+      for (const s of sockets) {
+        if (s !== server) {
+          try { s.send(joinMsg); } catch {}
+        }
+      }
+      this.env.DB.prepare('UPDATE users SET last_active_at = ? WHERE id = ?')
+        .bind(Date.now(), userId)
+        .run()
+        .catch(() => {});
+    } catch {}
+
     return new Response(null, {
       status: 101,
       webSocket: client,
@@ -302,6 +340,84 @@ export class ChatRoom {
         for (const socket of sockets) {
           socket.send(broadcastMsg);
         }
+        return;
+      }
+
+      // CASE A.1: TYPING INDICATOR
+      if (data.type === 'typing') {
+        const isTyping = Boolean(data.isTyping);
+        const broadcastMsg = JSON.stringify({
+          type: 'typing',
+          userId,
+          conversationId,
+          isTyping
+        });
+        for (const socket of sockets) {
+          const [socketUserId] = this.state.getTags(socket);
+          if (socketUserId !== userId) {
+            try { socket.send(broadcastMsg); } catch {}
+          }
+        }
+        return;
+      }
+
+      // CASE A.2: MESSAGE REACTION
+      if (data.type === 'reaction') {
+        const { messageId, emoji } = data;
+        if (!messageId || !emoji) return;
+
+        // Check if existing reaction by this user with this emoji
+        const existing = await this.env.DB.prepare(
+          'SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
+        ).bind(messageId, userId, emoji).first<any>();
+
+        let action = 'added';
+        if (existing) {
+          await this.env.DB.prepare('DELETE FROM message_reactions WHERE id = ?').bind(existing.id).run();
+          action = 'removed';
+        } else {
+          await this.env.DB.prepare(
+            'INSERT INTO message_reactions (id, message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?, ?)'
+          ).bind(crypto.randomUUID(), messageId, userId, emoji, Date.now()).run();
+          action = 'added';
+        }
+
+        // Fetch current summary of reactions for this message
+        const { results: reactions } = await this.env.DB.prepare(`
+          SELECT mr.emoji, mr.user_id, u.username
+          FROM message_reactions mr
+          LEFT JOIN users u ON mr.user_id = u.id
+          WHERE mr.message_id = ?
+        `).bind(messageId).all<any>();
+
+        const broadcastMsg = JSON.stringify({
+          type: 'reaction_update',
+          messageId,
+          conversationId,
+          userId,
+          emoji,
+          action,
+          reactions: reactions || []
+        });
+
+        for (const socket of sockets) {
+          try { socket.send(broadcastMsg); } catch {}
+        }
+        return;
+      }
+
+      // CASE A.3: GET ONLINE PRESENCE IN ROOM
+      if (data.type === 'get_presence') {
+        const onlineUsers = new Set<string>();
+        for (const socket of sockets) {
+          const [socketUserId] = this.state.getTags(socket);
+          if (socketUserId) onlineUsers.add(socketUserId);
+        }
+        ws.send(JSON.stringify({
+          type: 'presence_state',
+          conversationId,
+          onlineUsers: Array.from(onlineUsers)
+        }));
         return;
       }
 
@@ -564,6 +680,31 @@ export class ChatRoom {
   }
 
   async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+    try {
+      const [userId, conversationId] = this.state.getTags(ws);
+      if (userId && conversationId) {
+        const sockets = this.state.getWebSockets();
+        const otherSockets = sockets.filter(s => s !== ws && this.state.getTags(s)[0] === userId);
+        if (otherSockets.length === 0) {
+          const leaveMsg = JSON.stringify({
+            type: 'user_presence',
+            userId,
+            conversationId,
+            status: 'offline',
+            lastActive: Date.now()
+          });
+          for (const s of sockets) {
+            if (s !== ws) {
+              try { s.send(leaveMsg); } catch {}
+            }
+          }
+        }
+        this.env.DB.prepare('UPDATE users SET last_active_at = ? WHERE id = ?')
+          .bind(Date.now(), userId)
+          .run()
+          .catch(() => {});
+      }
+    } catch {}
     console.log(`WebSocket closed: Code ${code}, WasClean ${wasClean}`);
   }
 

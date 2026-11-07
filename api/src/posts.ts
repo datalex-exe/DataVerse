@@ -4,6 +4,105 @@ import { authMiddleware } from './auth';
 
 const postsApp = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+function extractHashtags(text: string): string[] {
+  if (!text) return [];
+  const matches = text.match(/#([a-zA-Z0-9_\u00c0-\u024f]+)/g);
+  if (!matches) return [];
+  return Array.from(new Set(matches.map(tag => tag.slice(1).toLowerCase())));
+}
+
+async function attachPostExtras(posts: any[], db: any, currentUserId?: string) {
+  if (!posts || posts.length === 0) return [];
+  const postIds = posts.map((p: any) => p.id);
+  const placeholders = postIds.map(() => '?').join(',');
+
+  // 1. Fetch media
+  const { results: mediaResults }: any = await db.prepare(`
+    SELECT * FROM post_media WHERE post_id IN (${placeholders}) ORDER BY position ASC
+  `).bind(...postIds).all();
+
+  // 2. Fetch polls
+  const { results: pollResults }: any = await db.prepare(`
+    SELECT * FROM post_polls WHERE post_id IN (${placeholders})
+  `).bind(...postIds).all();
+
+  let optionsByPoll: Record<string, any[]> = {};
+  let userVotesByPoll: Record<string, string> = {};
+
+  if (pollResults && pollResults.length > 0) {
+    const pollIds = pollResults.map((p: any) => p.id);
+    const pollPlaceholders = pollIds.map(() => '?').join(',');
+
+    const { results: optionResults }: any = await db.prepare(`
+      SELECT po.id, po.poll_id, po.option_text, po.position,
+        (SELECT COUNT(*) FROM poll_votes WHERE option_id = po.id) as vote_count
+      FROM poll_options po
+      WHERE po.poll_id IN (${pollPlaceholders})
+      ORDER BY po.position ASC
+    `).bind(...pollIds).all();
+
+    if (optionResults) {
+      for (const opt of optionResults) {
+        if (!optionsByPoll[opt.poll_id]) optionsByPoll[opt.poll_id] = [];
+        optionsByPoll[opt.poll_id].push(opt);
+      }
+    }
+
+    if (currentUserId) {
+      const { results: userVotes }: any = await db.prepare(`
+        SELECT poll_id, option_id FROM poll_votes WHERE user_id = ? AND poll_id IN (${pollPlaceholders})
+      `).bind(currentUserId, ...pollIds).all();
+      if (userVotes) {
+        for (const uv of userVotes) {
+          userVotesByPoll[uv.poll_id] = uv.option_id;
+        }
+      }
+    }
+  }
+
+  return posts.map((post: any) => {
+    const postMedia = (mediaResults || [])
+      .filter((m: any) => m.post_id === post.id)
+      .map((m: any) => ({
+        id: m.id,
+        r2_key: m.r2_key,
+        media_type: m.media_type,
+        position: m.position,
+      }));
+
+    const foundPoll = (pollResults || []).find((p: any) => p.post_id === post.id);
+    let poll = null;
+    if (foundPoll) {
+      const opts = optionsByPoll[foundPoll.id] || [];
+      const totalVotes = opts.reduce((acc, cur) => acc + (cur.vote_count || 0), 0);
+      poll = {
+        id: foundPoll.id,
+        question: foundPoll.question,
+        expires_at: foundPoll.expires_at,
+        is_expired: foundPoll.expires_at < Date.now(),
+        total_votes: totalVotes,
+        user_voted_option_id: userVotesByPoll[foundPoll.id] || null,
+        options: opts.map(o => ({
+          id: o.id,
+          option_text: o.option_text,
+          vote_count: o.vote_count || 0,
+          percentage: totalVotes > 0 ? Math.round((o.vote_count / totalVotes) * 100) : 0
+        }))
+      };
+    }
+
+    return {
+      ...post,
+      is_liked: post.is_liked ? Boolean(post.is_liked) : false,
+      is_verified: !!post.is_verified,
+      is_sensitive: Boolean(post.is_sensitive),
+      sensitive_reason: post.sensitive_reason || null,
+      media: postMedia,
+      poll
+    };
+  });
+}
+
 // ─── GET PUBLIC POST BY ID (Unauthenticated - Public accounts only) ─────────────
 postsApp.get('/public/:id', async (c) => {
   const postId = c.req.param('id');
@@ -60,10 +159,13 @@ postsApp.use('*', authMiddleware);
 postsApp.post('/', async (c) => {
   const userId = c.get('userId');
   try {
-    const { caption, media } = await c.req.json(); // media: array of { r2_key, media_type }
+    const { caption, media, poll, is_sensitive, sensitive_reason } = await c.req.json();
 
-    if (!media || !Array.isArray(media) || media.length === 0) {
-      return c.json({ error: 'At least one media file is required' }, 400);
+    const hasMedia = Array.isArray(media) && media.length > 0;
+    const hasPoll = poll && typeof poll.question === 'string' && Array.isArray(poll.options) && poll.options.length >= 2;
+
+    if (!hasMedia && !hasPoll && !caption?.trim()) {
+      return c.json({ error: 'Post must contain media, a poll, or text.' }, 400);
     }
 
     const postId = crypto.randomUUID();
@@ -71,21 +173,51 @@ postsApp.post('/', async (c) => {
 
     // 1. Insert into posts table
     await c.env.DB.prepare(
-      'INSERT INTO posts (id, user_id, caption, created_at) VALUES (?, ?, ?, ?)'
+      'INSERT INTO posts (id, user_id, caption, is_sensitive, sensitive_reason, created_at) VALUES (?, ?, ?, ?, ?, ?)'
     )
-      .bind(postId, userId, caption || '', createdAt)
+      .bind(postId, userId, caption || '', is_sensitive ? 1 : 0, sensitive_reason || null, createdAt)
       .run();
 
     // 2. Insert media items
-    const mediaStatements = media.map((item: { r2_key: string; media_type: string }, index: number) => {
-      const mediaId = crypto.randomUUID();
-      return c.env.DB.prepare(
-        'INSERT INTO post_media (id, post_id, r2_key, media_type, position) VALUES (?, ?, ?, ?, ?)'
-      ).bind(mediaId, postId, item.r2_key, item.media_type, index);
-    });
+    if (hasMedia) {
+      const mediaStatements = media.map((item: { r2_key: string; media_type: string }, index: number) => {
+        const mediaId = crypto.randomUUID();
+        return c.env.DB.prepare(
+          'INSERT INTO post_media (id, post_id, r2_key, media_type, position) VALUES (?, ?, ?, ?, ?)'
+        ).bind(mediaId, postId, item.r2_key, item.media_type, index);
+      });
+      await c.env.DB.batch(mediaStatements);
+    }
 
-    // Run batch inserts
-    await c.env.DB.batch(mediaStatements);
+    // 3. Insert poll if provided
+    if (hasPoll) {
+      const pollId = crypto.randomUUID();
+      const durationHours = typeof poll.durationHours === 'number' && poll.durationHours > 0 ? poll.durationHours : 24;
+      const expiresAt = createdAt + (durationHours * 3600 * 1000);
+
+      await c.env.DB.prepare(
+        'INSERT INTO post_polls (id, post_id, question, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).bind(pollId, postId, poll.question.trim(), expiresAt, createdAt).run();
+
+      const optionStatements = poll.options.slice(0, 6).map((optText: string, idx: number) => {
+        const optId = crypto.randomUUID();
+        return c.env.DB.prepare(
+          'INSERT INTO poll_options (id, poll_id, option_text, position) VALUES (?, ?, ?, ?)'
+        ).bind(optId, pollId, String(optText).trim(), idx);
+      });
+      await c.env.DB.batch(optionStatements);
+    }
+
+    // 4. Extract and save hashtags
+    const hashtags = extractHashtags(caption || '');
+    if (hashtags.length > 0) {
+      const tagStatements = hashtags.map(tag => {
+        return c.env.DB.prepare(
+          'INSERT OR IGNORE INTO post_hashtags (post_id, hashtag, created_at) VALUES (?, ?, ?)'
+        ).bind(postId, tag, createdAt);
+      });
+      await c.env.DB.batch(tagStatements);
+    }
 
     return c.json({ success: true, postId });
   } catch (err: any) {
@@ -93,7 +225,7 @@ postsApp.post('/', async (c) => {
   }
 });
 
-// GET FEED (following + own posts)
+// GET FEED (following + own posts, excludes muted users)
 postsApp.get('/feed', async (c) => {
   const userId = c.get('userId');
   const limit = Math.min(parseInt(c.req.query('limit') || '10'), 30);
@@ -102,7 +234,8 @@ postsApp.get('/feed', async (c) => {
   try {
     // 1. Fetch posts
     const { results: posts } = await c.env.DB.prepare(`
-      SELECT p.id, p.caption, p.created_at, u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
+      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+        u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) AS is_liked,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
@@ -114,44 +247,20 @@ postsApp.get('/feed', async (c) => {
           UNION
           SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
         )
+        AND p.user_id NOT IN (
+          SELECT muted_id FROM user_mutes WHERE muter_id = ?
+        )
       ORDER BY p.created_at DESC
       LIMIT ? OFFSET ?
     `)
-      .bind(userId, userId, userId, userId, userId, limit, offset)
+      .bind(userId, userId, userId, userId, userId, userId, limit, offset)
       .all<any>();
 
     if (!posts || posts.length === 0) {
       return c.json({ posts: [] });
     }
 
-    // 2. Fetch media keys for these posts in one query
-    const postIds = posts.map(p => p.id);
-    const placeholders = postIds.map(() => '?').join(',');
-    const { results: mediaResults } = await c.env.DB.prepare(`
-      SELECT * FROM post_media WHERE post_id IN (${placeholders}) ORDER BY position ASC
-    `)
-      .bind(...postIds)
-      .all<any>();
-
-    // 3. Map media keys to posts
-    const feed = posts.map(post => {
-      const postMedia = mediaResults
-        .filter(m => m.post_id === post.id)
-        .map(m => ({
-          id: m.id,
-          r2_key: m.r2_key,
-          media_type: m.media_type,
-          position: m.position
-        }));
-
-      return {
-        ...post,
-        is_liked: post.is_liked > 0,
-        is_verified: !!post.is_verified,
-        media: postMedia
-      };
-    });
-
+    const feed = await attachPostExtras(posts, c.env.DB, userId);
     return c.json({ posts: feed });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -171,7 +280,8 @@ postsApp.get('/reels', async (c) => {
     const isAdmin = viewer && (viewer.is_admin === 1 || viewer.is_top_admin === 1);
 
     const { results: posts } = await c.env.DB.prepare(`
-      SELECT p.id, p.caption, p.created_at, u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
+      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+        u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) AS is_liked,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
@@ -187,42 +297,20 @@ postsApp.get('/reels', async (c) => {
         UNION
         SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
       )
+      AND p.user_id NOT IN (
+        SELECT muted_id FROM user_mutes WHERE muter_id = ?
+      )
       ORDER BY p.created_at DESC
       LIMIT ? OFFSET ?
     `)
-      .bind(userId, userId, ...(isAdmin ? [] : [userId]), userId, userId, limit, offset)
+      .bind(userId, userId, ...(isAdmin ? [] : [userId]), userId, userId, userId, limit, offset)
       .all<any>();
 
     if (!posts || posts.length === 0) {
       return c.json({ posts: [] });
     }
 
-    const postIds = posts.map(p => p.id);
-    const placeholders = postIds.map(() => '?').join(',');
-    const { results: mediaResults } = await c.env.DB.prepare(`
-      SELECT * FROM post_media WHERE post_id IN (${placeholders}) ORDER BY position ASC
-    `)
-      .bind(...postIds)
-      .all<any>();
-
-    const feed = posts.map(post => {
-      const postMedia = mediaResults
-        .filter(m => m.post_id === post.id)
-        .map(m => ({
-          id: m.id,
-          r2_key: m.r2_key,
-          media_type: m.media_type,
-          position: m.position
-        }));
-
-      return {
-        ...post,
-        is_liked: post.is_liked > 0,
-        is_verified: !!post.is_verified,
-        media: postMedia
-      };
-    });
-
+    const feed = await attachPostExtras(posts, c.env.DB, userId);
     return c.json({ posts: feed });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -236,7 +324,7 @@ postsApp.get('/user/:username', async (c) => {
 
   try {
     const targetUser = await c.env.DB.prepare(
-      'SELECT id, is_private FROM users WHERE LOWER(username) = ?'
+      'SELECT id, is_private, display_name, avatar_url, is_verified FROM users WHERE LOWER(username) = ?'
     )
       .bind(username)
       .first<any>();
@@ -266,7 +354,8 @@ postsApp.get('/user/:username', async (c) => {
     }
 
     const { results: posts } = await c.env.DB.prepare(`
-      SELECT p.id, p.caption, p.created_at,
+      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+        p.user_id, ? AS username, ? AS display_name, ? AS avatar_url, ? AS is_verified,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) AS is_liked,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
@@ -274,39 +363,14 @@ postsApp.get('/user/:username', async (c) => {
       WHERE p.user_id = ?
       ORDER BY p.created_at DESC
     `)
-      .bind(currentUserId, targetUser.id)
+      .bind(username, targetUser.display_name, targetUser.avatar_url, targetUser.is_verified, currentUserId, targetUser.id)
       .all<any>();
 
     if (!posts || posts.length === 0) {
       return c.json({ posts: [], is_private: !!targetUser.is_private, is_following: true });
     }
 
-    // Fetch media for posts
-    const postIds = posts.map(p => p.id);
-    const placeholders = postIds.map(() => '?').join(',');
-    const { results: mediaResults } = await c.env.DB.prepare(`
-      SELECT * FROM post_media WHERE post_id IN (${placeholders}) ORDER BY position ASC
-    `)
-      .bind(...postIds)
-      .all<any>();
-
-    const mappedPosts = posts.map(post => {
-      const postMedia = mediaResults
-        .filter(m => m.post_id === post.id)
-        .map(m => ({
-          id: m.id,
-          r2_key: m.r2_key,
-          media_type: m.media_type,
-          position: m.position
-        }));
-
-      return {
-        ...post,
-        is_liked: post.is_liked > 0,
-        media: postMedia
-      };
-    });
-
+    const mappedPosts = await attachPostExtras(posts, c.env.DB, currentUserId);
     return c.json({ posts: mappedPosts, is_private: !!targetUser.is_private, is_following: true });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -609,29 +673,131 @@ postsApp.get('/:id', async (c) => {
       }
     }
 
-    // Fetch media files
-    const { results: media } = await c.env.DB.prepare(
-      'SELECT r2_key, media_type FROM post_media WHERE post_id = ? ORDER BY position ASC'
-    )
-      .bind(postId)
-      .all<any>();
+    // Fetch media and poll extras
+    const postWithExtras = await attachPostExtras([post], c.env.DB, userId);
 
     return c.json({
-      post: {
-        id: post.id,
-        caption: post.caption,
-        created_at: post.created_at,
-        likes_count: post.likes_count,
-        comments_count: post.comments_count,
-        is_liked: post.is_liked > 0,
-        user_id: post.user_id,
-        username: post.username,
-        display_name: post.display_name,
-        avatar_url: post.avatar_url,
-        is_verified: !!post.is_verified,
-        media: media || []
+      post: postWithExtras[0] || post
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// VOTE ON A POLL
+postsApp.post('/polls/:pollId/vote', async (c) => {
+  const userId = c.get('userId');
+  const pollId = c.req.param('pollId');
+  try {
+    const { optionId } = await c.req.json();
+    if (!optionId) return c.json({ error: 'Option ID is required' }, 400);
+
+    const poll = await c.env.DB.prepare('SELECT * FROM post_polls WHERE id = ?').bind(pollId).first<any>();
+    if (!poll) return c.json({ error: 'Poll not found' }, 404);
+
+    if (poll.expires_at < Date.now()) {
+      return c.json({ error: 'This poll has ended' }, 400);
+    }
+
+    const voteId = crypto.randomUUID();
+    await c.env.DB.prepare(`
+      INSERT INTO poll_votes (id, poll_id, option_id, user_id, created_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(poll_id, user_id) DO UPDATE SET option_id = excluded.option_id, created_at = excluded.created_at
+    `).bind(voteId, pollId, optionId, userId, Date.now()).run();
+
+    const { results: options } = await c.env.DB.prepare(`
+      SELECT po.id, po.option_text, (SELECT COUNT(*) FROM poll_votes WHERE option_id = po.id) as vote_count
+      FROM poll_options po
+      WHERE po.poll_id = ?
+      ORDER BY po.position ASC
+    `).bind(pollId).all<any>();
+
+    const totalVotes = (options || []).reduce((acc, cur) => acc + (cur.vote_count || 0), 0);
+    const updatedOptions = (options || []).map(o => ({
+      id: o.id,
+      option_text: o.option_text,
+      vote_count: o.vote_count || 0,
+      percentage: totalVotes > 0 ? Math.round((o.vote_count / totalVotes) * 100) : 0
+    }));
+
+    return c.json({
+      success: true,
+      poll: {
+        id: poll.id,
+        total_votes: totalVotes,
+        user_voted_option_id: optionId,
+        options: updatedOptions
       }
     });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// GET TRENDING HASHTAGS
+postsApp.get('/trending-tags', async (c) => {
+  try {
+    const sevenDaysAgo = Date.now() - (7 * 24 * 3600 * 1000);
+    const { results: tags } = await c.env.DB.prepare(`
+      SELECT hashtag, COUNT(*) as post_count
+      FROM post_hashtags
+      WHERE created_at > ?
+      GROUP BY hashtag
+      ORDER BY post_count DESC
+      LIMIT 10
+    `).bind(sevenDaysAgo).all<any>();
+
+    if (!tags || tags.length < 3) {
+      const { results: allTimeTags } = await c.env.DB.prepare(`
+        SELECT hashtag, COUNT(*) as post_count
+        FROM post_hashtags
+        GROUP BY hashtag
+        ORDER BY post_count DESC
+        LIMIT 10
+      `).all<any>();
+      return c.json({ tags: allTimeTags || [] });
+    }
+
+    return c.json({ tags: tags || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// GET POSTS BY HASHTAG
+postsApp.get('/tag/:hashtag', async (c) => {
+  const userId = c.get('userId');
+  const hashtag = c.req.param('hashtag').toLowerCase().replace(/^#/, '');
+  const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50);
+  const offset = parseInt(c.req.query('offset') || '0');
+
+  try {
+    const { results: posts } = await c.env.DB.prepare(`
+      SELECT p.id, p.caption, p.is_sensitive, p.sensitive_reason, p.created_at,
+        u.id AS user_id, u.username, u.display_name, u.avatar_url, u.is_verified,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS likes_count,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND user_id = ?) AS is_liked,
+        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
+      FROM posts p
+      JOIN post_hashtags ph ON p.id = ph.post_id
+      JOIN users u ON p.user_id = u.id
+      WHERE ph.hashtag = ?
+        AND (u.is_private = 0 OR p.user_id = ? OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = ? AND is_accepted = 1))
+        AND p.user_id NOT IN (
+          SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
+          UNION
+          SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
+        )
+        AND p.user_id NOT IN (
+          SELECT muted_id FROM user_mutes WHERE muter_id = ?
+        )
+      ORDER BY p.created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(userId, hashtag, userId, userId, userId, userId, userId, limit, offset).all<any>();
+
+    const feed = await attachPostExtras(posts || [], c.env.DB, userId);
+    return c.json({ posts: feed, hashtag });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

@@ -10,7 +10,10 @@ import {
   Lock, 
   Sparkles,
   SlidersHorizontal,
-  ArrowRight
+  ArrowRight,
+  Flame,
+  Hash,
+  TrendingUp
 } from 'lucide-react';
 import { VerifiedBadge } from '../components/VerifiedBadge';
 
@@ -50,10 +53,26 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
     return sessionStorage.getItem('dv_saved_search_query') || '';
   });
   const [results, setResults] = useState<ExploreUser[]>([]);
+  const [trendingTags, setTrendingTags] = useState<{ hashtag: string; post_count: number }[]>([]);
+  const [tagPosts, setTagPosts] = useState<any[]>([]);
+  const [searchMode, setSearchMode] = useState<'users' | 'tags'>('users');
   const [status, setStatus] = useState<ExploreStatus>('empty');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Fetch trending hashtags on mount
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/posts/trending-tags', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.tags && Array.isArray(data.tags)) setTrendingTags(data.tags);
+      })
+      .catch(() => {});
+  }, [token]);
 
   // State Preview Inspector (for testing & UX auditing)
   const [previewState, setPreviewState] = useState<ExploreStatus | null>(null);
@@ -123,11 +142,50 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
     }
 
     // Input Validation State 9
-    if (/^[^a-zA-Z0-9_@\s]+$/.test(trimmed)) {
-      setValidationError('Please use letters, numbers, or @ for usernames.');
+    if (/^[^a-zA-Z0-9_@#\s]+$/.test(trimmed)) {
+      setValidationError('Please use letters, numbers, @ or # for searches.');
       return;
     }
     setValidationError(null);
+
+    // Hashtag search mode
+    if (trimmed.startsWith('#')) {
+      setSearchMode('tags');
+      const tag = trimmed.replace(/^#/, '');
+      if (!navigator.onLine) {
+        setIsOffline(true);
+        setStatus('offline');
+        return;
+      }
+      setStatus('loading');
+      try {
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`/api/posts/tag/${encodeURIComponent(tag)}`, {
+          headers,
+          signal: searchAbortRef.current?.signal
+        });
+        if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+        if (res.status === 401) {
+          setStatus('session_expired');
+          return;
+        }
+        if (!res.ok) throw new Error('Tag search failed');
+        const data = await res.json();
+        const posts = data.posts || [];
+        setTagPosts(posts);
+        setStatus(posts.length > 0 ? 'success' : 'no_results');
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        setErrorMessage(err.message || 'Hashtag search failed');
+        setStatus('error');
+        return;
+      }
+    }
+
+    setSearchMode('users');
 
     // Offline check State 4
     if (!navigator.onLine) {
@@ -221,21 +279,64 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
   // 10-STATE RENDERERS
   // ─────────────────────────────────────────────────────────────────────────────
 
-  // STATE 1: EMPTY STATE (Discovery prompt)
+  // STATE 1: EMPTY STATE (Discovery prompt with Trending Hashtags)
   const renderEmptyState = () => (
-    <div 
-      role="region" 
-      aria-label="Search suggestions" 
-      className="w-full py-12 px-6 text-center space-y-4 bg-[var(--card)] rounded-[20px] border border-[var(--card-border)] shadow-sm animate-fade-in select-none"
-    >
-      <div className="w-14 h-14 rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_25%,transparent)] flex items-center justify-center mx-auto text-[var(--accent-2)] shadow-inner">
-        <Sparkles className="w-6 h-6 stroke-[1.8]" />
-      </div>
-      <div className="space-y-1.5 max-w-sm mx-auto">
-        <h2 className="text-base font-semibold text-[var(--text)]">Discover Creators & Topics</h2>
-        <p className="text-xs text-[var(--muted)] leading-relaxed font-normal">
-          Search by name or handle to find friends and community creators.
-        </p>
+    <div className="space-y-6 animate-fade-in select-none">
+      {/* Trending Hashtags Section */}
+      {trendingTags.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <Flame className="w-4 h-4 text-amber-400" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">
+              Trending Topics & Hashtags
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {trendingTags.map((t, idx) => (
+              <button
+                key={t.hashtag}
+                type="button"
+                onClick={() => {
+                  setSearchQuery(`#${t.hashtag}`);
+                  triggerSearch(`#${t.hashtag}`);
+                }}
+                className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--card-border)] hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] transition-all flex items-center justify-between text-left group cursor-pointer shadow-sm"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-[var(--input)] flex items-center justify-center text-[var(--accent-2)] font-bold text-xs shrink-0 group-hover:scale-105 transition-transform">
+                    #{idx + 1}
+                  </div>
+                  <div className="truncate">
+                    <p className="font-bold text-sm text-[var(--text)] group-hover:text-[var(--accent)] transition-colors truncate">
+                      #{t.hashtag}
+                    </p>
+                    <p className="text-[11px] text-[var(--muted)] font-medium">
+                      {t.post_count} {t.post_count === 1 ? 'post' : 'posts'}
+                    </p>
+                  </div>
+                </div>
+                <TrendingUp className="w-4 h-4 text-[var(--muted)] group-hover:text-[var(--accent)] transition-colors shrink-0" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Discovery Prompt Box */}
+      <div 
+        role="region" 
+        aria-label="Search suggestions" 
+        className="w-full py-10 px-6 text-center space-y-4 bg-[var(--card)] rounded-[20px] border border-[var(--card-border)] shadow-sm"
+      >
+        <div className="w-14 h-14 rounded-2xl bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border border-[color-mix(in_srgb,var(--accent)_25%,transparent)] flex items-center justify-center mx-auto text-[var(--accent-2)] shadow-inner">
+          <Sparkles className="w-6 h-6 stroke-[1.8]" />
+        </div>
+        <div className="space-y-1.5 max-w-sm mx-auto">
+          <h2 className="text-base font-semibold text-[var(--text)]">Discover Creators & Communities</h2>
+          <p className="text-xs text-[var(--muted)] leading-relaxed font-normal">
+            Search by creator username or type a <span className="font-bold text-[var(--accent)]">#hashtag</span> to explore trending posts.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -445,62 +546,126 @@ export const Explore: React.FC<ExploreProps> = ({ onNavigate }) => {
     </div>
   );
 
-  // STATE 10: SUCCESS RESULTS LIST
-  const renderResultsList = () => (
-    <div 
-      role="region" 
-      aria-live="polite" 
-      aria-label={`Search results (${results.length} found)`}
-      className="w-full space-y-3 animate-fade-in"
-    >
-      <div className="flex justify-between items-center pl-1 border-b border-[var(--card-border)] pb-2 select-none">
-        <h2 className="text-xs font-semibold text-[var(--muted)]">
-          Search Results ({results.length})
-        </h2>
-        <span className="text-[11px] text-[var(--muted)]">
-          Showing matching creators
-        </span>
-      </div>
+  // STATE 10: SUCCESS RESULTS LIST (Creators or Hashtag Posts)
+  const renderResultsList = () => {
+    if (searchMode === 'tags') {
+      return (
+        <div 
+          role="region" 
+          aria-live="polite" 
+          aria-label={`Tag results (${tagPosts.length} posts)`}
+          className="w-full space-y-3 animate-fade-in"
+        >
+          <div className="flex justify-between items-center pl-1 border-b border-[var(--card-border)] pb-2 select-none">
+            <h2 className="text-xs font-semibold text-[var(--accent)] flex items-center gap-1.5">
+              <Hash className="w-3.5 h-3.5" />
+              <span>{searchQuery}</span> ({tagPosts.length})
+            </h2>
+            <span className="text-[11px] text-[var(--muted)]">
+              Posts tagged with this topic
+            </span>
+          </div>
 
-      <div className="space-y-2">
-        {results.map(item => (
-          <div 
-            key={item.id} 
-            className="p-3 sm:p-4 rounded-[18px] bg-[var(--card)] flex items-center justify-between border border-[var(--card-border)] shadow-sm hover:border-[var(--accent-2)]/40 transition-colors"
-          >
-            <div 
-              onClick={() => onNavigate('profile', item.username)}
-              className="flex items-center gap-3 cursor-pointer group min-w-0 flex-1"
-            >
-              <div className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-xs font-bold text-[var(--accent-2)] uppercase select-none overflow-hidden shadow-sm flex-shrink-0">
-                {item.avatar_url ? (
-                  <img src={`/api/media/file/${item.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
-                ) : (
-                  item.username.substring(0, 2).toUpperCase()
+          <div className="space-y-3">
+            {tagPosts.map(p => (
+              <div
+                key={p.id}
+                onClick={() => onNavigate('post', p.id)}
+                className="p-4 rounded-[20px] bg-[var(--card)] border border-[var(--card-border)] shadow-sm hover:border-[var(--accent)]/50 transition-all cursor-pointer space-y-2.5"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-[var(--input)] flex items-center justify-center font-bold text-xs uppercase overflow-hidden">
+                    {p.avatar_url ? (
+                      <img src={`/api/media/file/${p.avatar_url}`} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      p.username?.substring(0, 2).toUpperCase()
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[var(--text)] hover:underline">
+                      @{p.username}
+                    </span>
+                  </div>
+                </div>
+
+                {p.caption && (
+                  <p className="text-xs text-[var(--text)] line-clamp-3 leading-relaxed">
+                    {p.caption}
+                  </p>
+                )}
+
+                {p.media && p.media[0] && (
+                  <div className="w-full max-h-56 rounded-xl overflow-hidden bg-black/20">
+                    <img 
+                      src={`/api/media/file/${p.media[0].r2_key}`} 
+                      alt="" 
+                      className="w-full h-auto max-h-56 object-cover"
+                    />
+                  </div>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-semibold text-[var(--text)] group-hover:text-[var(--accent-2)] transition-colors flex items-center gap-1 truncate">
-                  <span>{item.display_name || item.username}</span>
-                  {!!item.is_verified && <VerifiedBadge size={14} />}
-                </h3>
-                <p className="text-xs text-[var(--muted)] truncate">@{item.username}</p>
-              </div>
-            </div>
-            
-            <button 
-              type="button"
-              onClick={() => onNavigate('profile', item.username)}
-              aria-label={`View ${item.username}'s profile`}
-              className="min-h-[36px] px-4 rounded-full border border-[var(--card-border)] text-xs font-semibold text-[var(--accent-2)] hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] transition-all active:scale-95 flex-shrink-0 cursor-pointer ml-2"
-            >
-              View Profile
-            </button>
+            ))}
           </div>
-        ))}
+        </div>
+      );
+    }
+
+    return (
+      <div 
+        role="region" 
+        aria-live="polite" 
+        aria-label={`Search results (${results.length} found)`}
+        className="w-full space-y-3 animate-fade-in"
+      >
+        <div className="flex justify-between items-center pl-1 border-b border-[var(--card-border)] pb-2 select-none">
+          <h2 className="text-xs font-semibold text-[var(--muted)]">
+            Search Results ({results.length})
+          </h2>
+          <span className="text-[11px] text-[var(--muted)]">
+            Showing matching creators
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {results.map(item => (
+            <div 
+              key={item.id} 
+              className="p-3 sm:p-4 rounded-[18px] bg-[var(--card)] flex items-center justify-between border border-[var(--card-border)] shadow-sm hover:border-[var(--accent-2)]/40 transition-colors"
+            >
+              <div 
+                onClick={() => onNavigate('profile', item.username)}
+                className="flex items-center gap-3 cursor-pointer group min-w-0 flex-1"
+              >
+                <div className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--card-border)] flex items-center justify-center text-xs font-bold text-[var(--accent-2)] uppercase select-none overflow-hidden shadow-sm flex-shrink-0">
+                  {item.avatar_url ? (
+                    <img src={`/api/media/file/${item.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
+                  ) : (
+                    item.username.substring(0, 2).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-[var(--text)] group-hover:text-[var(--accent-2)] transition-colors flex items-center gap-1 truncate">
+                    <span>{item.display_name || item.username}</span>
+                    {!!item.is_verified && <VerifiedBadge size={14} />}
+                  </h3>
+                  <p className="text-xs text-[var(--muted)] truncate">@{item.username}</p>
+                </div>
+              </div>
+              
+              <button 
+                type="button"
+                onClick={() => onNavigate('profile', item.username)}
+                aria-label={`View ${item.username}'s profile`}
+                className="min-h-[36px] px-4 rounded-full border border-[var(--card-border)] text-xs font-semibold text-[var(--accent-2)] hover:bg-[color-mix(in_srgb,var(--accent-2)_12%,transparent)] transition-all active:scale-95 flex-shrink-0 cursor-pointer ml-2"
+              >
+                View Profile
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="w-full max-w-[640px] mx-auto self-center px-4 pt-3 sm:pt-6 pb-24 md:pb-12 space-y-5 animate-fade-in select-none">

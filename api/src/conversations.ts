@@ -432,7 +432,36 @@ conversationsApp.get('/:id/messages', async (c) => {
       );
     }
 
-    return c.json({ messages: messages || [] });
+    // Attach message reactions
+    let formattedMessages = messages || [];
+    if (formattedMessages.length > 0) {
+      try {
+        const { results: allReactions } = await c.env.DB.prepare(`
+          SELECT mr.message_id, mr.emoji, mr.user_id, u.username
+          FROM message_reactions mr
+          JOIN messages m ON mr.message_id = m.id
+          LEFT JOIN users u ON mr.user_id = u.id
+          WHERE m.conversation_id = ?
+        `).bind(conversationId).all<any>();
+
+        const reactionsByMsg: Record<string, any[]> = {};
+        if (allReactions) {
+          for (const r of allReactions) {
+            if (!reactionsByMsg[r.message_id]) reactionsByMsg[r.message_id] = [];
+            reactionsByMsg[r.message_id].push({ emoji: r.emoji, user_id: r.user_id, username: r.username });
+          }
+        }
+
+        formattedMessages = formattedMessages.map(m => ({
+          ...m,
+          reactions: reactionsByMsg[m.id] || []
+        }));
+      } catch (rErr) {
+        console.error('Error fetching reactions:', rErr);
+      }
+    }
+
+    return c.json({ messages: formattedMessages });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -611,6 +640,60 @@ conversationsApp.post('/:id/messages', async (c) => {
     }));
 
     return c.json({ success: true, message: messagePayload });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// TOGGLE MESSAGE REACTION
+conversationsApp.post('/messages/:messageId/react', authMiddleware, async (c) => {
+  const messageId = c.req.param('messageId');
+  const userId = c.get('userId');
+  try {
+    const { emoji } = await c.req.json();
+    if (!emoji) return c.json({ error: 'Emoji is required' }, 400);
+
+    const msg = await c.env.DB.prepare('SELECT conversation_id FROM messages WHERE id = ?')
+      .bind(messageId)
+      .first<any>();
+    if (!msg) return c.json({ error: 'Message not found' }, 404);
+
+    const existing = await c.env.DB.prepare(
+      'SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
+    ).bind(messageId, userId, emoji).first<any>();
+
+    let action = 'added';
+    if (existing) {
+      await c.env.DB.prepare('DELETE FROM message_reactions WHERE id = ?').bind(existing.id).run();
+      action = 'removed';
+    } else {
+      await c.env.DB.prepare(
+        'INSERT INTO message_reactions (id, message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).bind(crypto.randomUUID(), messageId, userId, emoji, Date.now()).run();
+      action = 'added';
+    }
+
+    const { results: reactions } = await c.env.DB.prepare(`
+      SELECT mr.emoji, mr.user_id, u.username
+      FROM message_reactions mr
+      LEFT JOIN users u ON mr.user_id = u.id
+      WHERE mr.message_id = ?
+    `).bind(messageId).all<any>();
+
+    // Forward to Durable Object for live broadcast if available
+    try {
+      const doId = c.env.CHAT_ROOM.idFromName(msg.conversation_id);
+      const stub = c.env.CHAT_ROOM.get(doId);
+      c.executionCtx.waitUntil(
+        stub.fetch(new Request('http://internal/broadcast_reaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messageId, conversationId: msg.conversation_id, userId, emoji, action, reactions: reactions || [] })
+        })).catch(() => {})
+      );
+    } catch {}
+
+    return c.json({ success: true, action, reactions: reactions || [] });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

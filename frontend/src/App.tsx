@@ -10,7 +10,8 @@ import {
   Heart, 
   Send, 
   Shield,
-  User 
+  User,
+  Gamepad2 
 } from 'lucide-react';
 /* THEME START */
 import { SidebarThemeSwitch } from './utils/theme';
@@ -31,6 +32,7 @@ import { Create } from './pages/Create';
 import { Activity } from './pages/Activity';
 
 // Secondary views loaded on demand
+const Arcade = React.lazy(() => import('./pages/Arcade').then(m => ({ default: m.Arcade })));
 const Admin = React.lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const NotFound = React.lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 const Legal = React.lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
@@ -217,6 +219,7 @@ const AppContent: React.FC = () => {
     'direct',
     'explore',
     'search',
+    'arcade',
     'notifications',
     'settings',
     'create',
@@ -354,6 +357,15 @@ const AppContent: React.FC = () => {
         view: 'admin',
         canonicalPath: '/admin/',
         shouldReplaceState: fromHash || pathname !== '/admin/',
+      };
+    }
+
+    // Arcade Mini-Games Hub
+    if (raw === 'arcade') {
+      return {
+        view: 'arcade',
+        canonicalPath: '/arcade/',
+        shouldReplaceState: fromHash || pathname !== '/arcade/',
       };
     }
 
@@ -520,6 +532,13 @@ const AppContent: React.FC = () => {
       setPostParam(undefined);
       setHideBottomNav(false);
       targetPath = '/admin/';
+    } else if (newView === 'arcade') {
+      setActiveView('arcade');
+      setProfileParam(undefined);
+      setMessagesParam(undefined);
+      setPostParam(undefined);
+      setHideBottomNav(false);
+      targetPath = '/arcade/';
     } else {
       setActiveView(newView);
       setProfileParam(undefined);
@@ -837,6 +856,28 @@ const AppContent: React.FC = () => {
               </span>
             </button>
 
+            {/* Arcade Mini-Games */}
+            <button
+              onClick={() => { navigate('arcade'); }}
+              title="Arcade Mini-Games"
+              className={`w-full flex items-center gap-0 group-hover/sidebar:gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 ${
+                isSidebarHovered ? 'gap-3.5' : ''
+              } ${
+                activeView === 'arcade'
+                  ? 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-[var(--accent-2)] font-semibold shadow-sm relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:rounded-r before:bg-[var(--accent-2)]'
+                  : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--hover)]'
+              }`}
+            >
+              <Gamepad2 className="w-6 h-6 flex-shrink-0" />
+              <span className={`text-sm font-semibold whitespace-nowrap transition-all duration-300 overflow-hidden ${
+                isSidebarHovered 
+                  ? 'max-w-xs opacity-100' 
+                  : 'max-w-0 opacity-0 group-hover/sidebar:max-w-xs group-hover/sidebar:opacity-100'
+              }`}>
+                Arcade
+              </span>
+            </button>
+
             {/* Admin Console (Admin & Top Admin) */}
             {(user.is_admin || user.is_top_admin) && (
               <button
@@ -942,6 +983,7 @@ const AppContent: React.FC = () => {
             {/* Dynamic / Parameter-based Views */}
             {activeView === 'settings' && <div className="w-full flex-1 animate-fade-in"><Profile initialShowSettings={true} onNavigate={navigate} /></div>}
             {activeView === 'profile' && !!profileParam && <div className="w-full flex-1 animate-fade-in"><Profile targetUsername={profileParam} onNavigate={navigate} /></div>}
+            {activeView === 'arcade' && <div className="w-full flex-1 animate-fade-in"><Arcade onNavigate={navigate} /></div>}
             {activeView === 'admin' && <div className="w-full flex-1 animate-fade-in"><Admin onNavigate={navigate} /></div>}
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (
               <div className="w-full flex-1 animate-fade-in"><Legal type={activeView as any} onNavigate={navigate} /></div>

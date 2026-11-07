@@ -70,11 +70,13 @@ usersApp.get('/notifications', authMiddleware, async (c) => {
           SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
           UNION
           SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
+          UNION
+          SELECT muted_id FROM user_mutes WHERE muter_id = ?
         ))
       ORDER BY n.created_at DESC
       LIMIT 50
     `)
-      .bind(userId, userId, userId)
+      .bind(userId, userId, userId, userId)
       .all<any>();
 
     return c.json({ notifications: notifications || [] });
@@ -815,6 +817,62 @@ usersApp.delete('/:id/block-user', authMiddleware, async (c) => {
   }
 });
 
+// ─── GET MUTED USERS LIST ────────────────────────────────────────────────────
+usersApp.get('/muted-list', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  try {
+    const { results } = await c.env.DB.prepare(`
+      SELECT u.id, u.username, u.display_name, u.avatar_url, um.created_at as muted_at
+      FROM users u
+      JOIN user_mutes um ON u.id = um.muted_id
+      WHERE um.muter_id = ?
+      ORDER BY um.created_at DESC
+    `)
+      .bind(callerId)
+      .all<any>();
+
+    return c.json({ mutedUsers: results || [] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ─── MUTE A USER ─────────────────────────────────────────────────────────────
+usersApp.post('/:id/mute-user', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  const targetUserId = c.req.param('id');
+
+  if (callerId === targetUserId) {
+    return c.json({ error: 'Cannot mute yourself' }, 400);
+  }
+
+  try {
+    await c.env.DB.prepare('INSERT OR IGNORE INTO user_mutes (muter_id, muted_id, created_at) VALUES (?, ?, ?)')
+      .bind(callerId, targetUserId, Date.now())
+      .run();
+
+    return c.json({ success: true, message: 'User muted successfully' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// ─── UNMUTE A USER ───────────────────────────────────────────────────────────
+usersApp.delete('/:id/mute-user', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  const targetUserId = c.req.param('id');
+
+  try {
+    await c.env.DB.prepare('DELETE FROM user_mutes WHERE muter_id = ? AND muted_id = ?')
+      .bind(callerId, targetUserId)
+      .run();
+
+    return c.json({ success: true, message: 'User unmuted successfully' });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // ─── FOLLOW A USER ─────────────────────────────────────────────────────────────
 usersApp.post('/:id/follow', authMiddleware, async (c) => {
   const followerId = c.get('userId');
@@ -926,7 +984,7 @@ usersApp.get('/:username', async (c) => {
   }
 
   const queryUser = await c.env.DB.prepare(`
-    SELECT id, username, display_name, bio, avatar_url, cover_url, cover_pos_y, created_at, is_verified, is_admin, is_top_admin, is_blocked, is_private,
+    SELECT id, username, display_name, bio, avatar_url, cover_url, cover_pos_y, created_at, is_verified, is_admin, is_top_admin, is_blocked, is_private, last_active_at,
       (SELECT COUNT(*) FROM follows WHERE following_id = users.id AND is_accepted = 1) AS followers_count,
       (SELECT COUNT(*) FROM follows WHERE follower_id = users.id AND is_accepted = 1) AS following_count,
       (SELECT COUNT(*) FROM posts WHERE user_id = users.id) AS posts_count,
@@ -962,6 +1020,14 @@ usersApp.get('/:username', async (c) => {
     }
   }
 
+  let isMuted = false;
+  if (currentUserId && currentUserId !== queryUser.id) {
+    const muteRow = await c.env.DB.prepare(
+      'SELECT 1 FROM user_mutes WHERE muter_id = ? AND muted_id = ?'
+    ).bind(currentUserId, queryUser.id).first();
+    isMuted = !!muteRow;
+  }
+
   return c.json({
     user: {
       id: queryUser.id,
@@ -974,6 +1040,8 @@ usersApp.get('/:username', async (c) => {
       is_top_admin: !!queryUser.is_top_admin,
       is_blocked: !!queryUser.is_blocked,
       is_private: !!queryUser.is_private,
+      last_active_at: queryUser.last_active_at || 0,
+      is_muted: isMuted,
       created_at: queryUser.created_at,
       followers_count: queryUser.followers_count,
       following_count: queryUser.following_count,

@@ -28,6 +28,8 @@ import {
   AlertTriangle,
   X,
   Shield,
+  VolumeX,
+  Volume2,
   ShieldCheck,
   ShieldAlert,
   Copy,
@@ -315,9 +317,46 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
   const [settingsSuccessMsg, setSettingsSuccessMsg] = useState<string | null>(null);
   const [settingsErrorMsg, setSettingsErrorMsg] = useState<string | null>(null);
 
-  // Blocking States
+  // Blocking & Muting States
   const [isBlocked, setIsBlocked] = useState<boolean>(false);
   const [viewerBlocked, setViewerBlocked] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+
+  const handleMuteUser = async () => {
+    if (!profile || !token) return;
+    try {
+      const res = await fetch(`/api/users/${profile.id}/mute-user`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setIsMuted(true);
+        toast.success(`Muted @${profile.username}`);
+      } else {
+        toast.error('Failed to mute user');
+      }
+    } catch {
+      toast.error('Network error muting user');
+    }
+  };
+
+  const handleUnmuteUser = async () => {
+    if (!profile || !token) return;
+    try {
+      const res = await fetch(`/api/users/${profile.id}/mute-user`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setIsMuted(false);
+        toast.success(`Unmuted @${profile.username}`);
+      } else {
+        toast.error('Failed to unmute user');
+      }
+    } catch {
+      toast.error('Network error unmuting user');
+    }
+  };
 
   // Followers / Following Modal States
   const [showConnectionsModal, setShowConnectionsModal] = useState<boolean>(false);
@@ -500,6 +539,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUsername, initialShowSet
       setIsBlocked(false);
       setViewerBlocked(false);
       setProfile(profileData.user);
+      setIsMuted(Boolean(profileData.user.is_muted));
       if (isOwnProfile) {
         try {
           sessionStorage.setItem('dv_cached_own_profile', JSON.stringify(profileData.user));
@@ -4018,6 +4058,20 @@ NEVER share these codes with anyone. DataVerse staff will never ask for them.
                       className="btn-secondary flex-1 h-10 px-4 text-xs sm:text-sm font-semibold text-center flex items-center justify-center cursor-pointer"
                     >
                       Message
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={isMuted ? handleUnmuteUser : handleMuteUser}
+                      className={`h-10 px-3.5 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 shrink-0 ${
+                        isMuted
+                          ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 hover:bg-amber-500/25'
+                          : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--card-border)]'
+                      }`}
+                      title={isMuted ? 'Unmute User' : 'Mute User'}
+                    >
+                      {isMuted ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                      <span>{isMuted ? 'Muted' : 'Mute'}</span>
                     </button>
 
                     <button

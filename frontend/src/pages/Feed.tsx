@@ -22,9 +22,12 @@ import {
   Compass,
   Lock,
   SlidersHorizontal,
-  Flag
+  Flag,
+  VolumeX,
+  Eye
 } from 'lucide-react';
 import { ReportModal } from '../components/ReportModal';
+import { PollWidget } from '../components/PollWidget';
 
 export type FeedStatus = 
   | 'idle'
@@ -56,6 +59,9 @@ interface Post {
   is_liked: boolean;
   media: Media[];
   is_private?: boolean;
+  is_sensitive?: boolean;
+  sensitive_reason?: string | null;
+  poll?: any;
 }
 
 interface Comment {
@@ -118,6 +124,24 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
   /* UI UPDATE START - More menu state & click outside handler */
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
   const [reportingPost, setReportingPost] = useState<Post | null>(null);
+  const [revealedSensitive, setRevealedSensitive] = useState<Record<string, boolean>>({});
+
+  const handleMuteUser = async (targetUserId: string, targetUsername: string) => {
+    try {
+      const res = await fetch(`/api/users/${targetUserId}/mute-user`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        toast.success(`Muted @${targetUsername}. Their posts are hidden from your feed.`);
+        setPosts(prev => prev.filter(p => p.user_id !== targetUserId));
+      } else {
+        toast.error('Failed to mute user');
+      }
+    } catch {
+      toast.error('Network error while muting user');
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuPostId(null);
@@ -1048,17 +1072,31 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                         </button>
 
                         {post.user_id !== user?.id && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenMenuPostId(null);
-                              setReportingPost(post);
-                            }}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors min-h-[38px] cursor-pointer"
-                          >
-                            <Flag className="w-4 h-4 text-rose-400" aria-hidden="true" />
-                            Report Post
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenMenuPostId(null);
+                                handleMuteUser(post.user_id, post.username);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[var(--muted)] hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors min-h-[38px] cursor-pointer"
+                            >
+                              <VolumeX className="w-4 h-4" aria-hidden="true" />
+                              Mute @{post.username}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenMenuPostId(null);
+                                setReportingPost(post);
+                              }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors min-h-[38px] cursor-pointer"
+                            >
+                              <Flag className="w-4 h-4 text-rose-400" aria-hidden="true" />
+                              Report Post
+                            </button>
+                          </>
                         )}
                         
                         {(post.user_id === user?.id || user?.is_admin || user?.is_top_admin) && (
@@ -1079,36 +1117,65 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                   </div>
                 </div>
 
-                {/* Media Image or Video: full width on phone, 20px radius on desktop, max-height 560px */}
+                {/* Interactive Poll if present */}
+                {post.poll && (
+                  <PollWidget 
+                    poll={post.poll} 
+                    token={token} 
+                    onVoteSuccess={(updated) => {
+                      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, poll: { ...p.poll, ...updated } } : p));
+                    }}
+                  />
+                )}
+
+                {/* Media Image or Video: with Sensitive Content Blur Warning */}
                 {post.media && post.media[0] && (
-                  <div className="relative w-full -mx-4 sm:mx-0 sm:w-full max-h-[560px] overflow-hidden sm:rounded-[20px] bg-[var(--card)] flex items-center justify-center my-2 sm:border sm:border-[var(--card-border)]" style={{ width: 'calc(100% + 2rem)', marginInline: '-1rem' }}>
-                    {post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
-                      <video 
-                        src={`/api/media/file/${post.media[0].r2_key}`} 
-                        controls 
-                        className="relative z-10 w-full h-auto max-h-[560px] object-contain select-none"
-                        playsInline
-                        preload="metadata"
-                      />
-                    ) : (
-                      <>
-                        <img 
+                  post.is_sensitive && !revealedSensitive[post.id] ? (
+                    <div className="relative w-full -mx-4 sm:mx-0 sm:w-full min-h-[220px] max-h-[380px] sm:rounded-[20px] bg-slate-900/90 border border-slate-700/50 flex flex-col items-center justify-center p-6 text-center my-2 backdrop-blur-xl" style={{ width: 'calc(100% + 2rem)', marginInline: '-1rem' }}>
+                      <AlertTriangle className="w-8 h-8 text-amber-400 mb-2" />
+                      <h4 className="text-sm font-bold text-white mb-1">Sensitive Content Warning</h4>
+                      <p className="text-xs text-slate-300 max-w-sm mb-4">
+                        {post.sensitive_reason ? `Author tagged this post: ${post.sensitive_reason}` : 'This media was marked as sensitive or containing spoilers.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setRevealedSensitive(prev => ({ ...prev, [post.id]: true }))}
+                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-2 border border-slate-600 transition-colors cursor-pointer"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Content
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative w-full -mx-4 sm:mx-0 sm:w-full max-h-[560px] overflow-hidden sm:rounded-[20px] bg-[var(--card)] flex items-center justify-center my-2 sm:border sm:border-[var(--card-border)]" style={{ width: 'calc(100% + 2rem)', marginInline: '-1rem' }}>
+                      {post.media[0].media_type && post.media[0].media_type.startsWith('video/') ? (
+                        <video 
                           src={`/api/media/file/${post.media[0].r2_key}`} 
-                          alt="" 
-                          aria-hidden="true"
-                          className="absolute inset-0 w-full h-full object-cover scale-125 select-none pointer-events-none post-backdrop"
-                          style={{ filter: 'blur(28px) brightness(var(--img-dim)) saturate(1.3)' }}
+                          controls 
+                          className="relative z-10 w-full h-auto max-h-[560px] object-contain select-none"
+                          playsInline
+                          preload="metadata"
                         />
-                        <img 
-                          src={`/api/media/file/${post.media[0].r2_key}`} 
-                          alt={cleanCaption ? `Photo: ${cleanCaption}` : `Photo shared by ${post.username}`} 
-                          className="relative z-10 w-full h-auto max-h-[560px] object-contain select-none cursor-pointer"
-                          loading="lazy"
-                          onDoubleClick={() => handleLike(post.id, post.is_liked)}
-                        />
-                      </>
-                    )}
-                  </div>
+                      ) : (
+                        <>
+                          <img 
+                            src={`/api/media/file/${post.media[0].r2_key}`} 
+                            alt="" 
+                            aria-hidden="true"
+                            className="absolute inset-0 w-full h-full object-cover scale-125 select-none pointer-events-none post-backdrop"
+                            style={{ filter: 'blur(28px) brightness(var(--img-dim)) saturate(1.3)' }}
+                          />
+                          <img 
+                            src={`/api/media/file/${post.media[0].r2_key}`} 
+                            alt={cleanCaption ? `Photo: ${cleanCaption}` : `Photo shared by ${post.username}`} 
+                            className="relative z-10 w-full h-auto max-h-[560px] object-contain select-none cursor-pointer"
+                            loading="lazy"
+                            onDoubleClick={() => handleLike(post.id, post.is_liked)}
+                          />
+                        </>
+                      )}
+                    </div>
+                  )
                 )}
 
                 {/* Action Row: Like with count, Comment with count, Share on left; Bookmark on right */}
@@ -1176,10 +1243,17 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                       {post.username}
                     </span>
                     <span>
-                      {cleanCaption.split(/(#[a-zA-Z0-9_]+)/g).map((part, i) => {
+                      {cleanCaption.split(/(#[a-zA-Z0-9_\u00c0-\u024f]+)/g).map((part, i) => {
                         if (part.startsWith('#')) {
                           return (
-                            <span key={i} className="text-[var(--accent-2)] font-medium cursor-pointer hover:underline">
+                            <span 
+                              key={i} 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNavigate('search', part);
+                              }}
+                              className="text-[var(--accent-2)] font-semibold cursor-pointer hover:underline"
+                            >
                               {part}
                             </span>
                           );

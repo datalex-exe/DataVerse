@@ -45,7 +45,8 @@ import {
   Clock,
   RefreshCw,
   WifiOff,
-  Sparkles
+  Sparkles,
+  Smile
 } from 'lucide-react';
 
 interface Member {
@@ -84,6 +85,7 @@ interface Message {
   display_name: string | null;
   avatar_url: string | null;
   is_verified?: boolean;
+  reactions?: { emoji: string; user_id: string; username: string }[];
 }
 
 interface GameState {
@@ -215,6 +217,7 @@ interface ChatInputProps {
   onDraftChange?: (text: string) => void;
   onSend: (text: string) => void;
   onFocus?: () => void;
+  onTyping?: () => void;
   openCamera: (mode: 'photo' | 'video') => void;
   handleSelectMedia: (e: React.ChangeEvent<HTMLInputElement>) => void;
   startRecording: () => void;
@@ -227,6 +230,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onDraftChange,
   onSend,
   onFocus,
+  onTyping,
   openCamera,
   handleSelectMedia,
   startRecording,
@@ -404,6 +408,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onChange={(e) => {
               setText(e.target.value);
               onDraftChange?.(e.target.value);
+              onTyping?.();
             }}
             onKeyDown={handleKeyDown}
             onFocus={onFocus}
@@ -506,6 +511,82 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
   const messagesCacheRef = useRef<Record<string, Message[]>>({});
+
+  // Real-time Chat Polish: Online Presence, Typing Indicators, and Reactions
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+  const typingTimersRef = useRef<Record<string, any>>({});
+  const lastTypingSentRef = useRef<number>(0);
+  const [activeReactionPickerMsgId, setActiveReactionPickerMsgId] = useState<string | null>(null);
+
+  const isOtherUserTyping = useMemo(() => {
+    if (!activeConvo) return false;
+    if (activeConvo.is_group) {
+      return Object.entries(typingUsers).some(([uid, isTyping]) => isTyping && uid !== user?.id && activeConvo.members.some(m => m.id === uid));
+    }
+    const partner = activeConvo.members.find(m => m.id !== user?.id);
+    return Boolean(partner && typingUsers[partner.id]);
+  }, [activeConvo, typingUsers, user?.id]);
+
+  const typingPartnerName = useMemo(() => {
+    if (!activeConvo || !isOtherUserTyping) return '';
+    if (!activeConvo.is_group) {
+      const partner = activeConvo.members.find(m => m.id !== user?.id);
+      return partner?.display_name || partner?.username || 'Someone';
+    }
+    const typingId = Object.keys(typingUsers).find(uid => typingUsers[uid] && uid !== user?.id);
+    if (!typingId) return 'Someone';
+    const member = activeConvo.members.find(m => m.id === typingId);
+    return member?.nickname || member?.display_name || member?.username || 'Someone';
+  }, [activeConvo, isOtherUserTyping, typingUsers, user?.id]);
+
+  const handleUserTyping = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTypingSentRef.current > 2000) {
+      lastTypingSentRef.current = now;
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'typing', isTyping: true }));
+      }
+    }
+  }, []);
+
+  const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    setActiveReactionPickerMsgId(null);
+    if (!user) return;
+
+    // Optimistic UI update
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m;
+      const currentReactions = m.reactions || [];
+      const hasReacted = currentReactions.some(r => r.emoji === emoji && r.user_id === user.id);
+      let nextReactions;
+      if (hasReacted) {
+        nextReactions = currentReactions.filter(r => !(r.emoji === emoji && r.user_id === user.id));
+      } else {
+        nextReactions = [...currentReactions, { emoji, user_id: user.id, username: user.username }];
+      }
+      return { ...m, reactions: nextReactions };
+    }));
+
+    // Send via WebSocket if open
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'reaction', messageId, emoji }));
+    } else {
+      // Fallback REST call
+      try {
+        await fetch(`/api/conversations/messages/${messageId}/react`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ emoji })
+        });
+      } catch (err) {
+        console.error('Failed to toggle reaction:', err);
+      }
+    }
+  }, [user, token]);
 
 
 
@@ -917,6 +998,10 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     const currentConvoId = activeConvo.id;
     let reconnectTimeout: number | null = null;
     let isCleanup = false;
+    Object.values(typingTimersRef.current).forEach(t => clearTimeout(t));
+    typingTimersRef.current = {};
+    setTypingUsers({});
+    setActiveReactionPickerMsgId(null);
 
     // Fast-path: display cached messages immediately if available for 0ms transition
     if (messagesCacheRef.current[currentConvoId] && messagesCacheRef.current[currentConvoId].length > 0) {
@@ -942,6 +1027,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       ws.onopen = () => {
         console.log('Chat WebSocket connected:', currentConvoId);
         ws.send(JSON.stringify({ type: 'get_game_state' }));
+        ws.send(JSON.stringify({ type: 'get_presence' }));
 
         if (pendingForwardRef.current && pendingForwardRef.current.conversationId === currentConvoId) {
           const forwardPayload = pendingForwardRef.current.body;
@@ -975,6 +1061,51 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
           
           if (data.type === 'error') {
             alert(data.error);
+            return;
+          }
+
+          // Real-time message reactions
+          if (data.type === 'reaction_update') {
+            setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, reactions: data.reactions } : m));
+            return;
+          }
+
+          // Real-time typing indicators
+          if (data.type === 'typing') {
+            if (data.userId && data.userId !== user?.id) {
+              setTypingUsers(prev => ({ ...prev, [data.userId]: Boolean(data.isTyping) }));
+              if (typingTimersRef.current[data.userId]) {
+                clearTimeout(typingTimersRef.current[data.userId]);
+              }
+              if (data.isTyping) {
+                typingTimersRef.current[data.userId] = setTimeout(() => {
+                  setTypingUsers(prev => {
+                    const copy = { ...prev };
+                    delete copy[data.userId];
+                    return copy;
+                  });
+                }, 3500);
+              }
+            }
+            return;
+          }
+
+          // Presence state hydration
+          if (data.type === 'presence_state') {
+            if (Array.isArray(data.userIds)) {
+              setOnlineUsers(new Set(data.userIds));
+            }
+            return;
+          }
+
+          // Real-time user online/offline broadcast
+          if (data.type === 'user_presence') {
+            setOnlineUsers(prev => {
+              const next = new Set(prev);
+              if (data.status === 'online') next.add(data.userId);
+              else next.delete(data.userId);
+              return next;
+            });
             return;
           }
 
@@ -4472,11 +4603,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       <Users className="w-5 h-5" />
                     </div>
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden flex-shrink-0 text-sm font-semibold text-[var(--accent-2)] transition-transform group-hover:scale-105">
-                      {partner.avatar_url ? (
-                        <img src={`/api/media/file/${partner.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
-                      ) : (
-                        partner.username.substring(0, 2).toUpperCase()
+                    <div className="relative flex-shrink-0">
+                      <div className="w-12 h-12 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden flex-shrink-0 text-sm font-semibold text-[var(--accent-2)] transition-transform group-hover:scale-105">
+                        {partner.avatar_url ? (
+                          <img src={`/api/media/file/${partner.avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
+                        ) : (
+                          partner.username.substring(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      {onlineUsers.has(partner.id) && (
+                        <span 
+                          className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[var(--card)] shadow-sm pointer-events-none" 
+                          title="Active now" 
+                        />
                       )}
                     </div>
                   )}
@@ -4575,14 +4714,22 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     <Users className="w-5 h-5 text-brand-400" />
                   </div>
                 ) : (
-                  <div 
-                    onClick={() => onNavigate && onNavigate('profile', getChatPartner(activeConvo).username)}
-                    className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden text-xs font-semibold text-[var(--accent-2)] cursor-pointer hover:opacity-85 transition-opacity flex-shrink-0"
-                  >
-                    {getChatPartner(activeConvo).avatar_url ? (
-                      <img src={`/api/media/file/${getChatPartner(activeConvo).avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
-                    ) : (
-                      getChatPartner(activeConvo).username.substring(0, 2).toUpperCase()
+                  <div className="relative flex-shrink-0">
+                    <div 
+                      onClick={() => onNavigate && onNavigate('profile', getChatPartner(activeConvo).username)}
+                      className="w-10 h-10 rounded-full bg-[var(--input)] border border-[var(--line)] flex items-center justify-center overflow-hidden text-xs font-semibold text-[var(--accent-2)] cursor-pointer hover:opacity-85 transition-opacity"
+                    >
+                      {getChatPartner(activeConvo).avatar_url ? (
+                        <img src={`/api/media/file/${getChatPartner(activeConvo).avatar_url}`} alt="" aria-hidden="true" className="w-full h-full object-cover" />
+                      ) : (
+                        getChatPartner(activeConvo).username.substring(0, 2).toUpperCase()
+                      )}
+                    </div>
+                    {onlineUsers.has(getChatPartner(activeConvo).id) && (
+                      <span 
+                        className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[var(--bg)] shadow-sm pointer-events-none" 
+                        title="Active now" 
+                      />
                     )}
                   </div>
                 )}
@@ -4616,6 +4763,16 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                       <Users className="w-3.5 h-3.5 text-[var(--muted)]" />
                       <span>{activeConvo.members.length} members</span>
                     </button>
+                  ) : isOtherUserTyping ? (
+                    <span className="text-[11px] text-brand-400 font-medium animate-pulse flex items-center gap-1.5 mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-ping"></span>
+                      <span>typing...</span>
+                    </span>
+                  ) : onlineUsers.has(getChatPartner(activeConvo).id) ? (
+                    <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5 mt-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span>Active now</span>
+                    </span>
                   ) : (
                     <span className="text-[11px] text-[var(--muted)] font-normal flex items-center gap-1 mt-0.5">
                       <Shield className="w-3.5 h-3.5 text-[var(--accent-2)]" />
@@ -5181,6 +5338,43 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
                       </div>
 
+                      {/* Message Reaction Badges */}
+                      {msg.reactions && msg.reactions.length > 0 && (() => {
+                        const reactionMap = msg.reactions.reduce((acc: Record<string, { emoji: string; count: number; users: string[]; hasReacted: boolean }>, r) => {
+                          if (!acc[r.emoji]) {
+                            acc[r.emoji] = { emoji: r.emoji, count: 0, users: [], hasReacted: false };
+                          }
+                          acc[r.emoji].count += 1;
+                          acc[r.emoji].users.push(r.username);
+                          if (r.user_id === user?.id) {
+                            acc[r.emoji].hasReacted = true;
+                          }
+                          return acc;
+                        }, {});
+                        const groups = Object.values(reactionMap);
+
+                        return (
+                          <div className={`flex flex-wrap gap-1 mt-0.5 z-10 ${isMe ? 'justify-end pr-1' : 'justify-start pl-10'}`}>
+                            {groups.map((group) => (
+                              <button
+                                key={group.emoji}
+                                type="button"
+                                onClick={() => handleToggleReaction(msg.id, group.emoji)}
+                                title={`Reacted by: ${group.users.join(', ')}`}
+                                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-all active:scale-90 select-none ${
+                                  group.hasReacted
+                                    ? 'bg-[color-mix(in_srgb,var(--accent)_25%,transparent)] border-[var(--accent-2)]/50 text-[var(--accent-2)] font-bold shadow-sm'
+                                    : 'bg-[var(--card)]/80 border-[var(--line)] text-[var(--text)] hover:bg-[var(--hover)] hover:border-white/20'
+                                }`}
+                              >
+                                <span>{group.emoji}</span>
+                                <span className="text-[10px] font-mono">{group.count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+
                       {/* Action buttons (Toggles for sender, forward for receiver if allowed) */}
                       <div 
                         className={`chat-meta-row flex flex-wrap items-center gap-x-2.5 gap-y-1 px-1 text-[10px] max-[400px]:text-[13px] max-[400px]:gap-x-[10px] max-[400px]:gap-y-1 font-normal text-[var(--muted)] select-none max-w-full min-w-0 ${isMe ? 'justify-end ml-auto text-right' : 'justify-start pl-10 text-left'}`}
@@ -5276,6 +5470,37 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           <CornerUpLeft className="w-3 h-3" />
                           Reply
                         </button>
+
+                        {/* Quick Emoji Reaction Trigger */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setActiveReactionPickerMsgId(activeReactionPickerMsgId === msg.id ? null : msg.id)}
+                            className="text-slate-550 hover:text-white flex items-center gap-0.5 transition-colors pl-2 border-l border-white/[0.04]"
+                            title="React with emoji"
+                          >
+                            <Smile className="w-3 h-3" />
+                            <span>React</span>
+                          </button>
+                          {activeReactionPickerMsgId === msg.id && (
+                            <div 
+                              className={`absolute bottom-full mb-1 z-50 flex items-center gap-1 p-1 bg-slate-900 border border-white/10 rounded-full shadow-2xl backdrop-blur-md animate-fade-in ${isMe ? 'right-0' : 'left-0'}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {['❤️', '👍', '😂', '🔥', '😮', '👏'].map(emoji => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => handleToggleReaction(msg.id, emoji)}
+                                  className="w-7 h-7 flex items-center justify-center text-sm rounded-full hover:bg-white/10 active:scale-125 transition-transform"
+                                  title={`React with ${emoji}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                     </div>
@@ -5299,6 +5524,17 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 paddingBottom: 'env(safe-area-inset-bottom, 0px)' 
               }}
             >
+              {/* Real-time Typing indicator banner */}
+              {isOtherUserTyping && (
+                <div className="flex items-center gap-2 px-3 py-1 mb-1.5 text-xs text-[var(--accent-2)] font-medium animate-fade-in select-none">
+                  <span className="inline-flex gap-1 items-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-2)] animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-2)] animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-2)] animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
+                  <span>{typingPartnerName} is typing...</span>
+                </div>
+              )}
               
               {isRecording ? (
                 // Recording Active state
@@ -5335,6 +5571,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   }}
                   onSend={handleSendMessage}
                   onFocus={handleInputFocus}
+                  onTyping={handleUserTyping}
                   openCamera={openCamera}
                   handleSelectMedia={handleSelectMedia}
                   startRecording={startRecording}

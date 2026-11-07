@@ -21,6 +21,7 @@ const SKIP_PATHS = [
   "/dashboard", 
   "/chat", 
   "/create", 
+  "/arcade", 
   "/verify-email", 
   "/reset-password"
 ];

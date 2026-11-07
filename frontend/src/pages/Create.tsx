@@ -13,7 +13,10 @@ import {
   WifiOff,
   AlertTriangle,
   Lock,
-  ArrowLeft
+  ArrowLeft,
+  BarChart2,
+  ShieldAlert,
+  Trash2
 } from 'lucide-react';
 import { ImageCropper } from '../components/ImageCropper';
 
@@ -37,6 +40,16 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
   const [filePreviews, setFilePreviews] = useState<{ url: string; type: string; file: File }[]>([]);
   const [fileToCrop, setFileToCrop] = useState<File | null>(null);
   const [showCameraModal, setShowCameraModal] = useState<boolean>(false);
+  
+  // Interactive Poll states
+  const [showPollCreator, setShowPollCreator] = useState<boolean>(false);
+  const [pollQuestion, setPollQuestion] = useState<string>('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  const [pollDurationHours, setPollDurationHours] = useState<number>(24);
+
+  // Sensitive Content states
+  const [isSensitive, setIsSensitive] = useState<boolean>(false);
+  const [sensitiveReason, setSensitiveReason] = useState<string>('');
   
   // UI states & 10-state architecture
   const [uploading, setUploading] = useState<boolean>(false);
@@ -182,8 +195,16 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
       return;
     }
 
-    if (selectedFiles.length === 0) {
-      setValidationError("Please select or capture at least one image or video to publish.");
+    const hasMedia = selectedFiles.length > 0;
+    const hasValidPoll = showPollCreator && pollQuestion.trim() && pollOptions.filter(o => o.trim()).length >= 2;
+
+    if (!hasMedia && !hasValidPoll && !caption.trim()) {
+      setValidationError("Please select media, create a poll, or enter text to share.");
+      return;
+    }
+
+    if (showPollCreator && (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2)) {
+      setValidationError("Please provide a question and at least 2 options for your poll.");
       return;
     }
 
@@ -237,6 +258,14 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
         uploadedMediaItems.push({ r2_key: r2Key, media_type: contentType });
       }
 
+      const pollPayload = hasValidPoll
+        ? {
+            question: pollQuestion.trim(),
+            options: pollOptions.filter(o => o.trim()),
+            durationHours: pollDurationHours
+          }
+        : undefined;
+
       // Register post metadata in D1
       const postMetadataRes = await fetch('/api/posts', {
         method: 'POST',
@@ -246,7 +275,10 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
         },
         body: JSON.stringify({
           caption: caption.trim(),
-          media: uploadedMediaItems
+          media: uploadedMediaItems,
+          poll: pollPayload,
+          is_sensitive: isSensitive,
+          sensitive_reason: isSensitive ? sensitiveReason.trim() : null
         })
       });
 
@@ -532,16 +564,130 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                   </div>
                   <textarea
                     id="create-post-caption"
-                    rows={7}
-                    placeholder="Say something about this photo or video..."
+                    rows={5}
+                    placeholder="Say something about this photo or video, or include #hashtags..."
                     value={caption}
                     onChange={(e) => {
                       setCaption(e.target.value);
                       if (validationError) setValidationError(null);
                     }}
-                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)]/40 rounded-2xl p-4 text-base md:text-sm text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all resize-none min-h-[140px] md:min-h-[180px]"
+                    className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-1 focus:ring-[var(--accent-2)]/40 rounded-2xl p-4 text-base md:text-sm text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all resize-none min-h-[110px] md:min-h-[140px]"
                   />
                 </div>
+
+                {/* Feature Toggles: Poll & Sensitive Content */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowPollCreator(prev => !prev)}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      showPollCreator
+                        ? 'bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] border-[var(--accent)] text-[var(--accent)]'
+                        : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    <BarChart2 className="w-3.5 h-3.5" />
+                    <span>{showPollCreator ? 'Remove Poll' : 'Attach Poll'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsSensitive(prev => !prev)}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      isSensitive
+                        ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                        : 'bg-[var(--input)] border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>{isSensitive ? 'Sensitive Content: ON' : 'Content Warning'}</span>
+                  </button>
+                </div>
+
+                {/* Interactive Poll Builder Panel */}
+                {showPollCreator && (
+                  <div className="p-3.5 rounded-2xl bg-[var(--card)] border border-[var(--accent)]/40 space-y-3 animate-fade-in shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[var(--accent)] uppercase tracking-wider flex items-center gap-1.5">
+                        <BarChart2 className="w-3.5 h-3.5" /> Community Poll
+                      </span>
+                      <select
+                        value={pollDurationHours}
+                        onChange={(e) => setPollDurationHours(Number(e.target.value))}
+                        className="bg-[var(--input)] border border-[var(--line)] text-[11px] font-semibold text-[var(--text)] rounded-lg px-2 py-1 outline-none"
+                      >
+                        <option value={12}>12 Hours</option>
+                        <option value={24}>24 Hours</option>
+                        <option value={72}>3 Days</option>
+                        <option value={168}>7 Days</option>
+                      </select>
+                    </div>
+
+                    <input
+                      type="text"
+                      placeholder="Ask a question..."
+                      value={pollQuestion}
+                      onChange={(e) => setPollQuestion(e.target.value)}
+                      maxLength={180}
+                      className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent)] rounded-xl px-3 py-2 text-xs sm:text-sm text-[var(--text)] placeholder:text-[var(--muted)] outline-none"
+                    />
+
+                    <div className="space-y-2">
+                      {pollOptions.map((opt, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder={`Option ${idx + 1}`}
+                            value={opt}
+                            onChange={(e) => {
+                              const updated = [...pollOptions];
+                              updated[idx] = e.target.value;
+                              setPollOptions(updated);
+                            }}
+                            maxLength={80}
+                            className="flex-1 bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent)] rounded-xl px-3 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none"
+                          />
+                          {pollOptions.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
+                              className="p-1.5 text-[var(--muted)] hover:text-rose-400 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {pollOptions.length < 4 && (
+                      <button
+                        type="button"
+                        onClick={() => setPollOptions([...pollOptions, ''])}
+                        className="text-xs font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" /> Add Option
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Sensitive Content Options */}
+                {isSensitive && (
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2 animate-fade-in">
+                    <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5" /> Content Warning Overlay Active
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Optional reason (e.g., Spoiler, Flashing lights, Sensitive theme)"
+                      value={sensitiveReason}
+                      onChange={(e) => setSensitiveReason(e.target.value)}
+                      maxLength={100}
+                      className="w-full bg-[var(--input)] border border-amber-500/30 focus:border-amber-400 rounded-xl px-3 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none"
+                    />
+                  </div>
+                )}
 
               </div>
 
@@ -549,7 +695,11 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
               <div className="mt-auto pt-6">
                 <button
                   type="submit"
-                  disabled={uploading || selectedFiles.length === 0 || success}
+                  disabled={
+                    uploading || 
+                    (!selectedFiles.length && (!showPollCreator || !pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) && !caption.trim()) || 
+                    success
+                  }
                   className="btn-primary w-full min-h-[48px] py-3.5 px-6 font-bold flex items-center justify-center gap-2 text-sm tracking-wide cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-[var(--shadow-accent)]"
                 >
                   {uploading ? (
@@ -558,7 +708,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
                       {uploadProgressText || 'Uploading & Sharing...'}
                     </>
                   ) : (
-                    `Share ${selectedFiles.length > 1 ? `(${selectedFiles.length} files)` : ''}`
+                    `Share ${selectedFiles.length > 0 ? (selectedFiles.length > 1 ? `(${selectedFiles.length} files)` : '') : showPollCreator ? 'Poll' : 'Post'}`
                   )}
                 </button>
               </div>

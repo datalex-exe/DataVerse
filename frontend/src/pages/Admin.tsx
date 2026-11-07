@@ -1748,8 +1748,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       onChange={(e) => setSenderType(e.target.value as 'admin' | 'system')}
                       className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
                     >
-                      <option value="admin">👤 Admin (My Username & Avatar)</option>
-                      <option value="system">🤖 System Identity (DataVerse Logo)</option>
+                      <option value="system">✨ DataVerse Official (System Identity & Logo)</option>
+                      <option value="admin">👤 Personal Admin Identity (@{currentUser?.username || 'admin'})</option>
                     </select>
                   </div>
                   
@@ -1848,8 +1848,8 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                           onChange={(e) => setRestrictSenderType(e.target.value as 'admin' | 'system')}
                           className="w-full bg-slate-950 border border-slate-900 rounded-xl px-3 py-2 text-xs text-slate-200 outline-none focus:border-brand-500 transition-all"
                         >
-                          <option value="admin">👤 From Admin Identity (Show Username & Avatar)</option>
-                          <option value="system">🤖 From System Identity (Anonymous, Show Site Logo)</option>
+                          <option value="system">✨ DataVerse Official (System Identity & Logo)</option>
+                          <option value="admin">👤 Personal Admin Identity (@{currentUser?.username || 'admin'})</option>
                         </select>
                       </div>
                     )}
