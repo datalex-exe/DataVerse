@@ -600,11 +600,20 @@ body.messages-active {
 }
 
 .chat-bubble {
-  max-width: min(80%, 520px) !important;
-  min-width: 0 !important;
+  width: fit-content !important;
+  min-width: 56px !important;
+  max-width: 70% !important;
+  padding: 10px 14px !important;
+  line-height: 1.45 !important;
+  font-size: 15px !important;
   overflow-wrap: anywhere !important;
-  word-break: break-word !important;
   white-space: pre-wrap !important;
+}
+
+@media (max-width: 639px) {
+  .chat-bubble {
+    max-width: 85% !important;
+  }
 }
 
 .chat-bubble a {
@@ -612,7 +621,6 @@ body.messages-active {
   text-decoration: underline !important;
   text-underline-offset: 2px !important;
   overflow-wrap: anywhere !important;
-  word-break: break-word !important;
   display: inline !important;
 }
 

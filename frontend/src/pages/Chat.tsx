@@ -180,10 +180,9 @@ const renderFormattedMessageText = (content: string) => {
 
   return (
     <span
-      className="break-words select-text inline leading-relaxed"
+      className="select-text inline leading-relaxed"
       style={{
-        wordBreak: 'break-word',
-        overflowWrap: 'break-word',
+        overflowWrap: 'anywhere',
         whiteSpace: 'pre-wrap',
       }}
     >
@@ -196,10 +195,10 @@ const renderFormattedMessageText = (content: string) => {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:opacity-80 transition-opacity font-medium cursor-pointer inline break-all"
+              className="underline underline-offset-2 hover:opacity-80 transition-opacity font-medium cursor-pointer inline"
               style={{
                 color: 'inherit',
-                wordBreak: 'break-all',
+                overflowWrap: 'anywhere',
                 display: 'inline',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -369,7 +368,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </span>
             <span 
               className="text-[var(--muted)] truncate max-w-full text-[11px] mt-0.5 line-clamp-1"
-              style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+              style={{ overflowWrap: 'anywhere' }}
             >
               {getReplyBodyText(replyingToMessage)}
             </span>
@@ -5334,7 +5333,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                     <div 
                       key={msg.id} 
                       id={`msg-${msg.id}`} 
-                      className={`flex flex-col gap-1 w-fit max-w-[85%] sm:max-w-[75%] md:max-w-[560px] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}
+                      className={`w-full flex flex-col gap-1 min-w-0 ${isMe ? 'items-end' : 'items-start'}`}
                     >
                       {/* Group Chat: sender name label */}
                       {activeConvo?.is_group && !isMe && (() => {
@@ -5354,7 +5353,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
                       {/* Message Sender and Profile */}
                       <div 
-                        className={`w-fit max-w-full flex items-start gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                        className={`flex items-start gap-2 max-w-[85%] sm:max-w-[70%] min-w-0 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                        style={{ width: 'fit-content' }}
                       >
                         {!isMe && (
                           <div 
@@ -5371,9 +5371,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
                         {/* Speech Bubble Container */}
                         <div 
-                          className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full`}
+                          className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-full min-w-0`}
                         >
-                          <div className={`group relative flex items-center gap-1.5 max-w-full ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                          <div className={`group relative flex items-center gap-1.5 max-w-full min-w-0 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                             <div
                               onTouchStart={() => handleMsgTouchStart(msg.id)}
                               onTouchEnd={handleMsgTouchEnd}
@@ -5383,7 +5383,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                 e.preventDefault();
                                 setActiveMsgActionMenuId(prev => prev === msg.id ? null : msg.id);
                               }}
-                              className="relative max-w-full flex-shrink-0 cursor-pointer select-text"
+                              className="relative max-w-full min-w-0 cursor-pointer select-text"
                             >
                           {/* Secure Media Rendering */}
                           {secureMedia ? (
@@ -5578,29 +5578,33 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             const replyObj = parseReplyBody(msg.body);
                             return (
                               <div 
-                                className={`chat-bubble px-4 py-2.5 rounded-[18px] text-xs sm:text-sm leading-relaxed shadow-sm whitespace-pre-wrap break-words w-fit min-w-[36px] max-w-full text-left select-text ${
+                                className={`chat-bubble rounded-[18px] text-[15px] sm:text-base leading-[1.45] shadow-sm select-text text-left ${
                                   isMe 
-                                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-br-[4px]' 
+                                    ? 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] font-medium rounded-br-[4px]' 
                                     : 'bg-[var(--card)] border border-[var(--card-border)] text-[var(--text)] rounded-bl-[4px]'
                                 }`}
                                 style={{
-                                  wordBreak: 'break-word',
-                                  overflowWrap: 'break-word',
+                                  width: 'fit-content',
+                                  minWidth: '56px',
+                                  maxWidth: '100%',
+                                  padding: '10px 14px',
+                                  lineHeight: '1.45',
                                   whiteSpace: 'pre-wrap',
+                                  overflowWrap: 'anywhere',
                                 }}
                               >
                                 {replyObj && (
                                   <div 
                                     onClick={() => handleScrollToMessage(replyObj.reply_to.id)}
-                                    className="chat-reply-preview mb-1.5 bg-black/10 dark:bg-white/[0.04] hover:bg-black/15 dark:hover:bg-white/[0.08] border-l-2 border-[var(--accent-2)] rounded-r-lg px-2.5 py-1.5 text-[10px] cursor-pointer transition-colors w-full min-w-0 max-w-full overflow-hidden text-left"
+                                    className="chat-reply-preview mb-1.5 bg-black/10 dark:bg-white/[0.04] hover:bg-black/15 dark:hover:bg-white/[0.08] border-l-2 border-[var(--accent-2)] rounded-r-lg px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors w-full min-w-0 max-w-full overflow-hidden text-left"
                                     style={{ maxWidth: '100%', minWidth: 0 }}
                                   >
                                     <span className="font-extrabold text-[var(--accent-2)] block mb-0.5 truncate max-w-full">
                                       @{replyObj.reply_to.username}
                                     </span>
                                     <span 
-                                      className="opacity-80 block text-[10px] truncate max-w-full line-clamp-2"
-                                      style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                                      className="opacity-80 block text-[11px] truncate max-w-full line-clamp-2"
+                                      style={{ overflowWrap: 'anywhere' }}
                                     >
                                       {getReplyPreviewText(replyObj.reply_to.body)}
                                     </span>
@@ -5628,7 +5632,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                       </div>
                                       <div className="space-y-0.5">
                                         <span className="text-[10px] font-extrabold text-[var(--text)] block truncate">@{username}</span>
-                                        <p className="text-[10px] text-[var(--muted)] line-clamp-2 leading-relaxed italic" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>"{caption || 'Photo'}"</p>
+                                        <p className="text-[10px] text-[var(--muted)] line-clamp-2 leading-relaxed italic" style={{ overflowWrap: 'anywhere' }}>"{caption || 'Photo'}"</p>
                                       </div>
                                       <button
                                         onClick={() => {
@@ -5917,63 +5921,63 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             )}
                           </div>
 
+                          {/* Message Reaction Badges */}
+                          {msg.reactions && msg.reactions.length > 0 && (() => {
+                            const reactionMap = msg.reactions.reduce((acc: Record<string, { emoji: string; count: number; users: string[]; hasReacted: boolean }>, r) => {
+                              if (!acc[r.emoji]) {
+                                acc[r.emoji] = { emoji: r.emoji, count: 0, users: [], hasReacted: false };
+                              }
+                              acc[r.emoji].count += 1;
+                              acc[r.emoji].users.push(r.username);
+                              if (r.user_id === user?.id) {
+                                acc[r.emoji].hasReacted = true;
+                              }
+                              return acc;
+                            }, {});
+                            const groups = Object.values(reactionMap);
+
+                            return (
+                              <div className={`flex flex-wrap gap-1 mt-1 z-10 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                {groups.map((group) => (
+                                  <button
+                                    key={group.emoji}
+                                    type="button"
+                                    onClick={() => handleToggleReaction(msg.id, group.emoji)}
+                                    title={`Reacted by: ${group.users.join(', ')}`}
+                                    className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-all active:scale-90 select-none ${
+                                      group.hasReacted
+                                        ? 'bg-[color-mix(in_srgb,var(--accent)_25%,transparent)] border-[var(--accent-2)]/50 text-[var(--accent-2)] font-bold shadow-sm'
+                                        : 'bg-[var(--card)]/80 border-[var(--line)] text-[var(--text)] hover:bg-[var(--hover)] hover:border-white/20'
+                                    }`}
+                                  >
+                                    <span>{group.emoji}</span>
+                                    <span className="text-[10px] font-mono">{group.count}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Compact Timestamp and sending status row */}
+                          <div 
+                            className={`chat-meta-row flex items-center gap-1.5 px-1 mt-0.5 text-[10px] text-[var(--muted)] select-none ${isMe ? 'justify-end text-right' : 'justify-start text-left'}`}
+                          >
+                            <span className="text-[var(--muted)] font-normal flex-shrink-0 flex items-center gap-1">
+                              {formatTime(msg.created_at)}
+                              {isMe && msg.id.startsWith('optimistic-') && (
+                                secureMedia?.status === 'failed' ? (
+                                  <span className="text-red-400 font-bold text-[9px] ml-0.5">Failed</span>
+                                ) : (
+                                  <span className="text-[var(--accent-2)] flex items-center gap-0.5 text-[9px] ml-0.5" title="Sending...">
+                                    <Clock className="w-2.5 h-2.5 animate-spin" />
+                                  </span>
+                                )
+                              )}
+                            </span>
+                          </div>
+
                         </div>
 
-                      </div>
-
-                      {/* Message Reaction Badges */}
-                      {msg.reactions && msg.reactions.length > 0 && (() => {
-                        const reactionMap = msg.reactions.reduce((acc: Record<string, { emoji: string; count: number; users: string[]; hasReacted: boolean }>, r) => {
-                          if (!acc[r.emoji]) {
-                            acc[r.emoji] = { emoji: r.emoji, count: 0, users: [], hasReacted: false };
-                          }
-                          acc[r.emoji].count += 1;
-                          acc[r.emoji].users.push(r.username);
-                          if (r.user_id === user?.id) {
-                            acc[r.emoji].hasReacted = true;
-                          }
-                          return acc;
-                        }, {});
-                        const groups = Object.values(reactionMap);
-
-                        return (
-                          <div className={`flex flex-wrap gap-1 mt-0.5 z-10 ${isMe ? 'justify-end pr-1' : 'justify-start pl-10'}`}>
-                            {groups.map((group) => (
-                              <button
-                                key={group.emoji}
-                                type="button"
-                                onClick={() => handleToggleReaction(msg.id, group.emoji)}
-                                title={`Reacted by: ${group.users.join(', ')}`}
-                                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-all active:scale-90 select-none ${
-                                  group.hasReacted
-                                    ? 'bg-[color-mix(in_srgb,var(--accent)_25%,transparent)] border-[var(--accent-2)]/50 text-[var(--accent-2)] font-bold shadow-sm'
-                                    : 'bg-[var(--card)]/80 border-[var(--line)] text-[var(--text)] hover:bg-[var(--hover)] hover:border-white/20'
-                                }`}
-                              >
-                                <span>{group.emoji}</span>
-                                <span className="text-[10px] font-mono">{group.count}</span>
-                              </button>
-                            ))}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Compact Timestamp and sending status row */}
-                      <div 
-                        className={`chat-meta-row flex items-center gap-1.5 px-1 mt-0.5 text-[10px] text-[var(--muted)] select-none ${isMe ? 'justify-end ml-auto text-right' : 'justify-start pl-1 text-left'}`}
-                      >
-                        <span className="text-[var(--muted)] font-normal flex-shrink-0 flex items-center gap-1">
-                          {formatTime(msg.created_at)}
-                          {isMe && msg.id.startsWith('optimistic-') && (
-                            secureMedia?.status === 'failed' ? (
-                              <span className="text-red-400 font-bold text-[9px] ml-0.5">Failed</span>
-                            ) : (
-                              <span className="text-[var(--accent-2)] flex items-center gap-0.5 text-[9px] ml-0.5" title="Sending...">
-                                <Clock className="w-2.5 h-2.5 animate-spin" />
-                              </span>
-                            )
-                          )}
-                        </span>
                       </div>
 
                     </div>
