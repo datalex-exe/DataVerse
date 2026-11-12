@@ -717,10 +717,10 @@ postsApp.post('/:id/comment', async (c) => {
         body: body.trim(),
         created_at: createdAt,
         user_id: userId,
-        username: commentUser.username,
-        display_name: commentUser.display_name,
-        avatar_url: commentUser.avatar_url,
-        is_verified: !!commentUser.is_verified
+        username: commentUser?.username || 'Unknown',
+        display_name: commentUser?.display_name || commentUser?.username || 'User',
+        avatar_url: commentUser?.avatar_url || null,
+        is_verified: !!commentUser?.is_verified
       }
     });
   } catch (err: any) {

@@ -134,6 +134,12 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
   const [comments, setComments] = useState<Comment[]>([]);
   const [newCommentText, setNewCommentText] = useState<string>('');
   const [loadingComments, setLoadingComments] = useState<boolean>(false);
+  const [submittingComment, setSubmittingComment] = useState<boolean>(false);
+
+  const activePostCommentsRef = useRef<string | null>(null);
+  activePostCommentsRef.current = activePostComments;
+  const isActiveRef = useRef<boolean>(isActive);
+  isActiveRef.current = isActive;
 
   /* UI UPDATE START - More menu state & click outside handler */
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
@@ -235,13 +241,13 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
 
     // Check if user is scrolled down, actively watching a video, or viewing comments
     const isScrolledDown = (window.scrollY || document.documentElement.scrollTop || 0) > 120;
-    const isCommentsOpen = Boolean(activePostComments);
+    const isCommentsOpen = Boolean(activePostCommentsRef.current);
     const isAnyVideoPlaying = Array.from(document.querySelectorAll('video')).some(
       v => !v.paused && !v.ended && v.readyState > 2
     );
 
     // If user is scrolled down or watching media or in another tab, queue without jarring scroll
-    if (isScrolledDown || isCommentsOpen || isAnyVideoPlaying || !isActive) {
+    if (isScrolledDown || isCommentsOpen || isAnyVideoPlaying || !isActiveRef.current) {
       setPendingLivePosts(prev => {
         if (prev.some(p => p.id === newPost.id)) return prev;
         return [newPost, ...prev];
@@ -258,7 +264,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
       });
       setStatus('idle');
     }
-  }, [activePostComments, isActive]);
+  }, []);
 
   const handleIncomingDeletedPost = useCallback((postId: string) => {
     setPosts(prev => {
@@ -374,7 +380,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
         const isAnyVideoPlaying = Array.from(document.querySelectorAll('video')).some(
           v => !v.paused && !v.ended && v.readyState > 2
         );
-        if (!isAnyVideoPlaying && !activePostComments) {
+        if (!isAnyVideoPlaying && !activePostCommentsRef.current) {
           handleShowPendingPosts();
         }
       }
@@ -382,7 +388,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
 
     window.addEventListener('scroll', handleScrollTop, { passive: true });
     return () => window.removeEventListener('scroll', handleScrollTop);
-  }, [pendingLivePosts, isActive, activePostComments, handleShowPendingPosts]);
+  }, [pendingLivePosts, isActive, handleShowPendingPosts]);
 
   // Fetch feed posts with deterministic seed & cursor pagination
   const fetchFeed = async (showLoading = false, freshSeed?: string) => {
@@ -637,39 +643,27 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
 
   // Lock body scroll and hide bottom nav when comments drawer is active/open
   useEffect(() => {
-    if (activePostComments) {
-      // Hide bottom navigation
-      if (onToggleBottomNav) {
-        onToggleBottomNav(true);
-      }
-      
-      // Fixed body scroll lock to support all mobile touch browsers
-      const scrollY = window.scrollY;
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = '100%';
-    } else {
-      // Restore bottom navigation
-      if (onToggleBottomNav) {
-        onToggleBottomNav(false);
-      }
+    if (!activePostComments) return;
 
-      // Restore body style and scroll position
-      const scrollY = document.body.style.top;
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
-      if (scrollY) {
-        window.scrollTo(0, parseInt(scrollY) * -1);
-      }
+    if (onToggleBottomNav) {
+      onToggleBottomNav(true);
     }
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActivePostComments(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
       if (onToggleBottomNav) {
         onToggleBottomNav(false);
       }
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
     };
   }, [activePostComments, onToggleBottomNav]);
 
@@ -746,7 +740,12 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     setActivePostComments(postId);
     setLoadingComments(true);
     setComments([]);
-    if (!token) return;
+    setDrawerCommentError(null);
+    setReplyingToComment(null);
+    if (!token) {
+      setLoadingComments(false);
+      return;
+    }
 
     try {
       const res = await fetch(`/api/posts/${postId}/comments`, {
@@ -755,9 +754,13 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
       if (res.ok) {
         const data = await res.json();
         setComments(data.comments || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDrawerCommentError(data.error || `Failed to load comments (${res.status})`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setDrawerCommentError('Failed to load comments. Check connection.');
     } finally {
       setLoadingComments(false);
     }
@@ -766,24 +769,26 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
   // Submit comment
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCommentText.trim()) {
+    if (submittingComment) return;
+
+    const text = newCommentText.trim();
+    if (!text) {
       setDrawerCommentError('Please enter a comment before submitting.');
       return;
     }
-    if (newCommentText.length > 500) {
+    if (text.length > 500) {
       setDrawerCommentError('Comment exceeds 500 characters.');
       return;
     }
     setDrawerCommentError(null);
     if (!activePostComments || !token) return;
 
-    const text = newCommentText.trim();
+    const currentPostId = activePostComments;
     const parentId = replyingToComment?.id || null;
-    setNewCommentText('');
-    setReplyingToComment(null);
+    setSubmittingComment(true);
 
     try {
-      const res = await fetch(`/api/posts/${activePostComments}/comment`, {
+      const res = await fetch(`/api/posts/${currentPostId}/comment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -797,20 +802,31 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
         return;
       }
 
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success && data.comment) {
+        setNewCommentText('');
+        setReplyingToComment(null);
         setComments(prev => [...prev, data.comment]);
         setPosts(prev => prev.map(p => {
-          if (p.id === activePostComments) {
-            return { ...p, comments_count: p.comments_count + 1 };
+          if (p.id === currentPostId) {
+            return { ...p, comments_count: (Number(p.comments_count) || 0) + 1 };
           }
           return p;
         }));
         toast.success('Comment added');
+      } else {
+        const errMsg = data.error || `Failed to post comment (${res.status})`;
+        setDrawerCommentError(errMsg);
+        toast.error(errMsg);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Failed to post comment. Check connection.');
+      const errMsg = err?.message || 'Failed to post comment. Check connection.';
+      setDrawerCommentError(errMsg);
+      toast.error(errMsg);
+    } finally {
+      setSubmittingComment(false);
     }
   };
 
@@ -1594,6 +1610,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                       e.preventDefault();
                       const form = e.currentTarget;
                       const input = form.querySelector('input') as HTMLInputElement;
+                      const submitBtn = form.querySelector('button') as HTMLButtonElement;
                       if (!input || !token) return;
                       const text = input.value.trim();
                       if (!text) {
@@ -1609,7 +1626,8 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                         delete next[post.id];
                         return next;
                       });
-                      input.value = '';
+                      if (submitBtn) submitBtn.disabled = true;
+                      input.disabled = true;
                       try {
                         const res = await fetch(`/api/posts/${post.id}/comment`, {
                           method: 'POST',
@@ -1623,22 +1641,32 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                           setStatus('session_expired');
                           return;
                         }
-                        if (res.ok) {
-                          const data = await res.json();
-                          if (activePostComments === post.id) {
+                        const data = await res.json().catch(() => ({}));
+                        if (res.ok && data.success && data.comment) {
+                          input.value = '';
+                          if (activePostCommentsRef.current === post.id) {
                             setComments(prev => [...prev, data.comment]);
                           }
                           setPosts(prev => prev.map(p => {
                             if (p.id === post.id) {
-                              return { ...p, comments_count: p.comments_count + 1 };
+                              return { ...p, comments_count: (Number(p.comments_count) || 0) + 1 };
                             }
                             return p;
                           }));
                           toast.success('Comment posted');
+                        } else {
+                          const errMsg = data.error || `Failed to post comment (${res.status})`;
+                          setCommentValidationErrors(prev => ({ ...prev, [post.id]: errMsg }));
+                          toast.error(errMsg);
                         }
-                      } catch (err) {
+                      } catch (err: any) {
                         console.error(err);
-                        toast.error('Failed to post comment. Check connection.');
+                        const errMsg = err?.message || 'Failed to post comment. Check connection.';
+                        setCommentValidationErrors(prev => ({ ...prev, [post.id]: errMsg }));
+                        toast.error(errMsg);
+                      } finally {
+                        input.disabled = false;
+                        if (submitBtn) submitBtn.disabled = false;
                       }
                     }}
                     className="relative flex items-center"
@@ -1659,12 +1687,12 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                           });
                         }
                       }}
-                      className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 rounded-full pl-4 pr-16 py-2.5 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all"
+                      className="w-full bg-[var(--input)] border border-[var(--line)] focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 rounded-full pl-4 pr-16 py-2.5 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none transition-all disabled:opacity-50"
                     />
                     <button 
                       type="submit" 
                       aria-label={`Post comment to ${post.username}'s post`}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 py-1.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center justify-center min-h-[32px] focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3.5 py-1.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-full text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50 flex items-center justify-center min-h-[32px] focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
                     >
                       Post
                     </button>
@@ -1713,9 +1741,13 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           role="dialog" 
           aria-modal="true" 
           aria-labelledby="comments-drawer-title"
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col justify-end sm:flex-row sm:justify-end sm:items-center"
+          onClick={() => setActivePostComments(null)}
+          className="fixed inset-0 bg-black/80 z-50 flex flex-col justify-end sm:flex-row sm:justify-end sm:items-center animate-fade-in"
         >
-          <div className="glass-card w-full h-[85vh] h-[85dvh] sm:h-full sm:max-w-md rounded-t-3xl sm:rounded-t-none border-t sm:border-t-0 sm:border-l border-[var(--line)] flex flex-col bg-[var(--card)] shadow-2xl animate-slide-up sm:animate-slide-left overflow-hidden">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="glass-card w-full h-[85vh] h-[85dvh] sm:h-full sm:max-w-md rounded-t-3xl sm:rounded-t-none border-t sm:border-t-0 sm:border-l border-[var(--line)] flex flex-col bg-[var(--card)] shadow-2xl animate-slide-up sm:animate-slide-left overflow-hidden"
+          >
             
             {/* Mobile Drag Indicator / Handle Bar */}
             <div className="w-12 h-1 bg-white/20 rounded-full mx-auto my-3 sm:hidden flex-shrink-0" />
@@ -1837,19 +1869,24 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                   type="text"
                   placeholder="Add a comment..."
                   value={newCommentText}
+                  disabled={submittingComment}
                   onChange={(e) => {
                     setNewCommentText(e.target.value);
                     if (drawerCommentError) setDrawerCommentError(null);
                   }}
-                  className="flex-1 bg-[var(--input)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 transition-colors"
+                  className="flex-1 bg-[var(--input)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 transition-colors disabled:opacity-50"
                 />
                 <button 
                   type="submit" 
-                  disabled={!newCommentText.trim()}
+                  disabled={!newCommentText.trim() || submittingComment}
                   aria-label="Send comment"
-                  className="p-2.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl transition-all disabled:opacity-50 flex items-center justify-center shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
+                  className="p-2.5 bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] rounded-xl transition-all disabled:opacity-50 flex items-center justify-center shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer min-w-[40px] min-h-[40px]"
                 >
-                  <Send className="w-4 h-4" aria-hidden="true" />
+                  {submittingComment ? (
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Send className="w-4 h-4" aria-hidden="true" />
+                  )}
                 </button>
               </div>
               {drawerCommentError && (
