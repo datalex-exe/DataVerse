@@ -649,8 +649,19 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     if (onToggleBottomNav) {
       onToggleBottomNav(true);
     }
-    const originalOverflow = document.body.style.overflow;
+
+    const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalBodyPosition = document.body.style.position;
+    const originalBodyTop = document.body.style.top;
+    const originalBodyWidth = document.body.style.width;
+
+    document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -660,7 +671,12 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.body.style.overflow = originalOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.overflow = originalBodyOverflow;
+      document.body.style.position = originalBodyPosition;
+      document.body.style.top = originalBodyTop;
+      document.body.style.width = originalBodyWidth;
+      window.scrollTo(0, scrollY);
       window.removeEventListener('keydown', handleKeyDown);
       if (onToggleBottomNav) {
         onToggleBottomNav(false);
@@ -1755,11 +1771,16 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
               setActivePostComments(null);
             }
           }}
-          className="fixed inset-0 bg-black/80 z-[999999] flex flex-col justify-end sm:flex-row sm:justify-end sm:items-center animate-fade-in"
+          onTouchMove={(e) => {
+            if (e.target === e.currentTarget) {
+              e.preventDefault();
+            }
+          }}
+          className="fixed inset-0 bg-black/80 z-[999999] flex flex-col justify-end sm:flex-row sm:justify-end sm:items-center animate-fade-in overscroll-none touch-none"
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="glass-card w-full h-[85vh] h-[85dvh] sm:h-full sm:max-w-md rounded-t-3xl sm:rounded-t-none border-t sm:border-t-0 sm:border-l border-[var(--line)] flex flex-col bg-[var(--card)] shadow-2xl animate-slide-up sm:animate-slide-left overflow-hidden relative z-10"
+            className="glass-card w-full h-[85vh] h-[85dvh] sm:h-full sm:max-w-md rounded-t-3xl sm:rounded-t-none border-t sm:border-t-0 sm:border-l border-[var(--line)] flex flex-col bg-[var(--card)] shadow-2xl animate-slide-up sm:animate-slide-left overflow-hidden relative z-10 overscroll-contain touch-auto"
           >
             
             {/* Mobile Drag Indicator / Handle Bar */}
@@ -1779,7 +1800,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
             </div>
 
             {/* Comments List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin overscroll-contain">
               {loadingComments ? (
                 <div className="flex justify-center py-10">
                   <Loader2 className="w-5 h-5 animate-spin text-[var(--accent-2)]" />
@@ -1887,7 +1908,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                     setNewCommentText(e.target.value);
                     if (drawerCommentError) setDrawerCommentError(null);
                   }}
-                  className="flex-1 bg-[var(--input)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 transition-colors disabled:opacity-50"
+                  className="flex-1 bg-[var(--input)] border border-[var(--line)] rounded-xl px-4 py-2.5 text-[16px] sm:text-xs text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--accent-2)] focus:ring-2 focus:ring-[var(--accent-2)]/20 transition-colors disabled:opacity-50"
                 />
                 <button 
                   type="submit" 
