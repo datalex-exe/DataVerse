@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, FolderPlus, Bookmark, Plus, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -46,9 +47,28 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({
   };
 
   useEffect(() => {
-    if (isOpen) {
-      fetchCollections();
-    }
+    if (!isOpen) return;
+
+    fetchCollections();
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.overflow = originalBodyOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -108,10 +128,15 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in select-none">
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in select-none overscroll-none"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="w-full max-w-sm rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-2xl p-6 relative flex flex-col animate-zoom"
+        className="w-full max-w-sm rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-2xl p-6 relative flex flex-col animate-zoom overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-3 border-b border-[var(--line)] mb-4">
@@ -122,7 +147,8 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-[var(--muted)] hover:text-[var(--text)] rounded-full hover:bg-[var(--hover)] transition-colors"
+            aria-label="Close dialog"
+            className="p-1 text-[var(--muted)] hover:text-[var(--text)] rounded-full hover:bg-[var(--hover)] transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -140,7 +166,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({
           <button
             type="submit"
             disabled={!newCollectionName.trim() || isCreating}
-            className="px-3 py-2 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold shadow disabled:opacity-40 flex items-center gap-1 active:scale-95 transition-transform"
+            className="px-3 py-2 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-bold shadow disabled:opacity-40 flex items-center gap-1 active:scale-95 transition-transform cursor-pointer"
           >
             {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
             <span>New</span>
@@ -164,7 +190,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({
                 type="button"
                 onClick={() => handleAddToCollection(col.id, col.name)}
                 disabled={savingCollectionId === col.id}
-                className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--input)] hover:bg-[var(--hover)] border border-[var(--line)] text-left transition-all active:scale-98"
+                className="w-full flex items-center justify-between p-3 rounded-xl bg-[var(--input)] hover:bg-[var(--hover)] border border-[var(--line)] text-left transition-all active:scale-98 cursor-pointer"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <FolderPlus className="w-4 h-4 text-[var(--accent-2)] flex-shrink-0" />
@@ -179,6 +205,7 @@ export const CollectionsModal: React.FC<CollectionsModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

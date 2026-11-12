@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   RotateCcw,
@@ -873,12 +874,25 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cameraMode, capturedPreviewUrl, handleClose, handleFinishCapture, handleFlipCamera, isRecording, startRecording, stopRecording, takePhoto]);
 
-  return (
+  // Lock body scroll while camera is open
+  useEffect(() => {
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.overflow = originalBodyOverflow;
+    };
+  }, []);
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Camera"
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black select-none overflow-hidden"
+      className="fixed inset-0 z-[999999] flex items-center justify-center bg-black select-none overflow-hidden overscroll-none"
       style={{
         backgroundColor: 'var(--camera-bg, #000000)'
       }}
@@ -1343,7 +1357,8 @@ export const SocialCameraModal: React.FC<SocialCameraModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

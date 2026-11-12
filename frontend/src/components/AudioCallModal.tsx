@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Phone, PhoneOff, Mic, MicOff, ShieldCheck } from 'lucide-react';
 
 export interface CallState {
@@ -36,6 +37,22 @@ export const AudioCallModal: React.FC<AudioCallModalProps> = ({
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<any>(null);
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+
+  // Drain queued candidates once remote description is set
+  const drainPendingCandidates = useCallback(async (pc: RTCPeerConnection) => {
+    if (pendingCandidatesRef.current.length > 0) {
+      const candidates = [...pendingCandidatesRef.current];
+      pendingCandidatesRef.current = [];
+      for (const cand of candidates) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch (e) {
+          console.warn('Failed to add queued ice candidate:', e);
+        }
+      }
+    }
+  }, []);
 
   // Clean cleanup of media streams and peer connection
   const cleanupCall = useCallback(() => {
@@ -51,6 +68,7 @@ export const AudioCallModal: React.FC<AudioCallModalProps> = ({
       pcRef.current.close();
       pcRef.current = null;
     }
+    pendingCandidatesRef.current = [];
   }, []);
 
   // Initialize peer connection and local audio stream
@@ -116,30 +134,36 @@ export const AudioCallModal: React.FC<AudioCallModalProps> = ({
 
   // Handle incoming signaling messages
   useEffect(() => {
-    if (!incomingSignal || !pcRef.current) return;
+    if (!incomingSignal) return;
 
     (async () => {
-      const pc = pcRef.current;
-      if (!pc) return;
+      if (incomingSignal.type === 'call_end' || incomingSignal.type === 'call_reject') {
+        cleanupCall();
+        onEndCall();
+        return;
+      }
 
-      if (incomingSignal.type === 'call_accept') {
-        // Callee accepted, wait for answer SDP if sent
-      } else if (incomingSignal.type === 'webrtc_answer') {
-        if (pc.signalingState === 'have-local-offer') {
+      const pc = pcRef.current;
+
+      if (incomingSignal.type === 'webrtc_answer') {
+        if (pc && pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal.sdp));
+          await drainPendingCandidates(pc);
         }
       } else if (incomingSignal.type === 'webrtc_ice') {
         if (incomingSignal.candidate) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(incomingSignal.candidate));
-          } catch (_) {}
+          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(incomingSignal.candidate));
+            } catch (_) {}
+          } else {
+            // Buffer candidate until remote description is ready
+            pendingCandidatesRef.current.push(incomingSignal.candidate);
+          }
         }
-      } else if (incomingSignal.type === 'call_end' || incomingSignal.type === 'call_reject') {
-        cleanupCall();
-        onEndCall();
       }
     })();
-  }, [incomingSignal, cleanupCall, onEndCall]);
+  }, [incomingSignal, cleanupCall, onEndCall, drainPendingCandidates]);
 
   // Duration timer when connected
   useEffect(() => {
@@ -161,6 +185,21 @@ export const AudioCallModal: React.FC<AudioCallModalProps> = ({
     };
   }, [cleanupCall]);
 
+  // Lock body scroll while in a call modal
+  useEffect(() => {
+    if (!call || call.status === 'idle') return;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.overflow = originalBodyOverflow;
+    };
+  }, [call?.status]);
+
   if (!call || call.status === 'idle') return null;
 
   const handleAcceptCall = async () => {
@@ -169,6 +208,7 @@ export const AudioCallModal: React.FC<AudioCallModalProps> = ({
 
     if (incomingSignal && incomingSignal.sdp) {
       await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal.sdp));
+      await drainPendingCandidates(pc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
@@ -209,11 +249,11 @@ export const AudioCallModal: React.FC<AudioCallModalProps> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-lg animate-fade-in select-none">
+  return createPortal(
+    <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-lg animate-fade-in select-none overscroll-none">
       <audio ref={remoteAudioRef} autoPlay />
 
-      <div className="w-full max-w-sm rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-2xl p-7 flex flex-col items-center text-center animate-zoom relative overflow-hidden">
+      <div className="w-full max-w-sm rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-2xl p-7 flex flex-col items-center text-center animate-zoom relative overflow-hidden overscroll-contain">
         {/* Glow backdrop */}
         <div className="absolute -top-12 -left-12 w-40 h-40 bg-[var(--accent-2)]/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-12 -right-12 w-40 h-40 bg-[var(--accent)]/10 rounded-full blur-3xl pointer-events-none" />
@@ -325,6 +365,7 @@ export const AudioCallModal: React.FC<AudioCallModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

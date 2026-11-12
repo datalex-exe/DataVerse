@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Copy, Check, Download, Share2 } from 'lucide-react';
 import { VerifiedBadge } from './VerifiedBadge';
 import { drawQRCodeToCanvas } from '../utils/qrCode';
@@ -24,18 +25,39 @@ export const ProfileQrModal: React.FC<ProfileQrModalProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const profileUrl = `${window.location.origin}/${username}`;
 
-  // Draw ISO/IEC 18004 scannable QR on canvas
+  // Draw ISO/IEC 18004 scannable QR on canvas & handle scroll lock
   useEffect(() => {
-    if (!isOpen || !canvasRef.current) return;
-    const canvas = canvasRef.current;
-    canvas.width = 560;
-    canvas.height = 560;
-    drawQRCodeToCanvas(canvas, profileUrl, {
-      darkColor: '#040b0d',
-      lightColor: '#ffffff',
-      quietZone: 4,
-      centerText: 'DV'
-    });
+    if (!isOpen) return;
+
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      canvas.width = 560;
+      canvas.height = 560;
+      drawQRCodeToCanvas(canvas, profileUrl, {
+        darkColor: '#040b0d',
+        lightColor: '#ffffff',
+        quietZone: 4,
+        centerText: 'DV'
+      });
+    }
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.overflow = originalBodyOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen, profileUrl]);
 
   if (!isOpen) return null;
@@ -68,16 +90,22 @@ export const ProfileQrModal: React.FC<ProfileQrModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in select-none">
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in select-none overscroll-none"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="w-full max-w-sm rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-2xl p-6 relative flex flex-col items-center text-center animate-zoom"
+        className="w-full max-w-sm rounded-3xl bg-[var(--card)] border border-[var(--line)] shadow-2xl p-6 relative flex flex-col items-center text-center animate-zoom overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-[var(--muted)] hover:text-[var(--text)] rounded-full hover:bg-[var(--hover)] transition-colors"
+          aria-label="Close QR Modal"
+          className="absolute top-4 right-4 p-2 text-[var(--muted)] hover:text-[var(--text)] rounded-full hover:bg-[var(--hover)] transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center cursor-pointer"
           title="Close"
         >
           <X className="w-4 h-4" />
@@ -116,7 +144,7 @@ export const ProfileQrModal: React.FC<ProfileQrModalProps> = ({
           <button
             type="button"
             onClick={handleCopyLink}
-            className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-[var(--input)] border border-[var(--line)] text-xs font-semibold text-[var(--text)] hover:border-[var(--accent-2)] transition-all active:scale-95"
+            className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-[var(--input)] border border-[var(--line)] text-xs font-semibold text-[var(--text)] hover:border-[var(--accent-2)] transition-all active:scale-95 cursor-pointer"
           >
             {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-[var(--muted)]" />}
             <span className="text-[10px]">{copied ? 'Copied' : 'Copy Link'}</span>
@@ -125,7 +153,7 @@ export const ProfileQrModal: React.FC<ProfileQrModalProps> = ({
           <button
             type="button"
             onClick={handleDownloadQr}
-            className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-[var(--input)] border border-[var(--line)] text-xs font-semibold text-[var(--text)] hover:border-[var(--accent-2)] transition-all active:scale-95"
+            className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-[var(--input)] border border-[var(--line)] text-xs font-semibold text-[var(--text)] hover:border-[var(--accent-2)] transition-all active:scale-95 cursor-pointer"
           >
             <Download className="w-4 h-4 text-[var(--muted)]" />
             <span className="text-[10px]">Save QR</span>
@@ -134,13 +162,14 @@ export const ProfileQrModal: React.FC<ProfileQrModalProps> = ({
           <button
             type="button"
             onClick={handleNativeShare}
-            className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-semibold shadow-md active:scale-95"
+            className="flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] text-xs font-semibold shadow-md active:scale-95 cursor-pointer"
           >
             <Share2 className="w-4 h-4" />
             <span className="text-[10px]">Share</span>
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

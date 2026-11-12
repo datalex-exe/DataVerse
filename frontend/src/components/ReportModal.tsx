@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Flag, X, AlertTriangle, ShieldCheck, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -38,6 +39,28 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.body.style.overflow = originalBodyOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -93,15 +116,15 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div 
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in select-none"
+      className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in select-none overscroll-none"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div 
-        className="w-full max-w-lg bg-[var(--card)] border border-[var(--line)] rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-scale-up"
+        className="w-full max-w-lg bg-[var(--card)] border border-[var(--line)] rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-scale-up overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -242,7 +265,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
