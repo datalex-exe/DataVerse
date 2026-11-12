@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { VerifiedBadge } from '../components/VerifiedBadge';
@@ -735,8 +736,11 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     }
   };
 
+  const commentsDrawerOpenedAtRef = useRef<number>(0);
+
   // Open Comments Drawer
   const handleOpenComments = async (postId: string) => {
+    commentsDrawerOpenedAtRef.current = Date.now();
     setActivePostComments(postId);
     setLoadingComments(true);
     setComments([]);
@@ -1532,12 +1536,15 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                     {/* Comment */}
                     <button 
                       type="button"
-                      onClick={() => handleOpenComments(post.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenComments(post.id);
+                      }}
                       className="min-w-[40px] min-h-[40px] flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--accent-2)] transition-colors p-2 rounded-full hover:bg-[var(--hover)] active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
                       aria-label={`View comments, ${post.comments_count} comments`}
                     >
-                      <MessageCircle className="w-5 h-5 stroke-[1.8]" aria-hidden="true" />
-                      <span className="text-xs font-semibold">{post.comments_count}</span>
+                      <MessageCircle className="w-5 h-5 stroke-[1.8] pointer-events-none" aria-hidden="true" />
+                      <span className="text-xs font-semibold pointer-events-none">{post.comments_count}</span>
                     </button>
 
                     {/* Share */}
@@ -1736,17 +1743,23 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
 
       {/* COMMENTS DRAWER / MODAL */}
       {/* THEME START */}
-      {activePostComments && (
+      {activePostComments && createPortal(
         <div 
           role="dialog" 
           aria-modal="true" 
           aria-labelledby="comments-drawer-title"
-          onClick={() => setActivePostComments(null)}
-          className="fixed inset-0 bg-black/80 z-50 flex flex-col justify-end sm:flex-row sm:justify-end sm:items-center animate-fade-in"
+          onClick={(e) => {
+            // Guard against mobile synthetic ghost clicks immediately after opening
+            if (Date.now() - commentsDrawerOpenedAtRef.current < 450) return;
+            if (e.target === e.currentTarget) {
+              setActivePostComments(null);
+            }
+          }}
+          className="fixed inset-0 bg-black/80 z-[999999] flex flex-col justify-end sm:flex-row sm:justify-end sm:items-center animate-fade-in"
         >
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="glass-card w-full h-[85vh] h-[85dvh] sm:h-full sm:max-w-md rounded-t-3xl sm:rounded-t-none border-t sm:border-t-0 sm:border-l border-[var(--line)] flex flex-col bg-[var(--card)] shadow-2xl animate-slide-up sm:animate-slide-left overflow-hidden"
+            className="glass-card w-full h-[85vh] h-[85dvh] sm:h-full sm:max-w-md rounded-t-3xl sm:rounded-t-none border-t sm:border-t-0 sm:border-l border-[var(--line)] flex flex-col bg-[var(--card)] shadow-2xl animate-slide-up sm:animate-slide-left overflow-hidden relative z-10"
           >
             
             {/* Mobile Drag Indicator / Handle Bar */}
@@ -1759,7 +1772,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
                 type="button"
                 onClick={() => setActivePostComments(null)}
                 aria-label="Close comments dialog"
-                className="text-[var(--muted)] hover:text-[var(--text)] transition-colors p-1.5 rounded-full hover:bg-[var(--hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-2)]"
+                className="text-[var(--muted)] hover:text-[var(--text)] transition-colors p-2 rounded-full hover:bg-[var(--hover)] min-w-[44px] min-h-[44px] flex items-center justify-center focus-visible:ring-2 focus-visible:ring-[var(--accent-2)] cursor-pointer"
               >
                 <X className="w-5 h-5" aria-hidden="true" />
               </button>
@@ -1898,11 +1911,12 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
             </form>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SHARE MODAL */}
-      {sharingPost && (
+      {sharingPost && createPortal(
         <div 
           role="dialog" 
           aria-modal="true" 
@@ -2045,7 +2059,8 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* THEME END */}
 
