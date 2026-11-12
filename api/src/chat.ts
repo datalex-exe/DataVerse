@@ -53,10 +53,68 @@ export class ChatRoom {
   state: DurableObjectState;
   env: Bindings;
   cachedGame: GameState | null = null;
+  private userCache: Map<string, { username: string; display_name: string; avatar_url: string | null; chat_restricted_until: number | null; cachedAt: number }> = new Map();
+  private pendingMessageInserts: Array<{ id: string; conversation_id: string; sender_id: string; body: string; created_at: number }> = [];
+  private flushTimer: any = null;
 
   constructor(state: DurableObjectState, env: Bindings) {
     this.state = state;
     this.env = env;
+  }
+
+  // In-memory cache for user profiles to eliminate D1 reads on every chat message
+  async getUserProfile(userId: string) {
+    const cached = this.userCache.get(userId);
+    const now = Date.now();
+    if (cached && (now - cached.cachedAt < 120000)) {
+      return cached;
+    }
+    const sender = await this.env.DB.prepare(
+      'SELECT username, display_name, avatar_url, chat_restricted_until FROM users WHERE id = ?'
+    )
+      .bind(userId)
+      .first<any>();
+    if (sender) {
+      this.userCache.set(userId, { ...sender, cachedAt: now });
+    }
+    return sender;
+  }
+
+  // Queue and batch D1 message inserts (flushes every 1.5s or on 20 messages)
+  queueMessageInsert(msg: { id: string; conversation_id: string; sender_id: string; body: string; created_at: number }) {
+    this.pendingMessageInserts.push(msg);
+    if (this.pendingMessageInserts.length >= 20) {
+      this.flushMessageQueue();
+    } else if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => {
+        this.flushMessageQueue();
+      }, 1500);
+    }
+  }
+
+  async flushMessageQueue() {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    if (this.pendingMessageInserts.length === 0) return;
+    const batch = [...this.pendingMessageInserts];
+    this.pendingMessageInserts = [];
+    try {
+      const stmts = batch.map(m =>
+        this.env.DB.prepare('INSERT INTO messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)')
+          .bind(m.id, m.conversation_id, m.sender_id, m.body, m.created_at)
+      );
+      await this.env.DB.batch(stmts);
+    } catch (err) {
+      console.error('Failed to batch insert messages, falling back to individual:', err);
+      for (const m of batch) {
+        try {
+          await this.env.DB.prepare('INSERT INTO messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)')
+            .bind(m.id, m.conversation_id, m.sender_id, m.body, m.created_at).run();
+        } catch (_) {}
+      }
+    }
   }
 
   async getGame(): Promise<GameState> {
@@ -382,11 +440,7 @@ export class ChatRoom {
         const messageId = crypto.randomUUID();
         const createdAt = Date.now();
 
-        const sender = await this.env.DB.prepare(
-          'SELECT username, display_name, avatar_url, chat_restricted_until FROM users WHERE id = ?'
-        )
-          .bind(userId)
-          .first<any>();
+        const sender = await this.getUserProfile(userId);
 
         if (!sender) return;
 
@@ -398,12 +452,7 @@ export class ChatRoom {
           return;
         }
 
-        await this.env.DB.prepare(
-          'INSERT INTO messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)'
-        )
-          .bind(messageId, conversationId, userId, bodyText, createdAt)
-          .run();
-
+        // Broadcast to all sockets immediately (0ms instant delivery)
         const broadcastMsg = JSON.stringify({
           type: 'message',
           message: {
@@ -419,8 +468,17 @@ export class ChatRoom {
         });
 
         for (const socket of sockets) {
-          socket.send(broadcastMsg);
+          try { socket.send(broadcastMsg); } catch {}
         }
+
+        // Queue for batched database write (batching 20 messages / 1.5s reduces D1 write transactions by up to 95%)
+        this.queueMessageInsert({
+          id: messageId,
+          conversation_id: conversationId,
+          sender_id: userId,
+          body: bodyText,
+          created_at: createdAt
+        });
         return;
       }
 
@@ -1369,11 +1427,13 @@ export class ChatRoom {
     const messageId = crypto.randomUUID();
     const createdAt = Date.now();
 
-    await this.env.DB.prepare(
-      'INSERT INTO messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)'
-    )
-      .bind(messageId, conversationId, 'system', text, createdAt)
-      .run();
+    this.queueMessageInsert({
+      id: messageId,
+      conversation_id: conversationId,
+      sender_id: 'system',
+      body: text,
+      created_at: createdAt
+    });
 
     const broadcastMsg = JSON.stringify({
       type: 'message',

@@ -1052,8 +1052,26 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   useEffect(() => {
     if (!token) return;
     fetchConversations(conversations.length === 0);
-    const interval = setInterval(() => fetchConversations(false), 5000);
-    return () => clearInterval(interval);
+
+    // Refresh once when returning to tab from background
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchConversations(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Lightweight 60s fallback only if WebSocket is not open (replaces burning 5s poll)
+    const interval = setInterval(() => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetchConversations(false);
+      }
+    }, 60000);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [token]);
 
   // Synchronize activeConvo with targetConvoId prop

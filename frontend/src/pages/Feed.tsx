@@ -361,9 +361,10 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
 
     connectWs();
 
-    // Passive fallback check every 25s for background updates
+    // Passive fallback check (60s) only if WebSocket is disconnected
     const fallbackInterval = setInterval(async () => {
       if (!document.hidden && navigator.onLine && token) {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
         try {
           const res = await fetch(`/api/posts/live?since=${lastLiveCheckRef.current}`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -377,7 +378,7 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
           }
         } catch (_) {}
       }
-    }, 25000);
+    }, 60000);
 
     return () => {
       isMounted = false;

@@ -116,7 +116,7 @@ const AppContent: React.FC = () => {
     };
 
     ping();
-    const interval = setInterval(ping, 25000);
+    const interval = setInterval(ping, 60000); // 60s active presence ping (reduces background ping load by 60%)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         ping();
@@ -213,8 +213,18 @@ const AppContent: React.FC = () => {
   React.useEffect(() => {
     if (!user) return;
     Promise.allSettled([fetchUnreadCount(), fetchUnreadChatsCount()]);
-    const notificationInterval = setInterval(fetchUnreadCount, 30000);
-    const chatsInterval = setInterval(fetchUnreadChatsCount, 15000);
+
+    // Check once on tab focus
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        Promise.allSettled([fetchUnreadCount(), fetchUnreadChatsCount()]);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // Passive 90s fallback interval (replaces burning 15s/30s polling)
+    const notificationInterval = setInterval(fetchUnreadCount, 90000);
+    const chatsInterval = setInterval(fetchUnreadChatsCount, 90000);
 
     const handleChatsValueUpdate = (e: Event) => {
       const customEvent = e as CustomEvent;
@@ -228,6 +238,7 @@ const AppContent: React.FC = () => {
     return () => {
       clearInterval(notificationInterval);
       clearInterval(chatsInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('unread-chats-update-value', handleChatsValueUpdate);
     };
   }, [user, fetchUnreadCount, fetchUnreadChatsCount]);
