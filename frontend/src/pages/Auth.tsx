@@ -88,6 +88,18 @@ export const Auth: React.FC = () => {
     };
   }, []);
 
+  // Idle prefetch the feed chunk so upon successful login, Feed is already warm in cache for 0ms transition
+  useEffect(() => {
+    const prefetchFeed = () => {
+      import('./Feed').catch(() => {});
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(prefetchFeed);
+    } else {
+      setTimeout(prefetchFeed, 1000);
+    }
+  }, []);
+
   /* ANIMATION START */
   const [animationKey, setAnimationKey] = useState<number>(0);
   const [placeholderText, setPlaceholderText] = useState<string>('');

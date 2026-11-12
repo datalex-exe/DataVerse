@@ -92,13 +92,6 @@ export async function authMiddleware(c: Context<{ Bindings: Bindings; Variables:
 // SIGNUP
 authApp.post('/signup', async (c) => {
   try {
-    // Rate limit: 5 signups per 15 minutes per IP
-    const rl = await checkRateLimit(c, { prefix: 'signup', limit: 5, windowSeconds: 900 });
-    if (!rl.allowed) {
-      c.header('Retry-After', rl.retryAfter.toString());
-      return c.json({ error: 'Too many signup attempts. Please try again later.' }, 429);
-    }
-
     const { username, email, password, display_name } = await c.req.json();
 
     if (!username || !email || !password) {
@@ -128,12 +121,20 @@ authApp.post('/signup', async (c) => {
       return c.json({ error: 'Password cannot exceed 128 characters.' }, 400);
     }
 
-    // Check if user already exists
-    const existing = await c.env.DB.prepare(
-      'SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?'
-    )
-      .bind(cleanUsername, cleanEmail)
-      .first();
+    // Parallelize rate limit check and existing user lookup for ultra-fast response
+    const [rl, existing] = await Promise.all([
+      checkRateLimit(c, { prefix: 'signup', limit: 5, windowSeconds: 900 }),
+      c.env.DB.prepare(
+        'SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?'
+      )
+        .bind(cleanUsername, cleanEmail)
+        .first()
+    ]);
+
+    if (!rl.allowed) {
+      c.header('Retry-After', rl.retryAfter.toString());
+      return c.json({ error: 'Too many signup attempts. Please try again later.' }, 429);
+    }
 
     if (existing) {
       return c.json({ error: 'Username or email already in use' }, 400);
@@ -203,13 +204,6 @@ authApp.post('/signup', async (c) => {
 // LOGIN
 authApp.post('/login', async (c) => {
   try {
-    // General IP rate limit: 10 login attempts per 5 minutes
-    const rl = await checkRateLimit(c, { prefix: 'login_ip', limit: 10, windowSeconds: 300 });
-    if (!rl.allowed) {
-      c.header('Retry-After', rl.retryAfter.toString());
-      return c.json({ error: 'Too many login attempts from this network. Please wait before trying again.' }, 429);
-    }
-
     const { login_id, password } = await c.req.json(); // login_id can be email or username
 
     if (!login_id || !password) {
@@ -218,24 +212,33 @@ authApp.post('/login', async (c) => {
 
     const cleanLoginId = String(login_id).trim().toLowerCase();
 
+    // Parallelize rate-limiting, account lockout, and DB user lookup for minimal server latency (<150ms)
+    const [rl, lockout, user] = await Promise.all([
+      checkRateLimit(c, { prefix: 'login_ip', limit: 10, windowSeconds: 300 }),
+      checkLoginLockout(c, cleanLoginId),
+      c.env.DB.prepare(`
+        SELECT u.*, COALESCE(t.enabled, 0) AS has_2fa
+        FROM users u
+        LEFT JOIN user_2fa t ON u.id = t.user_id
+        WHERE u.username = ? OR u.email = ?
+      `)
+        .bind(cleanLoginId, cleanLoginId)
+        .first<any>()
+    ]);
+
+    // General IP rate limit: 10 login attempts per 5 minutes
+    if (!rl.allowed) {
+      c.header('Retry-After', rl.retryAfter.toString());
+      return c.json({ error: 'Too many login attempts from this network. Please wait before trying again.' }, 429);
+    }
+
     // Check account-level lockout for repeated failed attempts
-    const lockout = await checkLoginLockout(c, cleanLoginId);
     if (lockout.isLocked) {
       c.header('Retry-After', lockout.retryAfter.toString());
       return c.json({
         error: `Account temporarily locked due to multiple failed login attempts. Please try again in ${Math.ceil(lockout.retryAfter / 60)} minute(s).`
       }, 429);
     }
-
-    // Single indexed query joining user details and 2FA status
-    const user = await c.env.DB.prepare(`
-      SELECT u.*, COALESCE(t.enabled, 0) AS has_2fa
-      FROM users u
-      LEFT JOIN user_2fa t ON u.id = t.user_id
-      WHERE u.username = ? OR u.email = ?
-    `)
-      .bind(cleanLoginId, cleanLoginId)
-      .first<any>();
 
     if (!user) {
       await recordFailedLogin(c, cleanLoginId);

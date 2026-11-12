@@ -24,10 +24,9 @@ import { GameChallengeModal, GameInvitation } from './components/GameChallengeMo
 import { sendPushHeartbeat, registerServiceWorker, autoSyncPushSubscription } from './utils/push';
 import { DataVerseLogo } from './components/DataVerseLogo';
 
-import { Auth } from './pages/Auth';
-import { Feed } from './pages/Feed';
-
 // On-demand code-split routes with automatic prefetching
+const Auth = React.lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })));
+const Feed = React.lazy(() => import('./pages/Feed').then(m => ({ default: m.Feed })));
 const Explore = React.lazy(() => import('./pages/Explore').then(m => ({ default: m.Explore })));
 const Profile = React.lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 const Chat = React.lazy(() => import('./pages/Chat').then(m => ({ default: m.Chat })));
@@ -43,6 +42,8 @@ const Contact = React.lazy(() => import('./pages/Contact').then(m => ({ default:
 const prefetchRoute = (view: string) => {
   try {
     switch (view) {
+      case 'feed': import('./pages/Feed'); break;
+      case 'auth': import('./pages/Auth'); break;
       case 'search': import('./pages/Explore'); break;
       case 'profile': import('./pages/Profile'); break;
       case 'messages': import('./pages/Chat'); break;
@@ -645,7 +646,11 @@ const AppContent: React.FC = () => {
       );
     }
 
-    return <Auth />;
+    return (
+      <React.Suspense fallback={<ViewFallback />}>
+        <Auth />
+      </React.Suspense>
+    );
   }
 
 
