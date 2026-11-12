@@ -108,21 +108,35 @@ arcadeApp.post('/invite', async (c) => {
       'INSERT INTO messages (id, conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, ?, ?)'
     ).bind(messageId, finalConvoId, userId, `🎮 Challenged you to a game of ${gameName}! Click to play in Arcade.`, now).run();
 
-    // 3. Notify Durable Object chat room
+    // 3. Notify Durable Object chat room & global room via WebSocket push
+    const invitePayload = {
+      type: 'game_invite',
+      id: notifId,
+      recipientId: targetRecipientId,
+      conversationId: finalConvoId,
+      senderId: userId,
+      gameType: selectedGame,
+      gameName,
+      challenger: challengerInfo
+    };
+
     try {
       const doId = c.env.CHAT_ROOM.idFromName(finalConvoId);
       const stub = c.env.CHAT_ROOM.get(doId);
       await stub.fetch(new Request('http://durableobject/broadcast_game_invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'game_invite',
-          conversationId: finalConvoId,
-          senderId: userId,
-          gameType: selectedGame,
-          gameName,
-          challenger: challengerInfo
-        })
+        body: JSON.stringify(invitePayload)
+      }));
+    } catch (_) {}
+
+    try {
+      const globalDoId = c.env.CHAT_ROOM.idFromName('room_global');
+      const globalStub = c.env.CHAT_ROOM.get(globalDoId);
+      await globalStub.fetch(new Request('http://durableobject/broadcast_game_invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invitePayload)
       }));
     } catch (_) {}
 

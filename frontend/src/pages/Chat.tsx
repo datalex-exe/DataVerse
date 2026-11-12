@@ -1344,6 +1344,24 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
           // Handle game invite in real-time
           if (data.type === 'game_invite') {
+            if (data.senderId !== user.id) {
+              window.dispatchEvent(new CustomEvent('game-challenge-received', {
+                detail: {
+                  id: data.id || `invite_${Date.now()}`,
+                  conversationId: data.conversationId,
+                  gameType: data.gameType || 'tic-tac-toe',
+                  gameName: data.gameName || 'Arcade Game',
+                  created_at: Date.now(),
+                  challenger: data.challenger || {
+                    id: data.senderId,
+                    username: 'player',
+                    display_name: 'Player',
+                    avatar_url: null
+                  }
+                }
+              }));
+            }
+
             setConversations(prevConvos => {
               return prevConvos.map(convo => {
                 if (convo.id === data.conversationId) {

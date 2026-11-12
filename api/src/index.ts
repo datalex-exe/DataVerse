@@ -276,6 +276,19 @@ app.get('/api/media/file/*', async (c) => {
     return c.json({ error: 'Missing file key' }, 400);
   }
 
+  // Fast 304 return if client already has matching ETag in browser cache
+  const ifNoneMatch = c.req.header('If-None-Match');
+  if (ifNoneMatch && (ifNoneMatch === `"${key}"` || ifNoneMatch === key)) {
+    return new Response(null, {
+      status: 304,
+      headers: {
+        'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
+        'ETag': `"${key}"`,
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+  }
+
   try {
     let content: any = null;
     let contentType = 'application/octet-stream';
@@ -417,7 +430,8 @@ app.get('/api/media/file/*', async (c) => {
       const headers = new Headers();
       headers.set('Content-Type', contentType);
       headers.set('Access-Control-Allow-Origin', '*');
-      headers.set('Cache-Control', 'public, max-age=31536000');
+      headers.set('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+      headers.set('ETag', `"${key}"`);
       headers.set('Accept-Ranges', 'bytes');
       headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Content-Range', `bytes ${start}-${end}/${finalContent.byteLength}`);
@@ -433,7 +447,8 @@ app.get('/api/media/file/*', async (c) => {
       const headers = new Headers();
       headers.set('Content-Type', contentType);
       headers.set('Access-Control-Allow-Origin', '*');
-      headers.set('Cache-Control', 'public, max-age=31536000');
+      headers.set('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+      headers.set('ETag', `"${key}"`);
       headers.set('Accept-Ranges', 'bytes');
       headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Content-Length', finalContent.byteLength.toString());

@@ -162,6 +162,18 @@ export default {
         return fetch(targetUrl, request);
       }
 
+      // Edge Caching for Media Assets (/api/media/file/*)
+      const isMediaFile = url.pathname.startsWith('/api/media/file/') && (request.method === 'GET' || request.method === 'HEAD');
+      if (isMediaFile) {
+        try {
+          const cache = caches.default;
+          const cachedRes = await cache.match(request);
+          if (cachedRes) {
+            return cachedRes;
+          }
+        } catch (_) {}
+      }
+
       const proxyRequest = new Request(targetUrl, {
         method: request.method,
         headers: request.headers,
@@ -176,6 +188,21 @@ export default {
         if (!newHeaders.has(key)) {
           newHeaders.set(key, value);
         }
+      }
+
+      if (isMediaFile && response.status === 200) {
+        newHeaders.set('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+        const edgeRes = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: newHeaders,
+        });
+        try {
+          const cache = caches.default;
+          const toCache = edgeRes.clone();
+          cache.put(request, toCache).catch(() => {});
+        } catch (_) {}
+        return edgeRes;
       }
 
       return new Response(response.body, {

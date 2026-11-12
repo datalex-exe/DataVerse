@@ -49,8 +49,17 @@ export const GameChallengeModal: React.FC<GameChallengeModalProps> = ({ onAccept
 
   useEffect(() => {
     if (!user || !token) return;
+    
+    // Check pending invites once on mount (no 7s interval polling)
     checkPendingInvites();
-    const interval = setInterval(checkPendingInvites, 7000);
+
+    // Re-check once only if user returns to the tab after being away
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkPendingInvites();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     const handleCustomInvite = (e: Event) => {
       const customEvent = e as CustomEvent<GameInvitation>;
@@ -62,7 +71,7 @@ export const GameChallengeModal: React.FC<GameChallengeModalProps> = ({ onAccept
     window.addEventListener('game-challenge-received', handleCustomInvite);
 
     return () => {
-      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('game-challenge-received', handleCustomInvite);
     };
   }, [user, token]);
