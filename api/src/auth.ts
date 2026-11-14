@@ -38,6 +38,75 @@ export async function verifyToken(token: string, secret?: string): Promise<{ use
 }
 
 /**
+ * Records an entry into auth_audit_log for account security, geolocation, and device telemetry.
+ */
+export async function recordAuthAuditLog(
+  c: Context<{ Bindings: Bindings; Variables: Variables }>,
+  userId: string,
+  event: string,
+  extraDetails?: Record<string, any>
+) {
+  try {
+    const rawIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || '127.0.0.1';
+    const ip = rawIp.split(',')[0].trim();
+    const cf = (c.req.raw as any)?.cf || {};
+    const country = cf.country || c.req.header('cf-ipcountry') || 'Unknown';
+    const city = cf.city || 'Unknown';
+    const region = cf.region || cf.regionCode || '';
+    const timezone = cf.timezone || '';
+    const asn = cf.asn ? `AS${cf.asn} (${cf.asOrganization || ''})` : '';
+
+    const userAgent = c.req.header('user-agent') || 'Unknown';
+
+    let deviceType = 'Desktop';
+    if (/mobile/i.test(userAgent)) deviceType = 'Mobile';
+    else if (/tablet|ipad/i.test(userAgent)) deviceType = 'Tablet';
+
+    let os = 'Unknown OS';
+    if (/android/i.test(userAgent)) os = 'Android';
+    else if (/iphone|ipad|ipod/i.test(userAgent)) os = 'iOS';
+    else if (/windows nt 10/i.test(userAgent)) os = 'Windows 10/11';
+    else if (/windows/i.test(userAgent)) os = 'Windows';
+    else if (/macintosh|mac os x/i.test(userAgent)) os = 'macOS';
+    else if (/linux/i.test(userAgent)) os = 'Linux';
+
+    let browser = 'Unknown Browser';
+    if (/edg/i.test(userAgent)) browser = 'Edge';
+    else if (/chrome|crios/i.test(userAgent)) browser = 'Chrome';
+    else if (/firefox|fxios/i.test(userAgent)) browser = 'Firefox';
+    else if (/safari/i.test(userAgent) && !/chrome/i.test(userAgent)) browser = 'Safari';
+    else if (/opera|opr/i.test(userAgent)) browser = 'Opera';
+
+    const detailsObj = {
+      city,
+      country,
+      region,
+      timezone,
+      asn,
+      deviceType,
+      os,
+      browser,
+      ...extraDetails
+    };
+
+    const auditId = crypto.randomUUID();
+    await c.env.DB.prepare(
+      'INSERT INTO auth_audit_log (id, user_id, event, ip, user_agent, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      auditId,
+      userId,
+      event,
+      ip,
+      userAgent,
+      JSON.stringify(detailsObj),
+      Date.now()
+    ).run();
+  } catch (err) {
+    console.warn('[Audit Log] Failed to record auth event:', err);
+  }
+}
+
+/**
  * Middleware to protect routes and verify the session in KV cache.
  */
 export async function authMiddleware(c: Context<{ Bindings: Bindings; Variables: Variables }>, next: any) {
@@ -180,6 +249,9 @@ authApp.post('/signup', async (c) => {
     // Cache session in KV for 30 days (2592000 seconds)
     await c.env.SESSION_KV.put(`session:${token}`, id, { expirationTtl: 2592000 });
 
+    // Asynchronously record signup audit log with IP, approximate location & device metadata
+    recordAuthAuditLog(c, id, 'signup').catch(() => {});
+
     const userObj: User = {
       id,
       username: cleanUsername,
@@ -311,6 +383,9 @@ authApp.post('/login', async (c) => {
     const token = await signToken(user.id, c.env.JWT_SECRET);
     // Cache session in KV for 30 days
     await c.env.SESSION_KV.put(`session:${token}`, user.id, { expirationTtl: 2592000 });
+
+    // Asynchronously record login audit log with IP, approximate location & device metadata
+    recordAuthAuditLog(c, user.id, 'login').catch(() => {});
 
     const userObj: User = {
       id: user.id,

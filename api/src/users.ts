@@ -141,6 +141,89 @@ usersApp.get('/', authMiddleware, async (c) => {
   }
 });
 
+// ─── GET USER SECURITY AUDIT & METADATA (Admin only) ───────────────────────────
+usersApp.get('/:id/security-audit', authMiddleware, async (c) => {
+  const callerId = c.get('userId');
+  const targetUserId = c.req.param('id');
+
+  const caller = await c.env.DB.prepare('SELECT is_admin, is_top_admin FROM users WHERE id = ?')
+    .bind(callerId)
+    .first<any>();
+
+  if (!caller || (caller.is_admin !== 1 && caller.is_top_admin !== 1)) {
+    return c.json({ error: 'Unauthorized: Admin privileges required' }, 403);
+  }
+
+  try {
+    const targetUser = await c.env.DB.prepare(`
+      SELECT u.id, u.username, u.email, u.display_name, u.avatar_url, u.is_verified, 
+             u.is_admin, u.is_top_admin, u.is_blocked, u.created_at,
+             COALESCE(t.enabled, 0) AS has_2fa
+      FROM users u
+      LEFT JOIN user_2fa t ON u.id = t.user_id
+      WHERE u.id = ?
+    `).bind(targetUserId).first<any>();
+
+    if (!targetUser) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+
+    // Fetch up to 25 recent authentication audit logs
+    const { results: logs } = await c.env.DB.prepare(`
+      SELECT id, event, ip, user_agent, details, created_at
+      FROM auth_audit_log
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT 25
+    `).bind(targetUserId).all<any>();
+
+    const mappedLogs = (logs || []).map(log => {
+      let parsedDetails: any = {};
+      if (log.details) {
+        try {
+          parsedDetails = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
+        } catch {
+          parsedDetails = { raw: log.details };
+        }
+      }
+      return {
+        id: log.id,
+        event: log.event,
+        ip: log.ip || 'Unknown',
+        userAgent: log.user_agent || '',
+        city: parsedDetails.city || 'Unknown',
+        country: parsedDetails.country || 'Unknown',
+        region: parsedDetails.region || '',
+        timezone: parsedDetails.timezone || '',
+        asn: parsedDetails.asn || '',
+        deviceType: parsedDetails.deviceType || 'Desktop',
+        os: parsedDetails.os || 'Unknown OS',
+        browser: parsedDetails.browser || 'Unknown Browser',
+        createdAt: log.created_at
+      };
+    });
+
+    return c.json({
+      user: {
+        id: targetUser.id,
+        username: targetUser.username,
+        email: targetUser.email,
+        displayName: targetUser.display_name || targetUser.username,
+        avatarUrl: targetUser.avatar_url,
+        isVerified: !!targetUser.is_verified,
+        isAdmin: !!targetUser.is_admin,
+        isTopAdmin: !!targetUser.is_top_admin,
+        isBlocked: !!targetUser.is_blocked,
+        has2FA: !!targetUser.has_2fa,
+        createdAt: targetUser.created_at
+      },
+      auditLogs: mappedLogs
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // ─── UPDATE PROFILE ────────────────────────────────────────────────────────────
 usersApp.put('/profile', authMiddleware, async (c) => {
   const userId = c.get('userId');

@@ -47,7 +47,12 @@ import {
   List,
   FileCode,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Info,
+  Globe,
+  Laptop,
+  MapPin,
+  Activity
 } from 'lucide-react';
 
 export type AdminStatus = 
@@ -878,6 +883,32 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
   const [auditMessages, setAuditMessages] = useState<AuditMessage[]>([]);
   const [loadingAudit, setLoadingAudit] = useState<boolean>(false);
 
+  // User Security Audit & Device Metadata Modal States
+  const [securityAuditUser, setSecurityAuditUser] = useState<SystemUser | null>(null);
+  const [securityAuditData, setSecurityAuditData] = useState<any | null>(null);
+  const [loadingSecurityAudit, setLoadingSecurityAudit] = useState<boolean>(false);
+
+  const handleOpenSecurityAudit = async (targetUser: SystemUser) => {
+    setSecurityAuditUser(targetUser);
+    setSecurityAuditData(null);
+    setLoadingSecurityAudit(true);
+    try {
+      const res = await fetch(`/api/users/${targetUser.id}/security-audit`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setSecurityAuditData(json);
+      } else {
+        toast.error('Failed to load user security audit details');
+      }
+    } catch {
+      toast.error('Network error loading security audit');
+    } finally {
+      setLoadingSecurityAudit(false);
+    }
+  };
+
   // Fetch all users list
   const fetchUsers = async () => {
     if (!token) return;
@@ -1100,6 +1131,16 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeMediaPreview, adminMedia]);
+
+  // Esc to close user security audit modal
+  useEffect(() => {
+    if (!securityAuditUser) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSecurityAuditUser(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [securityAuditUser]);
 
   // Load preview text content when inspecting text/code files
   useEffect(() => {
@@ -2159,6 +2200,16 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
                             {/* Action buttons (auto) - 40x40 rounded buttons */}
                             <div className="flex items-center gap-2 justify-end min-w-[130px]">
+                              {/* Security Audit & Device Info */}
+                              <button
+                                onClick={() => handleOpenSecurityAudit(u)}
+                                aria-label="View security and device metadata"
+                                title="Device & Security Metadata"
+                                className="admin-action-btn !text-cyan-400 !border-cyan-400/40 !bg-cyan-500/10 hover:!bg-cyan-500/20"
+                              >
+                                <Info className="w-4 h-4" />
+                              </button>
+
                               {/* Reset 2FA */}
                               {!!u.has_2fa && (
                                 <button
@@ -2293,6 +2344,16 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
                           {/* Col 3: Actions (Buttons at least 40px with 8px gaps) */}
                           <div className="flex items-center gap-2 flex-shrink-0">
+                            {/* Security Audit & Device Info */}
+                            <button
+                              onClick={() => handleOpenSecurityAudit(u)}
+                              aria-label="View security and device metadata"
+                              title="Device & Security Info"
+                              className="admin-action-btn !text-cyan-400 !border-cyan-400/40 !bg-cyan-500/10 hover:!bg-cyan-500/20"
+                            >
+                              <Info className="w-4 h-4" />
+                            </button>
+
                             {/* Reset 2FA */}
                             {!!u.has_2fa && (
                               <button
@@ -5102,6 +5163,218 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             </div>
           )}
         </aside>
+      )}
+
+      {/* USER SECURITY AUDIT & DEVICE TELEMETRY MODAL */}
+      {securityAuditUser && createPortal(
+        <div 
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="security-audit-title"
+          className="fixed inset-0 z-[1000000] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in"
+          onClick={() => setSecurityAuditUser(null)}
+        >
+          <div 
+            className="bg-[var(--card)] border border-[var(--line)] rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-[var(--line)] bg-[var(--hover)]/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 id="security-audit-title" className="text-base sm:text-lg font-bold text-[var(--text)]">
+                      Security & Device Telemetry
+                    </h2>
+                    {securityAuditUser.is_verified ? (
+                      <VerifiedBadge size={16} />
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-[var(--muted)] flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-[var(--text)]">@{securityAuditUser.username}</span>
+                    {securityAuditUser.email && (
+                      <>
+                        <span>•</span>
+                        <span>{securityAuditUser.email}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSecurityAuditUser(null)}
+                className="w-9 h-9 rounded-xl hover:bg-[var(--hover)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+              {loadingSecurityAudit ? (
+                <div className="py-16 flex flex-col items-center justify-center text-center space-y-3">
+                  <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+                  <p className="text-xs text-[var(--muted)]">Fetching security telemetry from Cloudflare D1 audit logs...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Overview Cards */}
+                  {(() => {
+                    const latestLog = securityAuditData?.auditLogs?.[0];
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="p-3.5 rounded-xl border border-[var(--line)] bg-[var(--hover)]/20 space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-[var(--muted)]">
+                            <span>Latest IP</span>
+                            <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                          </div>
+                          <div className="text-sm font-mono font-bold text-[var(--text)] truncate" title={latestLog?.ip || 'No log'}>
+                            {latestLog?.ip || 'Pending signin'}
+                          </div>
+                          <div className="text-[10px] text-[var(--muted)] truncate">
+                            {latestLog?.asn ? `ASN: ${latestLog.asn}` : 'Cloudflare Edge Routed'}
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-[var(--line)] bg-[var(--hover)]/20 space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-[var(--muted)]">
+                            <span>Location</span>
+                            <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                          </div>
+                          <div className="text-sm font-bold text-[var(--text)] truncate">
+                            {latestLog?.city && latestLog.city !== 'Unknown' 
+                              ? `${latestLog.city}, ${latestLog.country}` 
+                              : (latestLog?.country && latestLog.country !== 'Unknown' ? latestLog.country : 'Unknown')}
+                          </div>
+                          <div className="text-[10px] text-[var(--muted)] truncate">
+                            {latestLog?.timezone || 'Approximate GeoIP'}
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-[var(--line)] bg-[var(--hover)]/20 space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-[var(--muted)]">
+                            <span>Platform & Device</span>
+                            <Laptop className="w-3.5 h-3.5 text-amber-400" />
+                          </div>
+                          <div className="text-sm font-bold text-[var(--text)] truncate">
+                            {latestLog?.os || 'Unknown OS'}
+                          </div>
+                          <div className="text-[10px] text-[var(--muted)] truncate">
+                            {latestLog?.browser ? `${latestLog.browser} (${latestLog.deviceType || 'Desktop'})` : 'User-Agent'}
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-[var(--line)] bg-[var(--hover)]/20 space-y-1">
+                          <div className="flex items-center justify-between text-[11px] font-semibold text-[var(--muted)]">
+                            <span>2FA & Account Status</span>
+                            <Shield className="w-3.5 h-3.5 text-purple-400" />
+                          </div>
+                          <div className="text-sm font-bold text-[var(--text)]">
+                            {securityAuditData?.user?.has2FA ? (
+                              <span className="text-emerald-400">2FA Enabled</span>
+                            ) : (
+                              <span className="text-amber-400">2FA Disabled</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-[var(--muted)] truncate">
+                            Joined {new Date(securityAuditUser.created_at || Date.now()).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Audit Logs Table / Timeline */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text)] flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                        Authentication Activity Log ({securityAuditData?.auditLogs?.length || 0})
+                      </h3>
+                      <span className="text-[10px] text-[var(--muted)]">Latest 25 events</span>
+                    </div>
+
+                    {!securityAuditData?.auditLogs || securityAuditData.auditLogs.length === 0 ? (
+                      <div className="p-8 rounded-xl border border-dashed border-[var(--line)] text-center text-xs text-[var(--muted)] space-y-1">
+                        <p>No authentication events recorded yet for this user.</p>
+                        <p className="text-[11px] text-[var(--muted)]">New signin and signup events will automatically log IP, location, and device details here.</p>
+                      </div>
+                    ) : (
+                      <div className="border border-[var(--line)] rounded-xl overflow-hidden divide-y divide-[var(--line)] bg-[var(--bg)]/50">
+                        {securityAuditData.auditLogs.map((log: any, idx: number) => (
+                          <div key={log.id || idx} className="p-3 sm:p-4 hover:bg-[var(--hover)]/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                                  log.event === 'signup' 
+                                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
+                                    : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                }`}>
+                                  {log.event}
+                                </span>
+                                <span className="font-mono text-xs font-bold text-[var(--text)]">
+                                  {log.ip}
+                                </span>
+                                {(log.city !== 'Unknown' || log.country !== 'Unknown') && (
+                                  <span className="text-xs text-[var(--muted)] flex items-center gap-1">
+                                    <MapPin className="w-3 h-3 text-emerald-400" />
+                                    {[log.city, log.region, log.country].filter(Boolean).filter(x => x !== 'Unknown').join(', ') || 'Unknown'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-[var(--muted)] flex-wrap">
+                                <span className="font-medium text-[var(--text)]">
+                                  {log.os} • {log.browser}
+                                </span>
+                                <span>•</span>
+                                <span>{log.deviceType}</span>
+                                {log.timezone && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{log.timezone}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right sm:shrink-0 text-[10px] text-[var(--muted)] flex sm:flex-col items-center sm:items-end justify-between">
+                              <span className="font-medium">{new Date(log.createdAt).toLocaleDateString()}</span>
+                              <span className="font-mono">{new Date(log.createdAt).toLocaleTimeString()}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Security Boundary Notice */}
+                  <div className="p-3 rounded-xl border border-cyan-500/20 bg-cyan-950/20 text-[11px] text-cyan-300/80 leading-relaxed flex items-start gap-2">
+                    <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-cyan-200">Security & Privacy Architecture:</span> Telemetry is securely collected at the Cloudflare Edge network (IP geolocation, ASN, headers) and HTTP client hints. Operating system layer protections restrict raw hardware MAC addresses and prevent unauthorized camera feeds without explicit native system prompts.
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-[var(--line)] bg-[var(--hover)]/20 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSecurityAuditUser(null)}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-[var(--accent)] text-[var(--on-accent)] hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ADMIN MEDIA FULLSCREEN LIGHTBOX / UNIVERSAL IN-APP PREVIEW MODAL */}
