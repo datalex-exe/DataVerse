@@ -2294,69 +2294,75 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       </div>
                     </div>
 
-                    {/* Mobile View (Single-line Rows below 768px: avatar | name and handle | actions) */}
+                    {/* Mobile View (< 768px: responsive 2-tier card layout) */}
                     <div className="md:hidden glass-card rounded-2xl overflow-hidden border border-[var(--line)] bg-[var(--card)] shadow-md divide-y divide-[var(--line)] w-full min-w-0">
                       {filteredUsers.map(u => (
                         <div 
                           key={u.id} 
-                          className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 px-3 py-3 min-h-[72px] hover:bg-[var(--hover)] transition-colors w-full min-w-0"
+                          className="p-3 sm:p-4 hover:bg-[var(--hover)]/30 transition-colors w-full min-w-0 space-y-3"
                         >
-                          {/* Col 1: Avatar (44px) */}
-                          <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={44} />
-
-                          {/* Col 2: Name + Handle with Role badge as small pill under handle */}
-                          <div className="min-w-0 pr-1 flex flex-col justify-center">
-                            <h5 className="font-extrabold text-xs text-[var(--text)] flex items-center gap-1 truncate leading-tight">
-                              <span className="truncate">{u.display_name || u.username}</span>
-                              {!!u.is_verified && <VerifiedBadge size={11} className="flex-shrink-0" />}
-                            </h5>
-                            <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
-                              <span className="text-[10px] text-[var(--muted)] truncate max-w-[85px] xs:max-w-[130px]">
-                                @{u.username}
-                              </span>
-                              {u.is_top_admin && (
-                                <span className="flex-shrink-0 text-[8px] font-black text-[var(--gold)] bg-[color-mix(in_srgb,var(--gold)_14%,transparent)] border border-[color-mix(in_srgb,var(--gold)_30%,transparent)] px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
-                                  Top Admin
-                                </span>
-                              )}
-                              {u.is_admin && !u.is_top_admin && (
-                                <span className="flex-shrink-0 text-[8px] font-black text-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent-2)_14%,transparent)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)] px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
-                                  Admin
-                                </span>
-                              )}
-                              {u.is_blocked && (
-                                <span className="flex-shrink-0 text-[8px] font-black text-[var(--danger)] bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
-                                  Blocked
-                                </span>
-                              )}
-                              {!u.is_admin && !u.is_blocked && (
-                                <span className="flex-shrink-0 text-[8px] font-black text-[var(--muted)] bg-[var(--input)] border border-[var(--line)] px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
-                                  Member
-                                </span>
-                              )}
-                              {!!u.has_2fa && (
-                                <span className="flex-shrink-0 text-[8px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded-full uppercase tracking-wider leading-none">
-                                  2FA
-                                </span>
-                              )}
+                          {/* Row 1: Avatar + User Info (Full Width) + Security Info Button */}
+                          <div className="flex items-center justify-between gap-2.5 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <AdminAvatar avatarUrl={u.avatar_url} name={u.username} size={42} />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <h5 className="font-extrabold text-sm text-[var(--text)] truncate leading-tight">
+                                    {u.display_name || u.username}
+                                  </h5>
+                                  {!!u.is_verified && <VerifiedBadge size={12} className="flex-shrink-0" />}
+                                </div>
+                                <div className="flex items-center gap-1.5 min-w-0 mt-1 flex-wrap">
+                                  <span className="text-[11px] text-[var(--muted)] font-mono truncate">
+                                    @{u.username}
+                                  </span>
+                                  {u.is_top_admin && (
+                                    <span className="flex-shrink-0 text-[8px] font-black text-[var(--gold)] bg-[color-mix(in_srgb,var(--gold)_14%,transparent)] border border-[color-mix(in_srgb,var(--gold)_30%,transparent)] px-1.5 py-0.5 rounded-full uppercase tracking-wider leading-none">
+                                      Top Admin
+                                    </span>
+                                  )}
+                                  {u.is_admin && !u.is_top_admin && (
+                                    <span className="flex-shrink-0 text-[8px] font-black text-[var(--accent-2)] bg-[color-mix(in_srgb,var(--accent-2)_14%,transparent)] border border-[color-mix(in_srgb,var(--accent-2)_30%,transparent)] px-1.5 py-0.5 rounded-full uppercase tracking-wider leading-none">
+                                      Admin
+                                    </span>
+                                  )}
+                                  {u.is_blocked && (
+                                    <span className="flex-shrink-0 text-[8px] font-black text-[var(--danger)] bg-[color-mix(in_srgb,var(--danger)_14%,transparent)] border border-[color-mix(in_srgb,var(--danger)_30%,transparent)] px-1.5 py-0.5 rounded-full uppercase tracking-wider leading-none">
+                                      Blocked
+                                    </span>
+                                  )}
+                                  {!u.is_admin && !u.is_blocked && (
+                                    <span className="flex-shrink-0 text-[8px] font-black text-[var(--muted)] bg-[var(--input)] border border-[var(--line)] px-1.5 py-0.5 rounded-full uppercase tracking-wider leading-none">
+                                      Member
+                                    </span>
+                                  )}
+                                  {!!u.has_2fa && (
+                                    <span className="flex-shrink-0 text-[8px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full uppercase tracking-wider leading-none inline-flex items-center gap-0.5">
+                                      <Shield className="w-2.5 h-2.5" /> 2FA
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Col 3: Actions (Buttons at least 40px with 8px gaps) */}
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {/* Security Audit & Device Info */}
+                            {/* Security Audit & Device Info Button */}
                             <button
+                              type="button"
                               onClick={() => handleOpenSecurityAudit(u)}
                               aria-label="View security and device metadata"
                               title="Device & Security Info"
-                              className="admin-action-btn !text-cyan-400 !border-cyan-400/40 !bg-cyan-500/10 hover:!bg-cyan-500/20"
+                              className="admin-action-btn !text-cyan-400 !border-cyan-400/40 !bg-cyan-500/10 hover:!bg-cyan-500/20 flex-shrink-0 shadow-sm"
                             >
                               <Info className="w-4 h-4" />
                             </button>
+                          </div>
 
+                          {/* Row 2: Management Actions Toolbar */}
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--line)]/40 overflow-x-auto">
                             {/* Reset 2FA */}
                             {!!u.has_2fa && (
                               <button
+                                type="button"
                                 onClick={() => handleReset2FA(u)}
                                 aria-label="Reset user 2FA"
                                 title="Reset 2FA"
@@ -2369,6 +2375,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                             {/* Toggle Verification */}
                             {currentUser?.is_top_admin && (
                               <button
+                                type="button"
                                 onClick={() => handleToggleVerify(u)}
                                 aria-label={u.is_verified ? "Remove verified badge" : "Grant verified badge"}
                                 title="Toggle Verification"
@@ -2385,6 +2392,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                             {/* Toggle Admin */}
                             {currentUser?.is_top_admin && (
                               <button
+                                type="button"
                                 onClick={() => handleToggleAdmin(u)}
                                 disabled={u.is_top_admin}
                                 aria-label={u.is_admin ? "Revoke admin rights" : "Grant admin rights"}
@@ -2403,6 +2411,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
                             {/* Toggle Block */}
                             <button
+                              type="button"
                               onClick={() => handleToggleBlock(u)}
                               disabled={u.id === currentUser?.id || u.is_top_admin}
                               aria-label={u.is_blocked ? "Unblock user" : "Remove or block user"}
@@ -2420,6 +2429,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
 
                             {/* Delete User */}
                             <button
+                              type="button"
                               onClick={() => handleDeleteUser(u)}
                               disabled={u.id === currentUser?.id || u.is_top_admin}
                               aria-label="Delete user account"
