@@ -412,8 +412,10 @@ conversationsApp.get('/:id/messages', async (c) => {
       return c.json({ error: 'Access denied: You are not a participant in this conversation' }, 403);
     }
 
-    const limit = Math.min(parseInt(c.req.query('limit') || '40'), 100);
-    const before = c.req.query('before') ? parseInt(c.req.query('before')!) : null;
+    const limit = Math.min(parseInt(c.req.query('limit') || '40', 10), 100);
+    const beforeRaw = c.req.query('before');
+    const beforeParsed = beforeRaw ? parseInt(beforeRaw, 10) : NaN;
+    const before = !isNaN(beforeParsed) && beforeParsed > 0 ? beforeParsed : null;
 
     // Retrieve latest messages with cursor pagination (use LEFT JOIN and COALESCE to allow system messages)
     const query = `

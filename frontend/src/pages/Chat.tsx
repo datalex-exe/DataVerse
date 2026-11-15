@@ -915,6 +915,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const [showNewMessagesPill, setShowNewMessagesPill] = useState<boolean>(false);
   const [isAppOnline, setIsAppOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const offlineQueueRef = useRef<Array<{ type: string; body: string; id: string }>>([]);
+  const isPrependingOlderRef = useRef<boolean>(false);
 
   // Listen to network status changes to flush queued messages
   useEffect(() => {
@@ -1585,6 +1586,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
           if (!isCleanup) {
             messagesCacheRef.current[currentConvoId] = fetched;
             setMessages(fetched);
+            setHasMoreOlderMessages(Boolean(data.hasMore ?? (fetched.length >= 40)));
           }
         } else if ((res.status === 403 || res.status === 404) && !isCleanup) {
           if (wsRef.current) {
@@ -1629,10 +1631,16 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     const el = messagesContainerRef.current;
     if (!el) return;
 
-    const currentMsgs = messagesCacheRef.current[activeConvo.id] || messages;
-    if (!currentMsgs || currentMsgs.length === 0) return;
-    const oldestTimestamp = currentMsgs[0]?.created_at;
-    if (!oldestTimestamp) return;
+    // Filter messages for active conversation, ignoring optimistic messages
+    const convoMsgs = (messagesCacheRef.current[activeConvo.id] || messages)
+      .filter((m: any) => m.conversation_id === activeConvo.id && !m.id.startsWith('optimistic-'));
+    if (convoMsgs.length === 0) return;
+
+    // Find the oldest message timestamp among loaded messages
+    const oldestTimestamp = Math.min(
+      ...convoMsgs.map((m: any) => Number(m.created_at)).filter((t: number) => !isNaN(t) && t > 0)
+    );
+    if (!oldestTimestamp || !isFinite(oldestTimestamp)) return;
 
     loadingOlderRef.current = true;
     setLoadingOlderMessages(true);
@@ -1648,9 +1656,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
           const prevScrollHeight = el.scrollHeight;
           const prevScrollTop = el.scrollTop;
 
+          isPrependingOlderRef.current = true;
+          isNearBottomRef.current = false;
+
           setMessages(prev => {
             const existingIds = new Set(prev.map(m => m.id));
             const fresh = older.filter((m: any) => !existingIds.has(m.id));
+            if (fresh.length === 0) return prev;
             const merged = [...fresh, ...prev];
             messagesCacheRef.current[activeConvo.id] = merged;
             return merged;
@@ -1664,7 +1676,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             }
           });
 
-          setHasMoreOlderMessages(data.hasMore ?? (older.length === 40));
+          setHasMoreOlderMessages(Boolean(data.hasMore ?? (older.length >= 40)));
         } else {
           setHasMoreOlderMessages(false);
         }
@@ -1680,7 +1692,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const handleMessagesScroll = useCallback(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
-    if (el.scrollTop <= 60 && !loadingOlderRef.current && hasMoreOlderMessages) {
+    // Proactive trigger: load older messages when user scrolls within 250px of the top
+    if (el.scrollTop <= 250 && !loadingOlderRef.current && hasMoreOlderMessages) {
       loadOlderMessages();
     }
     const threshold = 120; // px threshold from bottom
@@ -1701,7 +1714,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     }
   }, []);
 
-  // 1. Reset near-bottom tracking on conversation switch
+  // 1. Reset near-bottom tracking and pagination state on conversation switch
   useEffect(() => {
     if (!activeConvo?.id) {
       prevConvoIdRef.current = null;
@@ -1712,6 +1725,9 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       isNearBottomRef.current = true;
       userSentMessageRef.current = false;
       setShowNewMessagesPill(false);
+      setHasMoreOlderMessages(true);
+      loadingOlderRef.current = false;
+      setLoadingOlderMessages(false);
     }
   }, [activeConvo?.id]);
 
@@ -1719,6 +1735,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   React.useLayoutEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
+
+    // Suppress bottom auto-scroll when prepending older historical messages
+    if (isPrependingOlderRef.current) {
+      isPrependingOlderRef.current = false;
+      return;
+    }
 
     if (userSentMessageRef.current || isNearBottomRef.current) {
       userSentMessageRef.current = false;
@@ -5384,12 +5406,26 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               className="message-list chat-messages-container flex-1 min-h-0 bg-transparent scrollbar-thin"
               style={{ flex: 1, minHeight: 0 }}
             >
-              {loadingOlderMessages && (
-                <div className="flex justify-center py-2 animate-fade-in">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--input)] text-teal-400 text-[10px] font-bold shadow-sm">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Loading older messages...</span>
-                  </div>
+              {hasMoreOlderMessages && !loadingMessages && activeMessages.length > 0 && (
+                <div className="flex justify-center py-2.5 animate-fade-in">
+                  <button
+                    type="button"
+                    onClick={() => loadOlderMessages()}
+                    disabled={loadingOlderMessages}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[var(--input)] hover:bg-[var(--hover)] border border-[var(--line)] text-[var(--muted)] hover:text-teal-400 text-[11px] font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-60 active:scale-95"
+                  >
+                    {loadingOlderMessages ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin text-teal-400" />
+                        <span>Loading earlier messages...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="w-3 h-3 text-teal-400" />
+                        <span>Load earlier messages</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
               {loadingMessages && activeMessages.length === 0 ? (
