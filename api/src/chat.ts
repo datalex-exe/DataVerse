@@ -602,40 +602,18 @@ export class ChatRoom {
           }
         }
 
-        // For P2P file request: write notification into D1 and broadcast to global room
+        // For P2P file request: broadcast live screen popup to active peers via global room
         if (data.type === 'p2p_file_request') {
           try {
-            const members = await this.env.DB.prepare(
-              'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?'
-            ).bind(conversationId, userId).all<any>();
-            const targetRecipientId = members.results?.[0]?.user_id || data.recipientId;
-
-            if (targetRecipientId) {
-              const notifId = crypto.randomUUID();
-              const now = Date.now();
-              const notifBody = JSON.stringify({
-                transferId: data.transferId,
-                fileName: data.fileName,
-                fileSize: data.fileSize,
-                fileType: data.fileType,
-                conversationId,
-                senderId: userId,
-                senderName: data.senderName
-              });
-              await this.env.DB.prepare(
-                'INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)'
-              ).bind(notifId, targetRecipientId, userId, 'p2p_transfer', notifBody, now).run();
-
-              const globalDoId = this.env.CHAT_ROOM.idFromName('room_global');
-              const globalStub = this.env.CHAT_ROOM.get(globalDoId);
-              await globalStub.fetch(new Request('http://durableobject/broadcast_p2p_request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: payload
-              }));
-            }
+            const globalDoId = this.env.CHAT_ROOM.idFromName('room_global');
+            const globalStub = this.env.CHAT_ROOM.get(globalDoId);
+            await globalStub.fetch(new Request('http://durableobject/broadcast_p2p_request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payload
+            }));
           } catch (notifErr) {
-            console.warn('Failed to dispatch P2P transfer notification:', notifErr);
+            console.warn('Failed to broadcast live P2P transfer popup:', notifErr);
           }
         }
 
