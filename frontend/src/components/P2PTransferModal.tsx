@@ -403,27 +403,37 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     <div 
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-lg animate-fade-in"
     >
       <div 
-        className="bg-[var(--card)] border border-[var(--line)] rounded-2xl max-w-md w-full shadow-2xl overflow-hidden p-6 space-y-5 animate-scale-up"
+        className="relative bg-gradient-to-br from-[#061215] via-[#091b22] to-[#040c0e] border-2 border-teal-500/40 rounded-3xl max-w-md w-full shadow-[0_0_50px_rgba(20,184,166,0.3)] overflow-hidden p-6 space-y-5 animate-scale-up text-white"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Glowing Top Cyber Conduit Line */}
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-teal-400 via-cyan-400 to-emerald-400 animate-pulse" />
+        
+        {/* Ambient mesh glows */}
+        <div className="absolute -top-12 -right-12 w-32 h-32 bg-teal-500/15 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -bottom-10 -left-10 w-28 h-28 bg-emerald-500/15 rounded-full blur-2xl pointer-events-none" />
+
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Zap className="w-5 h-5" />
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-500/20 to-emerald-500/30 border border-teal-400/50 flex items-center justify-center text-teal-300 shadow-[0_0_20px_rgba(45,212,191,0.35)]">
+              <Zap className="w-5 h-5 fill-current animate-pulse" />
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-[var(--text)] flex items-center gap-1.5">
-                <span>P2P Direct Transfer</span>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                  Zero Server Limit
+              <div className="flex items-center gap-2">
+                <h3 className="font-black text-base text-white tracking-wide uppercase">
+                  P2P Direct Beam
+                </h3>
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/40">
+                  100% Serverless
                 </span>
-              </h3>
-              <p className="text-xs text-[var(--muted)]">
-                {session.role === 'sender' ? `Sending to @${session.partnerName}` : `Receiving from @${session.partnerName}`}
+              </div>
+              <p className="text-xs text-teal-400/80 font-medium">
+                {session.role === 'sender' ? `Beaming live to @${session.partnerName}` : `Receiving stream from @${session.partnerName}`}
               </p>
             </div>
           </div>
@@ -438,34 +448,38 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
                 declineTransfer();
               }
             }}
-            className="w-8 h-8 rounded-lg hover:bg-[var(--hover)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer border border-white/10"
             aria-label="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* File Card Preview */}
-        <div className="p-4 rounded-xl border border-[var(--line)] bg-[var(--hover)]/30 flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-[var(--input)] border border-[var(--line)] flex items-center justify-center shrink-0">
+        <div className="relative p-4 rounded-2xl border border-white/10 bg-black/60 flex items-center gap-3.5 backdrop-blur-md shadow-inner">
+          <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-400/30 flex items-center justify-center shrink-0 shadow-lg">
             {getFileIcon(session.fileType, session.fileName)}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-[var(--text)] truncate" title={session.fileName}>
+            <p className="text-sm font-black text-white truncate" title={session.fileName}>
               {session.fileName}
             </p>
-            <p className="text-xs text-[var(--muted)] font-mono mt-0.5">
+            <p className="text-xs text-teal-300 font-mono font-bold mt-0.5">
               {formatBytes(session.fileSize)}
+            </p>
+            <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
+              <span>WebRTC Direct Encrypted Pipe</span>
             </p>
           </div>
           <div className="shrink-0 text-right">
             {session.role === 'sender' ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
-                <ArrowUpRight className="w-3.5 h-3.5" /> Direct Send
+              <span className="inline-flex items-center gap-1 text-[10px] font-black text-teal-300 px-2 py-1 rounded-lg bg-teal-500/15 border border-teal-500/30">
+                <ArrowUpRight className="w-3.5 h-3.5" /> Outgoing
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-400">
-                <ArrowDownLeft className="w-3.5 h-3.5" /> Direct Receive
+              <span className="inline-flex items-center gap-1 text-[10px] font-black text-cyan-300 px-2 py-1 rounded-lg bg-cyan-500/15 border border-cyan-500/30">
+                <ArrowDownLeft className="w-3.5 h-3.5" /> Incoming
               </span>
             )}
           </div>
@@ -473,39 +487,43 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
 
         {/* Body Status Content */}
         {status === 'waiting_accept' && session.role === 'sender' && (
-          <div className="py-4 text-center space-y-3">
-            <Loader2 className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
-            <p className="text-xs text-[var(--muted)]">
-              Waiting for <span className="font-bold text-[var(--text)]">@{session.partnerName}</span> to accept the transfer request...
+          <div className="py-5 text-center space-y-3 bg-black/40 rounded-2xl border border-white/5">
+            <div className="relative w-12 h-12 mx-auto flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-2 border-teal-400/40 animate-ping" />
+              <Loader2 className="w-8 h-8 text-teal-400 animate-spin" />
+            </div>
+            <p className="text-xs text-slate-200 font-bold">
+              Waiting for <span className="text-teal-400 font-black">@{session.partnerName}</span> to accept the live beam...
             </p>
-            <p className="text-[11px] text-[var(--muted)] leading-relaxed">
-              Both devices must keep this tab open during peer-to-peer streaming.
+            <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs mx-auto">
+              Keep this tab open while the peer connects. File data streams directly between devices with zero cloud limits.
             </p>
           </div>
         )}
 
         {status === 'waiting_accept' && session.role === 'receiver' && (
           <div className="space-y-4">
-            <div className="p-3.5 rounded-xl border border-cyan-500/20 bg-cyan-950/20 text-xs text-cyan-300/90 leading-relaxed flex items-start gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+            <div className="p-4 rounded-2xl border border-teal-500/30 bg-teal-950/30 text-xs text-teal-200/90 leading-relaxed flex items-start gap-3 shadow-inner">
+              <ShieldCheck className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold text-cyan-200">Encrypted P2P Connection:</span> This file will transfer directly from <span className="font-semibold text-white">@{session.partnerName}</span>'s device to yours via WebRTC without touching the cloud.
+                <span className="font-black text-white block mb-0.5">High-Speed Peer Stream:</span>
+                This file will transfer directly from <span className="font-bold text-teal-300">@{session.partnerName}</span>'s device to yours via WebRTC at your full internet speed without passing through cloud storage.
               </div>
             </div>
             <div className="flex gap-2.5">
               <button
                 type="button"
                 onClick={declineTransfer}
-                className="flex-1 py-2.5 px-4 rounded-xl border border-[var(--line)] text-xs font-semibold text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] transition-colors cursor-pointer"
+                className="flex-1 py-3 px-4 rounded-2xl border border-white/10 text-xs font-bold text-slate-400 hover:bg-white/5 hover:text-white transition-all cursor-pointer"
               >
                 Decline
               </button>
               <button
                 type="button"
                 onClick={acceptIncomingTransfer}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all shadow-md shadow-amber-950/40 cursor-pointer active:scale-95 flex items-center justify-center gap-1.5"
+                className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:to-cyan-300 text-slate-950 text-xs font-black transition-all shadow-[0_0_30px_rgba(45,212,191,0.5)] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 stroke-[2.5]" />
                 <span>Accept & Download</span>
               </button>
             </div>
@@ -513,38 +531,40 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
         )}
 
         {status === 'connecting' && (
-          <div className="py-4 text-center space-y-3">
-            <Loader2 className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
-            <p className="text-xs text-[var(--text)] font-semibold">
-              Establishing direct peer-to-peer encrypted channel...
+          <div className="py-6 text-center space-y-3 bg-black/40 rounded-2xl border border-white/5">
+            <Loader2 className="w-9 h-9 text-teal-400 animate-spin mx-auto" />
+            <p className="text-xs text-white font-bold">
+              Establishing encrypted peer-to-peer live pipe...
             </p>
-            <p className="text-[11px] text-[var(--muted)]">
-              Negotiating WebRTC ICE candidates and DTLS session.
+            <p className="text-[11px] text-slate-400 font-mono">
+              Negotiating WebRTC ICE candidates & DTLS socket.
             </p>
           </div>
         )}
 
         {status === 'transferring' && (
-          <div className="space-y-3">
+          <div className="space-y-3.5 p-4 rounded-2xl bg-black/50 border border-teal-500/20">
             <div className="flex justify-between items-center text-xs">
-              <span className="font-semibold text-[var(--text)] flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Transferring direct...
+              <span className="font-bold text-white flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,1)]" />
+                Live DataChannel Streaming...
               </span>
-              <span className="font-mono font-bold text-amber-400">{percent}%</span>
+              <span className="font-mono font-black text-teal-300 text-sm">{percent}%</span>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full h-2.5 rounded-full bg-[var(--input)] overflow-hidden border border-[var(--line)]">
+            {/* Glowing Progress Bar */}
+            <div className="w-full h-3 rounded-full bg-slate-950 overflow-hidden border border-teal-500/30 p-0.5 shadow-inner">
               <div 
-                className="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-150 ease-out rounded-full"
+                className="h-full bg-gradient-to-r from-teal-400 via-cyan-400 to-emerald-400 transition-all duration-150 ease-out rounded-full shadow-[0_0_12px_rgba(45,212,191,0.8)]"
                 style={{ width: `${percent}%` }}
               />
             </div>
 
-            <div className="flex justify-between items-center text-[11px] text-[var(--muted)] font-mono">
-              <span>{formatBytes(progressBytes)} / {formatBytes(session.fileSize)}</span>
-              <span>{speedMBs.toFixed(1)} MB/s</span>
+            <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono">
+              <span className="text-slate-300">{formatBytes(progressBytes)} / {formatBytes(session.fileSize)}</span>
+              <span className="text-teal-300 font-bold bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
+                ⚡ {speedMBs.toFixed(1)} MB/s
+              </span>
             </div>
           </div>
         )}
