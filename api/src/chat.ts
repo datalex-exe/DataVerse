@@ -262,6 +262,24 @@ export class ChatRoom {
           return new Response(JSON.stringify({ error: err.message }), { status: 500 });
         }
       }
+      if (url.pathname.endsWith('/broadcast_p2p_request')) {
+        try {
+          const payload = await request.json<any>();
+          const sockets = this.state.getWebSockets();
+          const broadcastMsg = JSON.stringify(payload);
+          for (const socket of sockets) {
+            const [socketUserId] = this.state.getTags(socket);
+            if (socketUserId && socketUserId !== payload.fromUserId) {
+              try { socket.send(broadcastMsg); } catch {}
+            }
+          }
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err: any) {
+          return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        }
+      }
       if (url.pathname.endsWith('/broadcast_system')) {
         try {
           const { messageId, conversationId, text, createdAt } = await request.json<any>();
@@ -583,6 +601,44 @@ export class ChatRoom {
             try { socket.send(payload); } catch {}
           }
         }
+
+        // For P2P file request: write notification into D1 and broadcast to global room
+        if (data.type === 'p2p_file_request') {
+          try {
+            const members = await this.env.DB.prepare(
+              'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?'
+            ).bind(conversationId, userId).all<any>();
+            const targetRecipientId = members.results?.[0]?.user_id || data.recipientId;
+
+            if (targetRecipientId) {
+              const notifId = crypto.randomUUID();
+              const now = Date.now();
+              const notifBody = JSON.stringify({
+                transferId: data.transferId,
+                fileName: data.fileName,
+                fileSize: data.fileSize,
+                fileType: data.fileType,
+                conversationId,
+                senderId: userId,
+                senderName: data.senderName
+              });
+              await this.env.DB.prepare(
+                'INSERT INTO notifications (id, user_id, notifier_id, type, body, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)'
+              ).bind(notifId, targetRecipientId, userId, 'p2p_transfer', notifBody, now).run();
+
+              const globalDoId = this.env.CHAT_ROOM.idFromName('room_global');
+              const globalStub = this.env.CHAT_ROOM.get(globalDoId);
+              await globalStub.fetch(new Request('http://durableobject/broadcast_p2p_request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload
+              }));
+            }
+          } catch (notifErr) {
+            console.warn('Failed to dispatch P2P transfer notification:', notifErr);
+          }
+        }
+
         return;
       }
 

@@ -52,7 +52,9 @@ import {
   Info,
   AlertCircle,
   ArrowDown,
-  Zap
+  Zap,
+  FileText,
+  Download
 } from 'lucide-react';
 import { AudioCallModal, CallState } from '../components/AudioCallModal';
 import { P2PTransferModal, P2PTransferSession } from '../components/P2PTransferModal';
@@ -659,48 +661,6 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const [p2pSession, setP2pSession] = useState<P2PTransferSession | null>(null);
   const [p2pSignal, setP2pSignal] = useState<any>(null);
 
-  const handleSelectP2PFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !activeConvo || !user) return;
-    e.target.value = '';
-
-    if (activeConvo.is_group) {
-      toast.error('P2P Direct Transfer is only available for 1-on-1 direct chats.');
-      return;
-    }
-
-    const partner = getChatPartner(activeConvo);
-    const isPartnerOnline = onlineUsers.has(partner.id) || Boolean(partner.is_online);
-
-    if (!isPartnerOnline) {
-      toast.error(`@${partner.username} is currently offline. Both users must be online simultaneously for P2P direct transfer. Use standard media upload for offline delivery.`);
-      return;
-    }
-
-    const transferId = `p2p_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const sessionData: P2PTransferSession = {
-      transferId,
-      role: 'sender',
-      partnerId: partner.id,
-      partnerName: partner.display_name || partner.username,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type || 'application/octet-stream',
-      file
-    };
-
-    setP2pSession(sessionData);
-    sendCallSignaling({
-      type: 'p2p_file_request',
-      transferId,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type || 'application/octet-stream',
-      senderId: user.id,
-      senderName: user.display_name || user.username
-    });
-  }, [activeConvo, onlineUsers, user]);
-
   const sendCallSignaling = useCallback((msg: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
@@ -1153,6 +1113,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     };
   }, [token]);
 
+  // Global P2P transfer invite event listener across app
+  useEffect(() => {
+    const handleGlobalP2PRequest = (e: any) => {
+      const detail = e.detail;
+      if (!detail || detail.fromUserId === user?.id || detail.senderId === user?.id) return;
+      const sizeMB = (detail.fileSize / (1024 * 1024)).toFixed(1);
+      toast.info(`⚡ @${detail.senderName || 'A friend'} sent you "${detail.fileName}" (${sizeMB} MB) via P2P Direct Transfer! Open chat to accept.`);
+      fetchConversations(false);
+    };
+    window.addEventListener('p2p-file-request-received', handleGlobalP2PRequest);
+    return () => window.removeEventListener('p2p-file-request-received', handleGlobalP2PRequest);
+  }, [user?.id]);
+
   // Synchronize activeConvo with targetConvoId prop
   useEffect(() => {
     if (!token) return;
@@ -1436,18 +1409,23 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
           // WebRTC P2P Direct File Transfer Signaling
           if (data.type === 'p2p_file_request') {
-            if (activeConvo && !activeConvo.is_group) {
-              const partner = getChatPartner(activeConvo);
+            if (data.senderId !== user?.id && data.fromUserId !== user?.id) {
+              const partner = activeConvo ? getChatPartner(activeConvo) : null;
+              const senderDisplayName = data.senderName || partner?.display_name || partner?.username || 'Someone';
+              const sizeMB = (data.fileSize / (1024 * 1024)).toFixed(1);
+
               setP2pSession({
                 transferId: data.transferId,
                 role: 'receiver',
-                partnerId: data.senderId,
-                partnerName: data.senderName || partner.display_name || partner.username,
+                partnerId: data.senderId || data.fromUserId,
+                partnerName: senderDisplayName,
                 fileName: data.fileName,
                 fileSize: data.fileSize,
-                fileType: data.fileType
+                fileType: data.fileType || 'application/octet-stream'
               });
               setP2pSignal(data);
+
+              toast.info(`⚡ @${senderDisplayName} sent you "${data.fileName}" (${sizeMB} MB) via P2P Direct Transfer!`);
             }
             return;
           }
@@ -2713,6 +2691,89 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     sendMediaOptimistic(blob, mediaType, baseType, fileName);
   };
 
+  // P2P Direct File Transfer Handlers
+  const handleSelectP2PFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeConvo || !user) return;
+    e.target.value = '';
+
+    if (activeConvo.is_group) {
+      toast.error('P2P Direct Transfer is only available for 1-on-1 direct chats.');
+      return;
+    }
+
+    const partner = getChatPartner(activeConvo);
+    const isPartnerOnline = onlineUsers.has(partner.id) || Boolean(partner.is_online);
+
+    if (!isPartnerOnline) {
+      toast.error(`@${partner.username} is currently offline. Both users must be online simultaneously for P2P direct transfer. Use standard media upload for offline delivery.`);
+      return;
+    }
+
+    const transferId = `p2p_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const sessionData: P2PTransferSession = {
+      transferId,
+      role: 'sender',
+      partnerId: partner.id,
+      partnerName: partner.display_name || partner.username,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || 'application/octet-stream',
+      file
+    };
+
+    setP2pSession(sessionData);
+
+    // 1. Send live signaling over WebSocket
+    sendCallSignaling({
+      type: 'p2p_file_request',
+      transferId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || 'application/octet-stream',
+      senderId: user.id,
+      senderName: user.display_name || user.username,
+      recipientId: partner.id,
+      conversationId: activeConvo.id
+    });
+
+    // 2. Post interactive P2P Card into the chat timeline so recipient can accept from message
+    const invitePayload = JSON.stringify({
+      type: 'p2p_transfer_invite',
+      transferId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || 'application/octet-stream',
+      senderId: user.id,
+      senderName: user.display_name || user.username
+    });
+    handleSendMessage(invitePayload);
+  }, [activeConvo, handleSendMessage, onlineUsers, sendCallSignaling, user]);
+
+  const handleAcceptP2PFromChat = useCallback((transferData: any) => {
+    if (!activeConvo || !user) return;
+    const partner = getChatPartner(activeConvo);
+    const sessionData: P2PTransferSession = {
+      transferId: transferData.transferId,
+      role: 'receiver',
+      partnerId: transferData.senderId || partner?.id || 'sender',
+      partnerName: transferData.senderName || partner?.display_name || partner?.username || 'Sender',
+      fileName: transferData.fileName,
+      fileSize: transferData.fileSize,
+      fileType: transferData.fileType || 'application/octet-stream'
+    };
+    setP2pSession(sessionData);
+    setP2pSignal({
+      type: 'p2p_file_request',
+      transferId: transferData.transferId,
+      fileName: transferData.fileName,
+      fileSize: transferData.fileSize,
+      fileType: transferData.fileType,
+      senderId: transferData.senderId,
+      senderName: transferData.senderName
+    });
+  }, [activeConvo, user]);
+
   // Game interaction helpers
   const handleInviteGame = () => {
     setShowGameSelectorModal(true);
@@ -3906,7 +3967,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     if (rawBody.startsWith('{') && rawBody.endsWith('}')) {
       try {
         const obj = JSON.parse(rawBody);
-        if (obj && obj.type === 'secure_media') {
+        if (obj && (obj.type === 'secure_media' || obj.type === 'p2p_transfer_invite')) {
           return obj;
         }
       } catch {}
@@ -5058,7 +5119,11 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
               if (convo.last_message) {
                 const secure = parseMessageBody(convo.last_message.body);
                 if (secure) {
-                  lastMsgText = `🔒 Sent a secure ${secure.media_type}`;
+                  if (secure.type === 'p2p_transfer_invite') {
+                    lastMsgText = `⚡ P2P Direct File: ${secure.fileName}`;
+                  } else {
+                    lastMsgText = `🔒 Sent a secure ${secure.media_type}`;
+                  }
                 } else {
                   const isReply = convo.last_message.body.startsWith('{') && convo.last_message.body.endsWith('}');
                   if (isReply) {
@@ -5666,8 +5731,64 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                             }}
                             className="relative max-w-full cursor-pointer select-text"
                           >
-                          {/* Secure Media Rendering */}
+                          {/* Secure Media & P2P Rendering */}
                           {secureMedia ? (
+                            secureMedia.type === 'p2p_transfer_invite' ? (
+                              <div className="p-3.5 sm:p-4 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-950/40 via-slate-900/90 to-slate-950 max-w-sm w-full shadow-xl space-y-3 select-none">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                                      <Zap className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <span className="text-xs font-black text-white flex items-center gap-1.5">
+                                        P2P Direct Transfer
+                                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                          Zero Server Limit
+                                        </span>
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 block">
+                                        {isMe ? 'Sent by you' : `From @${msg.username}`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5 flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-lg bg-slate-900 border border-white/10 flex items-center justify-center shrink-0">
+                                    <FileText className="w-5 h-5 text-amber-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-bold text-white truncate" title={secureMedia.fileName}>
+                                      {secureMedia.fileName}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                      {(secureMedia.fileSize / (1024 * 1024)).toFixed(1)} MB • Direct Peer-to-Peer
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {isMe ? (
+                                  <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+                                    <span className="flex items-center gap-1.5 text-amber-400 font-semibold">
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                      Waiting for recipient to accept...
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAcceptP2PFromChat(secureMedia)}
+                                      className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-amber-950/50 active:scale-95 cursor-pointer"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Accept & Download</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
                             <div className="space-y-1.5 max-w-full min-w-0">
                               {secureMedia.media_type === 'voice' ? (
                                 <AudioPlayer url={secureMedia.url} allowSave={secureMedia.allow_save || isAdmin} />
@@ -5855,6 +5976,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                 </div>
                               )}
                             </div>
+                            )
                           ) : (() => {
                             const replyObj = parseReplyBody(msg.body);
                             return (

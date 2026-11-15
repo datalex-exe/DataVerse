@@ -320,6 +320,12 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
               handleIncomingLivePost(data.post);
             } else if (data.type === 'post_deleted' && data.postId) {
               handleIncomingDeletedPost(data.postId);
+            } else if (data.type === 'p2p_file_request') {
+              if (data.fromUserId !== user?.id && (!data.recipientId || data.recipientId === user?.id)) {
+                window.dispatchEvent(new CustomEvent('p2p-file-request-received', {
+                  detail: data
+                }));
+              }
             } else if (data.type === 'game_invite') {
               if (data.recipientId === user?.id && data.senderId !== user?.id) {
                 window.dispatchEvent(new CustomEvent('game-challenge-received', {
