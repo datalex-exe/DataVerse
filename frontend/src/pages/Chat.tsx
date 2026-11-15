@@ -7165,7 +7165,6 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             setP2pSignal(null);
           }}
           onCompleted={(sess, blobUrl) => {
-            const sizeMB = (sess.fileSize / (1024 * 1024)).toFixed(1);
             if (blobUrl) {
               setCompletedP2PFiles(prev => ({
                 ...prev,
@@ -7176,9 +7175,6 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   isDownloaded: true
                 }
               }));
-            }
-            if (sess.role === 'sender') {
-              handleSendMessage(`⚡ Beamed "${sess.fileName}" (${sizeMB} MB) via P2P Direct Transfer`);
             }
           }}
         />
