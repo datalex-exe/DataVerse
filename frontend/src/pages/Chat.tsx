@@ -59,7 +59,8 @@ import {
   Music,
   Archive,
   ShieldCheck,
-  Radio
+  Radio,
+  CheckCircle2
 } from 'lucide-react';
 import { AudioCallModal, CallState } from '../components/AudioCallModal';
 import { P2PTransferModal, P2PTransferSession } from '../components/P2PTransferModal';
@@ -431,8 +432,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => fileInputRef.current?.click()}
             className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
-            title="Send photos, videos, or files (up to 100MB each)"
-            aria-label="Send media or files"
+            title="Standard Media Upload (Photos, Videos, Files up to 100MB • Saved online 24/7)"
+            aria-label="Standard Media Upload"
           >
             <ImageIcon className="w-4 h-4" />
           </button>
@@ -454,11 +455,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 onPointerDown={(e) => e.preventDefault()}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => p2pFileInputRef.current?.click()}
-                className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
-                title="P2P Direct File Transfer (Unlimited size, direct peer-to-peer)"
+                className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/20 text-teal-400 flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
+                title="P2P Live Direct Beam (Unlimited size • Zero server limits • Direct device-to-device)"
                 aria-label="P2P Direct File Transfer"
               >
-                <Zap className="w-4 h-4 text-amber-400" />
+                <Zap className="w-4 h-4 text-teal-400" />
               </button>
               <input
                 id="chat-p2p-file-input"
@@ -665,6 +666,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   // WebRTC P2P Direct File Transfer States
   const [p2pSession, setP2pSession] = useState<P2PTransferSession | null>(null);
   const [p2pSignal, setP2pSignal] = useState<any>(null);
+  const [completedP2PFiles, setCompletedP2PFiles] = useState<Record<string, { url: string; fileName: string; fileType: string; isDownloaded: boolean }>>({});
+  const p2pSignalEmitterRef = useRef<((signal: any) => void) | null>(null);
 
   const sendCallSignaling = useCallback((msg: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -1426,7 +1429,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 partnerName: senderDisplayName,
                 fileName: data.fileName,
                 fileSize: data.fileSize,
-                fileType: data.fileType || 'application/octet-stream'
+                fileType: data.fileType || 'application/octet-stream',
+                autoAccept: false
               });
               setP2pSignal(data);
 
@@ -1437,6 +1441,13 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
           if (typeof data.type === 'string' && data.type.startsWith('p2p_file_')) {
             setP2pSignal(data);
+            if (p2pSignalEmitterRef.current) {
+              try {
+                p2pSignalEmitterRef.current(data);
+              } catch (err) {
+                console.warn('Error in p2p signal handler:', err);
+              }
+            }
             return;
           }
 
@@ -2765,7 +2776,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       partnerName: transferData.senderName || partner?.display_name || partner?.username || 'Sender',
       fileName: transferData.fileName,
       fileSize: transferData.fileSize,
-      fileType: transferData.fileType || 'application/octet-stream'
+      fileType: transferData.fileType || 'application/octet-stream',
+      autoAccept: true
     };
     setP2pSession(sessionData);
     setP2pSignal({
@@ -5793,6 +5805,87 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           {secureMedia ? (
                             secureMedia.type === 'p2p_transfer_invite' ? (() => {
                               const meta = getP2PFileMeta(secureMedia.fileName, secureMedia.fileSize, secureMedia.fileType);
+                              const completed = completedP2PFiles[secureMedia.transferId];
+
+                              if (completed) {
+                                const ext = (completed.fileName || '').split('.').pop()?.toLowerCase() || '';
+                                const isVideo = completed.fileType?.startsWith('video/') || ['mp4', 'mkv', 'webm', 'mov'].includes(ext);
+                                const isImage = completed.fileType?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+                                const isAudio = completed.fileType?.startsWith('audio/') || ['mp3', 'wav', 'ogg'].includes(ext);
+
+                                return (
+                                  <div className="relative overflow-hidden rounded-3xl border-2 border-emerald-500/40 bg-gradient-to-br from-[#061510] via-[#091b15] to-[#040e0a] p-4 max-w-sm w-full shadow-[0_0_35px_rgba(16,185,129,0.25)] space-y-3 select-none">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
+                                          <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                                        </div>
+                                        <div>
+                                          <span className="text-xs font-black text-white uppercase tracking-wide block">
+                                            Downloaded & Ready
+                                          </span>
+                                          <span className="text-[10px] text-emerald-300 font-mono">
+                                            {meta.sizeFormatted} • P2P Direct
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <a
+                                        href={completed.url}
+                                        download={completed.fileName}
+                                        className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1 transition-all active:scale-95"
+                                        title="Save file to disk"
+                                      >
+                                        <Download className="w-3 h-3" />
+                                        <span>Save</span>
+                                      </a>
+                                    </div>
+
+                                    {/* Inline Media Player / Preview */}
+                                    {isVideo ? (
+                                      <div className="relative rounded-2xl overflow-hidden bg-black border border-emerald-500/30 shadow-lg">
+                                        <video
+                                          src={completed.url}
+                                          controls
+                                          playsInline
+                                          className="w-full max-h-60 object-cover"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveFullscreenVideo({ url: completed.url, allowSave: true });
+                                            modalOpenTimeRef.current = Date.now();
+                                          }}
+                                          className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/85 text-white rounded-lg transition-all z-20 shadow border border-white/10 active:scale-95 flex items-center justify-center"
+                                          title="Open Fullscreen"
+                                        >
+                                          <Maximize2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    ) : isImage ? (
+                                      <div className="relative rounded-2xl overflow-hidden bg-black border border-emerald-500/30 shadow-lg">
+                                        <img
+                                          src={completed.url}
+                                          alt={completed.fileName}
+                                          className="w-full max-h-60 object-cover"
+                                        />
+                                      </div>
+                                    ) : isAudio ? (
+                                      <div className="p-2.5 rounded-2xl bg-black/60 border border-emerald-500/30">
+                                        <audio src={completed.url} controls className="w-full" />
+                                      </div>
+                                    ) : (
+                                      <div className="p-3 rounded-2xl bg-black/60 border border-emerald-500/20 flex items-center gap-3">
+                                        <FileText className="w-8 h-8 text-emerald-400 shrink-0" />
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-xs font-bold text-white truncate">{completed.fileName}</p>
+                                          <span className="text-[10px] text-slate-400">Saved to Downloads folder</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+
                               return (
                                 <div className="relative overflow-hidden rounded-3xl border-2 border-teal-500/40 bg-gradient-to-br from-[#061215] via-[#091b20] to-[#040c0e] p-4 sm:p-5 max-w-sm w-full shadow-[0_0_40px_rgba(20,184,166,0.22)] space-y-3.5 select-none transition-all group hover:border-teal-400/70">
                                   {/* Radiant Animated Cyber Conduit Line */}
@@ -7115,14 +7208,30 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         <P2PTransferModal
           session={p2pSession}
           incomingSignal={p2pSignal}
+          registerSignalHandler={(handler) => {
+            p2pSignalEmitterRef.current = handler;
+          }}
           sendSignaling={sendCallSignaling}
           onClose={() => {
             setP2pSession(null);
             setP2pSignal(null);
           }}
-          onCompleted={(sess) => {
+          onCompleted={(sess, blobUrl) => {
             const sizeMB = (sess.fileSize / (1024 * 1024)).toFixed(1);
-            handleSendMessage(`⚡ Transferred "${sess.fileName}" (${sizeMB} MB) via P2P Direct Transfer`);
+            if (blobUrl) {
+              setCompletedP2PFiles(prev => ({
+                ...prev,
+                [sess.transferId]: {
+                  url: blobUrl,
+                  fileName: sess.fileName,
+                  fileType: sess.fileType,
+                  isDownloaded: true
+                }
+              }));
+            }
+            if (sess.role === 'sender') {
+              handleSendMessage(`⚡ Beamed "${sess.fileName}" (${sizeMB} MB) via P2P Direct Transfer`);
+            }
           }}
         />
       )}

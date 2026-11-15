@@ -14,7 +14,9 @@ import {
   Archive,
   ArrowUpRight,
   ArrowDownLeft,
-  ShieldCheck
+  ShieldCheck,
+  Minus,
+  Maximize2
 } from 'lucide-react';
 
 export interface P2PTransferSession {
@@ -26,14 +28,16 @@ export interface P2PTransferSession {
   fileSize: number;
   fileType: string;
   file?: File;
+  autoAccept?: boolean;
 }
 
 interface P2PTransferModalProps {
   session: P2PTransferSession | null;
-  incomingSignal: any;
+  incomingSignal?: any;
+  registerSignalHandler?: (handler: ((signal: any) => void) | null) => void;
   sendSignaling: (msg: any) => void;
   onClose: () => void;
-  onCompleted?: (session: P2PTransferSession) => void;
+  onCompleted?: (session: P2PTransferSession, blobUrl: string) => void;
 }
 
 const CHUNK_SIZE = 64 * 1024; // 64 KB optimal SCTP chunk size for WebRTC DataChannel
@@ -42,8 +46,13 @@ const MAX_BUFFERED_AMOUNT = 2 * 1024 * 1024; // 2 MB backpressure threshold
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ]
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' }
+  ],
+  iceCandidatePoolSize: 10
 };
 
 function formatBytes(bytes: number, decimals = 1): string {
@@ -75,17 +84,19 @@ function getFileIcon(mime: string, name: string) {
 export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
   session,
   incomingSignal,
+  registerSignalHandler,
   sendSignaling,
   onClose,
   onCompleted
 }) => {
   const [status, setStatus] = useState<
     'waiting_accept' | 'connecting' | 'transferring' | 'completed' | 'cancelled' | 'error'
-  >('waiting_accept');
+  >(session?.autoAccept ? 'connecting' : 'waiting_accept');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [progressBytes, setProgressBytes] = useState<number>(0);
   const [speedMBs, setSpeedMBs] = useState<number>(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [isMinimized, setIsMinimized] = useState<boolean>(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -195,7 +206,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
               // Signal EOF to receiver
               dc.send(JSON.stringify({ type: 'p2p_file_complete' }));
               setStatus('completed');
-              if (session && onCompleted) onCompleted(session);
+              if (session && onCompleted) onCompleted(session, '');
             } else {
               sendNextChunk();
             }
@@ -282,7 +293,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
               setDownloadUrl(url);
               setStatus('completed');
 
-              // Auto-trigger browser download
+              // Auto-trigger browser download to disk
               const a = document.createElement('a');
               a.href = url;
               a.download = session.fileName;
@@ -290,7 +301,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
               a.click();
               document.body.removeChild(a);
 
-              if (onCompleted) onCompleted(session);
+              if (onCompleted) onCompleted(session, url);
             }
           } catch {}
           return;
@@ -330,58 +341,94 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     onClose();
   }, [cleanupP2P, onClose, sendSignaling, session]);
 
-  // Handle incoming signaling updates
-  useEffect(() => {
-    if (!incomingSignal || !session || incomingSignal.transferId !== session.transferId) return;
+  // Process any incoming signaling packet directly without dropped events
+  const processSignal = useCallback(async (sig: any) => {
+    if (!sig || !session || sig.transferId !== session.transferId) return;
 
-    const handleSignal = async () => {
-      const pc = pcRef.current || initPeerConnection();
+    const pc = pcRef.current || initPeerConnection();
 
-      if (incomingSignal.type === 'p2p_file_accept' && session.role === 'sender') {
-        // Partner accepted! Initiate WebRTC Offer
-        await initiateSenderOffer();
-      } else if (incomingSignal.type === 'p2p_file_reject') {
-        setStatus('cancelled');
-        setErrorMessage(`${session.partnerName} declined the transfer request`);
-      } else if (incomingSignal.type === 'p2p_file_cancel') {
-        setStatus('cancelled');
-        setErrorMessage(`${session.partnerName} cancelled the transfer`);
-      } else if (incomingSignal.type === 'p2p_file_offer' && session.role === 'receiver') {
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal.sdp));
-          await drainCandidates(pc);
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          sendSignaling({
-            type: 'p2p_file_answer',
-            transferId: session.transferId,
-            sdp: answer
-          });
-        } catch (err) {
-          console.error('Error handling P2P offer:', err);
-        }
-      } else if (incomingSignal.type === 'p2p_file_answer' && session.role === 'sender') {
-        try {
-          await pc.setRemoteDescription(new RTCSessionDescription(incomingSignal.sdp));
-          await drainCandidates(pc);
-        } catch (err) {
-          console.error('Error handling P2P answer:', err);
-        }
-      } else if (incomingSignal.type === 'p2p_file_ice') {
-        if (pc.remoteDescription && pc.remoteDescription.type) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(incomingSignal.candidate));
-          } catch (e) {
-            console.warn('Failed to add incoming candidate:', e);
-          }
-        } else {
-          pendingCandidatesRef.current.push(incomingSignal.candidate);
-        }
+    if (sig.type === 'p2p_file_accept' && session.role === 'sender') {
+      // Partner accepted! Initiate WebRTC Offer
+      await initiateSenderOffer();
+    } else if (sig.type === 'p2p_file_reject') {
+      setStatus('cancelled');
+      setErrorMessage(`${session.partnerName} declined the transfer request`);
+    } else if (sig.type === 'p2p_file_cancel') {
+      setStatus('cancelled');
+      setErrorMessage(`${session.partnerName} cancelled the transfer`);
+    } else if (sig.type === 'p2p_file_offer' && session.role === 'receiver') {
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+        await drainCandidates(pc);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendSignaling({
+          type: 'p2p_file_answer',
+          transferId: session.transferId,
+          sdp: answer
+        });
+      } catch (err) {
+        console.error('Error handling P2P offer:', err);
       }
-    };
+    } else if (sig.type === 'p2p_file_answer' && session.role === 'sender') {
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+        await drainCandidates(pc);
+      } catch (err) {
+        console.error('Error handling P2P answer:', err);
+      }
+    } else if (sig.type === 'p2p_file_ice') {
+      if (pc.remoteDescription && pc.remoteDescription.type) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(sig.candidate));
+        } catch (e) {
+          console.warn('Failed to add incoming candidate:', e);
+        }
+      } else {
+        pendingCandidatesRef.current.push(sig.candidate);
+      }
+    }
+  }, [drainCandidates, initPeerConnection, initiateSenderOffer, sendSignaling, session]);
 
-    handleSignal();
-  }, [drainCandidates, incomingSignal, initPeerConnection, initiateSenderOffer, sendSignaling, session]);
+  // Register signal handler with parent for immediate delivery
+  useEffect(() => {
+    if (registerSignalHandler) {
+      registerSignalHandler(processSignal);
+      return () => {
+        registerSignalHandler(null);
+      };
+    }
+    return undefined;
+  }, [registerSignalHandler, processSignal]);
+
+  // Fallback for incomingSignal prop
+  useEffect(() => {
+    if (incomingSignal) {
+      processSignal(incomingSignal);
+    }
+  }, [incomingSignal, processSignal]);
+
+  // Auto-accept if session requested autoAccept
+  useEffect(() => {
+    if (session?.role === 'receiver' && session?.autoAccept) {
+      acceptIncomingTransfer();
+    }
+  }, [session?.role, session?.autoAccept, acceptIncomingTransfer]);
+
+  // 25s timeout guard for connection establishment
+  useEffect(() => {
+    if (status === 'connecting' || (status === 'waiting_accept' && session?.role === 'receiver')) {
+      const timer = setTimeout(() => {
+        if (status === 'connecting' || status === 'waiting_accept') {
+          const name = session?.partnerName || 'peer';
+          setStatus('error');
+          setErrorMessage('Peer device connection timed out. In direct P2P mode, both devices must be active simultaneously. Ask @' + name + ' to keep the app open, or use Standard Media Upload (📸) for 24/7 cloud availability.');
+        }
+      }, 25000);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [status, session?.role, session?.partnerName]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -398,6 +445,39 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
   const percent = session.fileSize > 0 
     ? Math.min(100, Math.round((progressBytes / session.fileSize) * 100)) 
     : 0;
+
+  if (isMinimized) {
+    return createPortal(
+      <div 
+        onClick={() => setIsMinimized(false)}
+        className="fixed bottom-24 right-4 z-[999999] bg-[#061215]/95 border-2 border-teal-500/50 shadow-[0_0_35px_rgba(20,184,166,0.5)] rounded-2xl p-3 flex items-center gap-3 backdrop-blur-md cursor-pointer animate-slide-up text-white max-w-xs hover:border-teal-400 transition-all active:scale-95 select-none"
+      >
+        <div className="relative w-9 h-9 rounded-xl bg-teal-500/20 border border-teal-400/50 flex items-center justify-center text-teal-300 shrink-0">
+          <Zap className="w-4 h-4 fill-current animate-pulse" />
+          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-teal-300">P2P Beam</span>
+            <span className="text-[9px] text-slate-400 font-mono">({percent}%)</span>
+          </div>
+          <p className="text-xs font-bold text-white truncate">{session.fileName}</p>
+          <p className="text-[10px] text-teal-400/80 font-medium truncate">
+            {status === 'transferring' ? `${formatBytes(progressBytes)} / ${formatBytes(session.fileSize)} • ${speedMBs.toFixed(1)} MB/s` : status === 'waiting_accept' ? 'Live Beam Ready • Waiting peer' : status === 'completed' ? 'Completed' : 'Connecting...'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setIsMinimized(false); }}
+          className="p-1.5 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg transition-colors shrink-0"
+          title="Expand"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div 
@@ -437,22 +517,33 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (status === 'transferring') {
-                if (window.confirm('Transfer in progress. Are you sure you want to cancel?')) {
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsMinimized(true)}
+              className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer border border-white/10"
+              title="Minimize to background (keep transfer running)"
+            >
+              <Minus className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (status === 'transferring' || (status === 'waiting_accept' && session.role === 'sender')) {
+                  if (window.confirm('Cancelling will abort this direct transfer. Minimize instead if you want to keep chatting while waiting for peer. Cancel anyway?')) {
+                    declineTransfer();
+                  }
+                } else {
                   declineTransfer();
                 }
-              } else {
-                declineTransfer();
-              }
-            }}
-            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer border border-white/10"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
+              }}
+              className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer border border-white/10"
+              aria-label="Close"
+              title="Cancel Transfer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* File Card Preview */}
