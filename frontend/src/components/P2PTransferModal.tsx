@@ -39,6 +39,7 @@ interface P2PTransferModalProps {
 
 const CHUNK_SIZE = 64 * 1024; // 64 KB optimal SCTP chunk size for WebRTC DataChannel
 const MAX_BUFFERED_AMOUNT = 2 * 1024 * 1024; // 2 MB backpressure threshold
+const RELAY_CHUNK_SIZE = 32 * 1024; // 32 KB chunk size for fallback relay
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
@@ -46,8 +47,16 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' }
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp'
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
   ],
   iceCandidatePoolSize: 10
 };
@@ -95,8 +104,12 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
 
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const isDataChannelOpenRef = useRef<boolean>(false);
   const receivedChunksRef = useRef<ArrayBuffer[]>([]);
   const receivedBytesRef = useRef<number>(0);
   const lastSpeedCheckRef = useRef<{ bytes: number; time: number }>({ bytes: 0, time: Date.now() });
@@ -105,10 +118,32 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
   const isOfferInitiatedRef = useRef<boolean>(false);
   const isCompletedRef = useRef<boolean>(false);
   const isDataChannelBoundRef = useRef<boolean>(false);
+  const isRelayActiveRef = useRef<boolean>(false);
   const processedSignalsRef = useRef<Set<string>>(new Set());
+
+  // Timers
+  const fallbackTimerRef = useRef<any>(null);
+  const acceptRetryTimerRef = useRef<any>(null);
+  const offerRetryTimerRef = useRef<any>(null);
+
+  const clearAllTimers = useCallback(() => {
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+    if (acceptRetryTimerRef.current) {
+      clearInterval(acceptRetryTimerRef.current);
+      acceptRetryTimerRef.current = null;
+    }
+    if (offerRetryTimerRef.current) {
+      clearInterval(offerRetryTimerRef.current);
+      offerRetryTimerRef.current = null;
+    }
+  }, []);
 
   const cleanupP2P = useCallback(() => {
     isAbortedRef.current = true;
+    clearAllTimers();
     if (dataChannelRef.current) {
       try { dataChannelRef.current.close(); } catch {}
       dataChannelRef.current = null;
@@ -117,55 +152,125 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
       try { pcRef.current.close(); } catch {}
       pcRef.current = null;
     }
-  }, []);
+  }, [clearAllTimers]);
 
-  // Handle peer connection creation
-  const initPeerConnection = useCallback(() => {
-    if (pcRef.current) return pcRef.current;
+  // Finalize receiving file and trigger disk download
+  const finalizeTransfer = useCallback(() => {
+    if (isCompletedRef.current || !session) return;
+    isCompletedRef.current = true;
+    clearAllTimers();
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-    pcRef.current = pc;
+    const blob = new Blob(receivedChunksRef.current, { type: session.fileType || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    setDownloadUrl(url);
+    setStatus('completed');
+    setProgressBytes(session.fileSize);
 
-    pc.onicecandidate = (event) => {
-      if (event.candidate && session) {
-        sendSignaling({
-          type: 'p2p_file_ice',
-          transferId: session.transferId,
-          candidate: event.candidate.toJSON()
-        });
-      }
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        if (status !== 'completed' && !isAbortedRef.current && !isCompletedRef.current) {
-          setStatus('error');
-          setErrorMessage('Peer connection disconnected');
-        }
-      }
-    };
-
-    return pc;
-  }, [sendSignaling, session, status]);
-
-  // Drain pending candidates when remote description is set
-  const drainCandidates = useCallback(async (pc: RTCPeerConnection) => {
-    if (pendingCandidatesRef.current.length > 0) {
-      const list = [...pendingCandidatesRef.current];
-      pendingCandidatesRef.current = [];
-      for (const c of list) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(c));
-        } catch (e) {
-          console.warn('Failed to add ICE candidate in P2P transfer:', e);
-        }
-      }
+    // Auto-trigger browser download to disk
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = session.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) {
+      console.warn('Auto-download trigger error:', e);
     }
-  }, []);
 
-  // Sender file streaming routine over RTCDataChannel
+    if (onCompleted) onCompleted(session, url);
+  }, [clearAllTimers, onCompleted, session]);
+
+  // WebSocket High-Speed Chunk Relay Fallback (Guarantees transfer even behind symmetric NAT)
+  const startWebSocketRelayStreaming = useCallback((file: File) => {
+    if (isAbortedRef.current || isCompletedRef.current || isRelayActiveRef.current || !session) return;
+    isRelayActiveRef.current = true;
+    console.log('[P2P] WebRTC direct path bypassed; activating high-speed WebSocket relay stream');
+    setStatus('transferring');
+
+    sendSignaling({
+      type: 'p2p_file_relay_start',
+      transferId: session.transferId,
+      partnerId: session.partnerId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
+
+    let offset = 0;
+    const totalSize = file.size;
+    let lastTime = Date.now();
+    let lastBytes = 0;
+
+    const readAndSendChunk = () => {
+      if (isAbortedRef.current || isCompletedRef.current) return;
+      if (offset >= totalSize) {
+        sendSignaling({
+          type: 'p2p_file_relay_complete',
+          transferId: session.transferId,
+          partnerId: session.partnerId
+        });
+        setStatus('completed');
+        setProgressBytes(totalSize);
+        if (onCompleted) onCompleted(session, '');
+        return;
+      }
+
+      const slice = file.slice(offset, offset + RELAY_CHUNK_SIZE);
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (isAbortedRef.current || isCompletedRef.current) return;
+        const arrayBuffer = reader.result as ArrayBuffer;
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64Chunk = window.btoa(binary);
+
+        offset += arrayBuffer.byteLength;
+        setProgressBytes(Math.min(offset, totalSize));
+
+        const now = Date.now();
+        const elapsed = (now - lastTime) / 1000;
+        if (elapsed >= 0.4) {
+          const diffBytes = offset - lastBytes;
+          setSpeedMBs(diffBytes / (1024 * 1024 * elapsed));
+          lastTime = now;
+          lastBytes = offset;
+        }
+
+        const isLast = offset >= totalSize;
+        sendSignaling({
+          type: 'p2p_file_relay_chunk',
+          transferId: session.transferId,
+          partnerId: session.partnerId,
+          chunk: base64Chunk,
+          offset,
+          totalSize,
+          isLast
+        });
+
+        if (isLast) {
+          setStatus('completed');
+          setProgressBytes(totalSize);
+          if (onCompleted) onCompleted(session, '');
+        } else {
+          // Pace transmissions slightly (6ms) so WebSocket message buffer stays lean
+          setTimeout(readAndSendChunk, 6);
+        }
+      };
+      reader.readAsArrayBuffer(slice);
+    };
+
+    readAndSendChunk();
+  }, [onCompleted, sendSignaling, session]);
+
+  // Sender file streaming routine over direct RTCDataChannel
   const startFileStreaming = useCallback((dc: RTCDataChannel, file: File) => {
     setStatus('transferring');
+    clearAllTimers();
     let offset = 0;
     const totalSize = file.size;
     let lastTime = Date.now();
@@ -226,8 +331,13 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
             }
           } catch (err: any) {
             console.error('Data channel send error:', err);
-            setStatus('error');
-            setErrorMessage('Data channel transfer interrupted');
+            // Fallback to relay if data channel fails mid-stream
+            if (session?.file && !isRelayActiveRef.current) {
+              startWebSocketRelayStreaming(session.file);
+            } else {
+              setStatus('error');
+              setErrorMessage('Data channel transfer interrupted');
+            }
           }
         };
         reader.readAsArrayBuffer(slice);
@@ -236,7 +346,65 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     };
 
     sendNextChunk();
-  }, [onCompleted, session]);
+  }, [clearAllTimers, onCompleted, session, startWebSocketRelayStreaming]);
+
+  // Handle peer connection creation
+  const initPeerConnection = useCallback(() => {
+    if (pcRef.current) return pcRef.current;
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    pcRef.current = pc;
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && session) {
+        sendSignaling({
+          type: 'p2p_file_ice',
+          transferId: session.transferId,
+          partnerId: session.partnerId,
+          candidate: event.candidate.toJSON()
+        });
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('[P2P] ICE connection state:', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        clearAllTimers();
+      } else if (pc.iceConnectionState === 'failed') {
+        console.warn('[P2P] ICE failed; switching to relay fallback');
+        if (session?.role === 'sender' && session?.file && !isRelayActiveRef.current) {
+          startWebSocketRelayStreaming(session.file);
+        }
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') {
+        if (statusRef.current !== 'completed' && !isAbortedRef.current && !isCompletedRef.current) {
+          if (session?.role === 'sender' && session?.file && !isRelayActiveRef.current) {
+            startWebSocketRelayStreaming(session.file);
+          }
+        }
+      }
+    };
+
+    return pc;
+  }, [clearAllTimers, sendSignaling, session, startWebSocketRelayStreaming]);
+
+  // Drain pending candidates when remote description is set
+  const drainCandidates = useCallback(async (pc: RTCPeerConnection) => {
+    if (pendingCandidatesRef.current.length > 0) {
+      const list = [...pendingCandidatesRef.current];
+      pendingCandidatesRef.current = [];
+      for (const c of list) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(c));
+        } catch (e) {
+          console.warn('Failed to add ICE candidate in P2P transfer:', e);
+        }
+      }
+    }
+  }, []);
 
   // Sender initial offer dispatch after peer accepts
   const initiateSenderOffer = useCallback(async () => {
@@ -250,6 +418,9 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     dataChannelRef.current = dc;
 
     dc.onopen = () => {
+      console.log('[P2P] WebRTC DataChannel OPEN! Streaming direct P2P...');
+      isDataChannelOpenRef.current = true;
+      clearAllTimers();
       if (session.file) {
         startFileStreaming(dc, session.file);
       }
@@ -257,8 +428,9 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
 
     dc.onerror = (e) => {
       console.error('P2P Sender DataChannel error:', e);
-      setStatus('error');
-      setErrorMessage('Direct data channel failed to establish');
+      if (session.file && !isRelayActiveRef.current) {
+        startWebSocketRelayStreaming(session.file);
+      }
     };
 
     try {
@@ -267,14 +439,47 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
       sendSignaling({
         type: 'p2p_file_offer',
         transferId: session.transferId,
+        partnerId: session.partnerId,
         sdp: offer
       });
+
+      // Retry sending offer if no answer within 2.5s and DC not open
+      let offerRetries = 0;
+      offerRetryTimerRef.current = setInterval(() => {
+        if (!isDataChannelOpenRef.current && statusRef.current === 'connecting' && offerRetries < 3) {
+          offerRetries++;
+          console.log('[P2P] Retrying p2p_file_offer attempt', offerRetries);
+          sendSignaling({
+            type: 'p2p_file_offer',
+            transferId: session.transferId,
+            partnerId: session.partnerId,
+            sdp: offer
+          });
+        } else {
+          if (offerRetryTimerRef.current) {
+            clearInterval(offerRetryTimerRef.current);
+            offerRetryTimerRef.current = null;
+          }
+        }
+      }, 2500);
+
+      // 4.5s fallback timer: if WebRTC DataChannel has not opened, stream via relay
+      fallbackTimerRef.current = setTimeout(() => {
+        if (!isDataChannelOpenRef.current && !isCompletedRef.current && !isAbortedRef.current && !isRelayActiveRef.current) {
+          console.log('[P2P] Direct WebRTC connection negotiation pending; activating relay fallback');
+          if (session.file) {
+            startWebSocketRelayStreaming(session.file);
+          }
+        }
+      }, 4500);
+
     } catch (err: any) {
       console.error('Error creating P2P offer:', err);
-      setStatus('error');
-      setErrorMessage('Failed to create WebRTC offer');
+      if (session.file && !isRelayActiveRef.current) {
+        startWebSocketRelayStreaming(session.file);
+      }
     }
-  }, [initPeerConnection, sendSignaling, session, startFileStreaming]);
+  }, [clearAllTimers, initPeerConnection, sendSignaling, session, startFileStreaming, startWebSocketRelayStreaming]);
 
   // Receiver setup
   const acceptIncomingTransfer = useCallback(async () => {
@@ -282,39 +487,36 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     setStatus('connecting');
     sendSignaling({
       type: 'p2p_file_accept',
-      transferId: session.transferId
+      transferId: session.transferId,
+      partnerId: session.partnerId
     });
 
-    const pc = initPeerConnection();
-
-    const finalizeTransfer = () => {
-      if (isCompletedRef.current) return;
-      isCompletedRef.current = true;
-
-      const blob = new Blob(receivedChunksRef.current, { type: session.fileType || 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      setDownloadUrl(url);
-      setStatus('completed');
-      setProgressBytes(session.fileSize);
-
-      // Auto-trigger browser download to disk
-      try {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = session.fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } catch (e) {
-        console.warn('Auto-download trigger error:', e);
+    // Retry sending accept if no offer is received within 2s
+    let acceptRetries = 0;
+    acceptRetryTimerRef.current = setInterval(() => {
+      if (statusRef.current === 'connecting' && !isDataChannelOpenRef.current && !isRelayActiveRef.current && acceptRetries < 3) {
+        acceptRetries++;
+        console.log('[P2P] Retrying p2p_file_accept attempt', acceptRetries);
+        sendSignaling({
+          type: 'p2p_file_accept',
+          transferId: session.transferId,
+          partnerId: session.partnerId
+        });
+      } else {
+        if (acceptRetryTimerRef.current) {
+          clearInterval(acceptRetryTimerRef.current);
+          acceptRetryTimerRef.current = null;
+        }
       }
+    }, 2000);
 
-      if (onCompleted) onCompleted(session, url);
-    };
+    const pc = initPeerConnection();
 
     pc.ondatachannel = (event) => {
       if (isDataChannelBoundRef.current) return;
       isDataChannelBoundRef.current = true;
+      isDataChannelOpenRef.current = true;
+      clearAllTimers();
 
       const dc = event.channel;
       dc.binaryType = 'arraybuffer';
@@ -359,19 +561,20 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
 
       dc.onerror = (e) => {
         console.error('P2P Receiver DataChannel error:', e);
-        if (!isCompletedRef.current) {
+        if (!isCompletedRef.current && !isRelayActiveRef.current) {
           setStatus('error');
           setErrorMessage('Data transfer error');
         }
       };
     };
-  }, [initPeerConnection, onCompleted, sendSignaling, session]);
+  }, [clearAllTimers, finalizeTransfer, initPeerConnection, sendSignaling, session]);
 
   const declineTransfer = useCallback(() => {
     if (session) {
       sendSignaling({
         type: 'p2p_file_reject',
-        transferId: session.transferId
+        transferId: session.transferId,
+        partnerId: session.partnerId
       });
     }
     cleanupP2P();
@@ -384,7 +587,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
 
     // Deduplicate critical signals so they never run twice
     const sigKey = `${sig.type}_${sig.transferId}`;
-    if (sig.type === 'p2p_file_accept' || sig.type === 'p2p_file_offer' || sig.type === 'p2p_file_answer') {
+    if (sig.type === 'p2p_file_accept' || sig.type === 'p2p_file_offer' || sig.type === 'p2p_file_answer' || sig.type === 'p2p_file_relay_start') {
       if (processedSignalsRef.current.has(sigKey)) return;
       processedSignalsRef.current.add(sigKey);
     }
@@ -392,16 +595,19 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     const pc = pcRef.current || initPeerConnection();
 
     if (sig.type === 'p2p_file_accept' && session.role === 'sender') {
-      // Partner accepted! Initiate WebRTC Offer
+      console.log('[P2P] Peer accepted transfer; initiating offer');
       await initiateSenderOffer();
     } else if (sig.type === 'p2p_file_reject') {
+      clearAllTimers();
       setStatus('cancelled');
       setErrorMessage(`${session.partnerName} declined the transfer request`);
     } else if (sig.type === 'p2p_file_cancel') {
+      clearAllTimers();
       setStatus('cancelled');
       setErrorMessage(`${session.partnerName} cancelled the transfer`);
     } else if (sig.type === 'p2p_file_offer' && session.role === 'receiver') {
       try {
+        console.log('[P2P] Receiver got offer; creating answer');
         await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
         await drainCandidates(pc);
         const answer = await pc.createAnswer();
@@ -409,6 +615,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
         sendSignaling({
           type: 'p2p_file_answer',
           transferId: session.transferId,
+          partnerId: session.partnerId,
           sdp: answer
         });
       } catch (err) {
@@ -416,6 +623,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
       }
     } else if (sig.type === 'p2p_file_answer' && session.role === 'sender') {
       try {
+        console.log('[P2P] Sender got answer; setting remote description');
         await pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
         await drainCandidates(pc);
       } catch (err) {
@@ -431,8 +639,45 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
       } else {
         pendingCandidatesRef.current.push(sig.candidate);
       }
+    } else if (sig.type === 'p2p_file_relay_start' && session.role === 'receiver') {
+      // Sender activated relay mode
+      isRelayActiveRef.current = true;
+      clearAllTimers();
+      setStatus('transferring');
+      receivedChunksRef.current = [];
+      receivedBytesRef.current = 0;
+      lastSpeedCheckRef.current = { bytes: 0, time: Date.now() };
+    } else if (sig.type === 'p2p_file_relay_chunk' && session.role === 'receiver') {
+      if (isCompletedRef.current) return;
+      isRelayActiveRef.current = true;
+      setStatus('transferring');
+
+      // Decode base64 chunk
+      const binaryString = window.atob(sig.chunk);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      receivedChunksRef.current.push(bytes.buffer);
+      receivedBytesRef.current += bytes.buffer.byteLength;
+      setProgressBytes(Math.min(receivedBytesRef.current, session.fileSize));
+
+      const now = Date.now();
+      const elapsed = (now - lastSpeedCheckRef.current.time) / 1000;
+      if (elapsed >= 0.4) {
+        const diff = receivedBytesRef.current - lastSpeedCheckRef.current.bytes;
+        setSpeedMBs(diff / (1024 * 1024 * elapsed));
+        lastSpeedCheckRef.current = { bytes: receivedBytesRef.current, time: now };
+      }
+
+      if (sig.isLast || (session.fileSize > 0 && receivedBytesRef.current >= session.fileSize)) {
+        finalizeTransfer();
+      }
+    } else if (sig.type === 'p2p_file_relay_complete' && session.role === 'receiver') {
+      finalizeTransfer();
     }
-  }, [drainCandidates, initPeerConnection, initiateSenderOffer, sendSignaling, session]);
+  }, [clearAllTimers, drainCandidates, finalizeTransfer, initPeerConnection, initiateSenderOffer, sendSignaling, session]);
 
   // Register signal handler with parent for immediate delivery
   useEffect(() => {
@@ -459,16 +704,16 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     }
   }, [session?.role, session?.autoAccept, acceptIncomingTransfer]);
 
-  // 25s timeout guard for connection establishment
+  // 35s global safety guard: if still not transferring or completed after 35s
   useEffect(() => {
     if (status === 'connecting' || (status === 'waiting_accept' && session?.role === 'receiver')) {
       const timer = setTimeout(() => {
-        if (status === 'connecting' || status === 'waiting_accept') {
+        if (statusRef.current === 'connecting' || statusRef.current === 'waiting_accept') {
           const name = session?.partnerName || 'peer';
           setStatus('error');
-          setErrorMessage('Peer device connection timed out. In direct P2P mode, both devices must be active simultaneously. Ask @' + name + ' to keep the app open, or use Standard Media Upload (📸) for 24/7 cloud availability.');
+          setErrorMessage(`Connection timed out. Ask @${name} to keep the app open, or use Standard Media Upload for cloud storage.`);
         }
-      }, 25000);
+      }, 35000);
       return () => clearTimeout(timer);
     }
     return undefined;

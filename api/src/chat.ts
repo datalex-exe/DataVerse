@@ -262,7 +262,7 @@ export class ChatRoom {
           return new Response(JSON.stringify({ error: err.message }), { status: 500 });
         }
       }
-      if (url.pathname.endsWith('/broadcast_p2p_request')) {
+      if (url.pathname.endsWith('/broadcast_p2p_signal') || url.pathname.endsWith('/broadcast_p2p_request')) {
         try {
           const payload = await request.json<any>();
           const sockets = this.state.getWebSockets();
@@ -270,7 +270,9 @@ export class ChatRoom {
           for (const socket of sockets) {
             const [socketUserId] = this.state.getTags(socket);
             if (socketUserId && socketUserId !== payload.fromUserId) {
-              try { socket.send(broadcastMsg); } catch {}
+              if (!payload.partnerId || socketUserId === payload.partnerId || !payload.targetUserId || socketUserId === payload.targetUserId) {
+                try { socket.send(broadcastMsg); } catch {}
+              }
             }
           }
           return new Response(JSON.stringify({ success: true }), {
@@ -602,18 +604,28 @@ export class ChatRoom {
           }
         }
 
-        // For P2P file request: broadcast live screen popup to active peers via global room
-        if (data.type === 'p2p_file_request') {
+        // For P2P file signaling: broadcast to all active peers via global room and conversation room
+        if (typeof data.type === 'string' && data.type.startsWith('p2p_file_')) {
           try {
-            const globalDoId = this.env.CHAT_ROOM.idFromName('room_global');
-            const globalStub = this.env.CHAT_ROOM.get(globalDoId);
-            await globalStub.fetch(new Request('http://durableobject/broadcast_p2p_request', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: payload
-            }));
+            if (conversationId !== 'room_global') {
+              const globalDoId = this.env.CHAT_ROOM.idFromName('room_global');
+              const globalStub = this.env.CHAT_ROOM.get(globalDoId);
+              await globalStub.fetch(new Request('http://durableobject/broadcast_p2p_signal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload
+              }));
+            } else if (data.conversationId && data.conversationId !== 'room_global') {
+              const targetDoId = this.env.CHAT_ROOM.idFromName(`room_${data.conversationId}`);
+              const targetStub = this.env.CHAT_ROOM.get(targetDoId);
+              await targetStub.fetch(new Request('http://durableobject/broadcast_p2p_signal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payload
+              }));
+            }
           } catch (notifErr) {
-            console.warn('Failed to broadcast live P2P transfer popup:', notifErr);
+            console.warn('Failed to broadcast live P2P transfer signal:', notifErr);
           }
         }
 

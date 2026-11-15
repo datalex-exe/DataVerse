@@ -667,12 +667,19 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   const [p2pSignal, setP2pSignal] = useState<any>(null);
   const [completedP2PFiles, setCompletedP2PFiles] = useState<Record<string, { url: string; fileName: string; fileType: string; isDownloaded: boolean }>>({});
   const p2pSignalEmitterRef = useRef<((signal: any) => void) | null>(null);
+  const signalingQueueRef = useRef<any[]>([]);
 
   const sendCallSignaling = useCallback((msg: any) => {
+    const payload = {
+      ...msg,
+      conversationId: activeConvo?.id || msg.conversationId
+    };
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
+      wsRef.current.send(JSON.stringify(payload));
+    } else {
+      signalingQueueRef.current.push(payload);
     }
-  }, []);
+  }, [activeConvo?.id]);
 
   const handleStartAudioCall = useCallback(() => {
     if (!activeConvo || activeConvo.is_group || !user) return;
@@ -1280,6 +1287,12 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
         console.log('Chat WebSocket connected:', currentConvoId);
         ws.send(JSON.stringify({ type: 'get_game_state' }));
         ws.send(JSON.stringify({ type: 'get_presence' }));
+
+        // Flush any pending P2P or Audio signaling messages
+        while (signalingQueueRef.current.length > 0) {
+          const queued = signalingQueueRef.current.shift();
+          try { ws.send(JSON.stringify(queued)); } catch {}
+        }
 
         if (pendingForwardRef.current && pendingForwardRef.current.conversationId === currentConvoId) {
           const forwardPayload = pendingForwardRef.current.body;
