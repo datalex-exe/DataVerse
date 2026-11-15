@@ -1,4 +1,4 @@
-export const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB limit (2,147,483,648 bytes)
+export const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB limit (104,857,600 bytes)
 
 export async function uploadMediaFile(
   file: Blob | File,
@@ -9,7 +9,7 @@ export async function uploadMediaFile(
 ): Promise<void> {
   if (file.size > MAX_FILE_SIZE) {
     const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
-    throw new Error(`File size (${sizeInMB} MB) exceeds maximum allowed limit of 2 GB.`);
+    throw new Error(`File size (${sizeInMB} MB) exceeds maximum allowed limit of 100 MB. Use P2P Direct Transfer for unlimited file sizes.`);
   }
 
   const baseContentType = contentType.split(';')[0].trim() || 'application/octet-stream';

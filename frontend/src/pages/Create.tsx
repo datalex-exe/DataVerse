@@ -113,7 +113,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
     for (const file of fileList) {
       if (file.size > MAX_FILE_SIZE) {
         const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-        setError(`File "${file.name}" (${sizeMB} MB) exceeds the 2 GB maximum limit.`);
+        setError(`File "${file.name}" (${sizeMB} MB) exceeds the 100 MB maximum limit.`);
         return;
       }
 
@@ -144,7 +144,7 @@ export const Create: React.FC<CreateProps> = ({ onNavigate }) => {
     for (const file of fileList) {
       if (file.size > MAX_FILE_SIZE) {
         const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-        setError(`File "${file.name}" (${sizeMB} MB) exceeds the 2 GB maximum limit.`);
+        setError(`File "${file.name}" (${sizeMB} MB) exceeds the 100 MB maximum limit.`);
         return;
       }
 

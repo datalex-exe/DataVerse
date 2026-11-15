@@ -569,7 +569,8 @@ export class ChatRoom {
         data.type === 'call_end' ||
         data.type === 'webrtc_offer' ||
         data.type === 'webrtc_answer' ||
-        data.type === 'webrtc_ice'
+        data.type === 'webrtc_ice' ||
+        (typeof data.type === 'string' && data.type.startsWith('p2p_file_'))
       ) {
         const payload = JSON.stringify({
           ...data,

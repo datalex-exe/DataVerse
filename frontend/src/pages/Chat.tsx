@@ -51,9 +51,11 @@ import {
   Phone,
   Info,
   AlertCircle,
-  ArrowDown
+  ArrowDown,
+  Zap
 } from 'lucide-react';
 import { AudioCallModal, CallState } from '../components/AudioCallModal';
+import { P2PTransferModal, P2PTransferSession } from '../components/P2PTransferModal';
 import { LinkPreviewCard } from '../components/LinkPreviewCard';
 import { ChatProfileModal } from '../components/ChatProfileModal';
 
@@ -275,6 +277,8 @@ interface ChatInputProps {
   onTyping?: () => void;
   openCamera: (mode: 'photo' | 'video') => void;
   handleSelectMedia: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onSelectP2PFile?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  isGroup?: boolean;
   startRecording: () => void;
   replyingToMessage: Message | null;
   onCancelReply: () => void;
@@ -288,6 +292,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onTyping,
   openCamera,
   handleSelectMedia,
+  onSelectP2PFile,
+  isGroup = false,
   startRecording,
   replyingToMessage,
   onCancelReply
@@ -296,6 +302,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // BUG 1 FIX: Use sending state on button instead of disabling input
   const [isSending, setIsSending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const p2pFileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Sync draft text if parent changes conversation
@@ -410,14 +417,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <Camera className="w-4 h-4" />
           </button>
 
-          {/* BUG 1 FIX: File selector button with onPointerDown and onMouseDown calling preventDefault() to stop stealing focus */}
+          {/* File selector button (Cloud / Server storage up to 100MB) */}
           <button
             type="button"
             onPointerDown={(e) => e.preventDefault()}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => fileInputRef.current?.click()}
             className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-[var(--input)] border border-[var(--line)] hover:bg-[var(--hover)] text-[var(--muted)] hover:text-[var(--text)] flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
-            title="Send photos, videos, or files (multiple selection, up to 2GB each)"
+            title="Send photos, videos, or files (up to 100MB each)"
             aria-label="Send media or files"
           >
             <ImageIcon className="w-4 h-4" />
@@ -431,6 +438,31 @@ const ChatInput: React.FC<ChatInputProps> = ({
             className="absolute w-0 h-0 opacity-0 pointer-events-none"
             multiple
           />
+
+          {/* P2P Direct File Transfer button (Direct device-to-device, unlimited file size) */}
+          {!isGroup && onSelectP2PFile && (
+            <>
+              <button
+                type="button"
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => p2pFileInputRef.current?.click()}
+                className="w-9 h-9 sm:w-10 sm:h-10 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] rounded-full bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 flex items-center justify-center transition-all shadow-sm active:scale-95 flex-shrink-0"
+                title="P2P Direct File Transfer (Unlimited size, direct peer-to-peer)"
+                aria-label="P2P Direct File Transfer"
+              >
+                <Zap className="w-4 h-4 text-amber-400" />
+              </button>
+              <input
+                id="chat-p2p-file-input"
+                aria-label="P2P Direct File Transfer"
+                type="file"
+                ref={p2pFileInputRef}
+                onChange={onSelectP2PFile}
+                className="absolute w-0 h-0 opacity-0 pointer-events-none"
+              />
+            </>
+          )}
 
           {/* BUG 1 FIX: Mic button with onPointerDown and onMouseDown calling preventDefault() to stop stealing focus */}
           <button
@@ -622,6 +654,52 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   // WebRTC Direct Audio Call States
   const [activeCall, setActiveCall] = useState<CallState | null>(null);
   const [incomingSignal, setIncomingSignal] = useState<any>(null);
+
+  // WebRTC P2P Direct File Transfer States
+  const [p2pSession, setP2pSession] = useState<P2PTransferSession | null>(null);
+  const [p2pSignal, setP2pSignal] = useState<any>(null);
+
+  const handleSelectP2PFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeConvo || !user) return;
+    e.target.value = '';
+
+    if (activeConvo.is_group) {
+      toast.error('P2P Direct Transfer is only available for 1-on-1 direct chats.');
+      return;
+    }
+
+    const partner = getChatPartner(activeConvo);
+    const isPartnerOnline = onlineUsers.has(partner.id) || Boolean(partner.is_online);
+
+    if (!isPartnerOnline) {
+      toast.error(`@${partner.username} is currently offline. Both users must be online simultaneously for P2P direct transfer. Use standard media upload for offline delivery.`);
+      return;
+    }
+
+    const transferId = `p2p_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const sessionData: P2PTransferSession = {
+      transferId,
+      role: 'sender',
+      partnerId: partner.id,
+      partnerName: partner.display_name || partner.username,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || 'application/octet-stream',
+      file
+    };
+
+    setP2pSession(sessionData);
+    sendCallSignaling({
+      type: 'p2p_file_request',
+      transferId,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type || 'application/octet-stream',
+      senderId: user.id,
+      senderName: user.display_name || user.username
+    });
+  }, [activeConvo, onlineUsers, user]);
 
   const sendCallSignaling = useCallback((msg: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -1356,6 +1434,29 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
             return;
           }
 
+          // WebRTC P2P Direct File Transfer Signaling
+          if (data.type === 'p2p_file_request') {
+            if (activeConvo && !activeConvo.is_group) {
+              const partner = getChatPartner(activeConvo);
+              setP2pSession({
+                transferId: data.transferId,
+                role: 'receiver',
+                partnerId: data.senderId,
+                partnerName: data.senderName || partner.display_name || partner.username,
+                fileName: data.fileName,
+                fileSize: data.fileSize,
+                fileType: data.fileType
+              });
+              setP2pSignal(data);
+            }
+            return;
+          }
+
+          if (typeof data.type === 'string' && data.type.startsWith('p2p_file_')) {
+            setP2pSignal(data);
+            return;
+          }
+
           if (data.type === 'game_state') {
             setGameState(data.game);
             return;
@@ -1969,7 +2070,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
     if (blob.size > MAX_FILE_SIZE) {
       const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
-      alert(`File size (${sizeMB} MB) exceeds the 2 GB system limit.`);
+      alert(`File size (${sizeMB} MB) exceeds the 100 MB maximum server limit. Please use P2P Direct Transfer (⚡) for unlimited file sizes.`);
       return;
     }
 
@@ -2074,7 +2175,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     for (const file of fileList) {
       if (file.size > MAX_FILE_SIZE) {
         const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-        alert(`File "${file.name}" (${sizeMB} MB) exceeds the 2 GB maximum limit and will be skipped.`);
+        alert(`File "${file.name}" (${sizeMB} MB) exceeds the 100 MB server limit. Please use P2P Direct Transfer (⚡) for unlimited file sizes.`);
         continue;
       }
 
@@ -6245,6 +6346,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   onTyping={handleUserTyping}
                   openCamera={openCamera}
                   handleSelectMedia={handleSelectMedia}
+                  onSelectP2PFile={handleSelectP2PFile}
+                  isGroup={activeConvo.is_group}
                   startRecording={startRecording}
                   replyingToMessage={replyingToMessage}
                   onCancelReply={() => setReplyingToMessage(null)}
@@ -6783,6 +6886,23 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
           onEndCall={() => {
             setActiveCall(null);
             setIncomingSignal(null);
+          }}
+        />
+      )}
+
+      {/* WebRTC P2P Direct File Transfer Modal */}
+      {p2pSession && (
+        <P2PTransferModal
+          session={p2pSession}
+          incomingSignal={p2pSignal}
+          sendSignaling={sendCallSignaling}
+          onClose={() => {
+            setP2pSession(null);
+            setP2pSignal(null);
+          }}
+          onCompleted={(sess) => {
+            const sizeMB = (sess.fileSize / (1024 * 1024)).toFixed(1);
+            handleSendMessage(`⚡ Transferred "${sess.fileName}" (${sizeMB} MB) via P2P Direct Transfer`);
           }}
         />
       )}

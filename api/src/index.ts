@@ -199,15 +199,24 @@ app.post('/api/media/upload', authMiddleware, async (c) => {
   if (!ALLOWED_MIME_TYPES.includes(contentType)) {
     return c.json({ error: 'Unsupported media file type.' }, 400);
   }
+
+  const MAX_SERVER_UPLOAD_SIZE = 100 * 1024 * 1024; // 100 MB maximum server storage limit
+  if (totalSizeParam && parseInt(totalSizeParam, 10) > MAX_SERVER_UPLOAD_SIZE) {
+    return c.json({ error: 'File size exceeds maximum allowed limit of 100 MB. Please use P2P Direct Transfer for larger files.' }, 400);
+  }
   
   try {
     const body = await c.req.arrayBuffer();
 
     if (chunkIndexParam !== undefined && totalChunksParam !== undefined && totalSizeParam !== undefined) {
-      // Direct chunked upload from client (for files up to 2 GB)
+      // Direct chunked upload from client (up to 100 MB)
       const chunkIndex = parseInt(chunkIndexParam, 10);
       const totalChunks = parseInt(totalChunksParam, 10);
       const totalSize = parseInt(totalSizeParam, 10);
+
+      if (totalSize > MAX_SERVER_UPLOAD_SIZE) {
+        return c.json({ error: 'File size exceeds 100 MB limit. Use P2P Direct Transfer for unlimited file sizes.' }, 400);
+      }
 
       await c.env.SESSION_KV.put(`media:${key}:chunk:${chunkIndex}`, body);
 
@@ -228,6 +237,9 @@ app.post('/api/media/upload', authMiddleware, async (c) => {
     } else {
       // Single request payload upload
       const totalSize = body.byteLength;
+      if (totalSize > MAX_SERVER_UPLOAD_SIZE) {
+        return c.json({ error: 'File size exceeds 100 MB limit. Use P2P Direct Transfer for unlimited file sizes.' }, 400);
+      }
       const CHUNK_SIZE = 20 * 1024 * 1024; // Slice into 20MB chunks to stay under KV limit
 
       // Attempt KV storage first; if KV daily put limit is exceeded or KV fails, gracefully fallback to D1
