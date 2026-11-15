@@ -6,7 +6,6 @@ import {
   Minimize2,
   RefreshCw,
   Swords,
-  Send,
   X,
   Check,
   Loader2,
@@ -14,7 +13,10 @@ import {
   ShieldCheck,
   Trophy,
   Flame,
-  RotateCcw
+  RotateCcw,
+  Search,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -143,6 +145,10 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
   const [selectedContact, setSelectedContact] = useState<ChatContact | null>(null);
   const [selectedGameType, setSelectedGameType] = useState('tic-tac-toe');
   const [isSendingChallenge, setIsSendingChallenge] = useState(false);
+  const [challengeSearch, setChallengeSearch] = useState('');
+  const [showGameSwitcher, setShowGameSwitcher] = useState(false);
+  const [searchResults, setSearchResults] = useState<ChatContact[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
   // Active multiplayer game session
   const [activeSession, setActiveSession] = useState<{
@@ -289,6 +295,91 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     }, 5000);
     return () => clearInterval(interval);
   }, [activeTab, showChallengeModal, token]);
+
+  // Smooth-scroll active solo game button into view when changed
+  useEffect(() => {
+    if (activeTab === 'retro' && selectedSoloGame) {
+      const el = document.getElementById(`solo-tab-${selectedSoloGame}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  }, [selectedSoloGame, activeTab]);
+
+  // Debounced search for challenge modal
+  useEffect(() => {
+    if (!showChallengeModal || challengeSearch.trim().length < 2) {
+      setSearchResults([]);
+      return undefined;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingUsers(true);
+      try {
+        const res = await fetch(`/api/users/search?q=${encodeURIComponent(challengeSearch.trim())}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const foundUsers: any[] = data.users || [];
+          const mapped: ChatContact[] = foundUsers
+            .filter((u: any) => u.id !== user?.id)
+            .map((u: any) => {
+              const existing = contacts.find(c => c.id === u.id);
+              return {
+                id: u.id,
+                conversationId: existing?.conversationId || '',
+                username: u.username,
+                display_name: u.display_name || u.username,
+                avatar_url: u.avatar_url,
+                is_online: Boolean(onlineUserIds.has(u.id))
+              };
+            });
+          setSearchResults(mapped);
+        }
+      } catch {
+        // Ignore
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [challengeSearch, showChallengeModal, token, user?.id, contacts, onlineUserIds]);
+
+  // Combined & sorted contacts for challenge modal
+  const displayContacts = React.useMemo(() => {
+    if (challengeSearch.trim().length >= 2) {
+      const seen = new Set<string>();
+      const combined: ChatContact[] = [];
+
+      contacts
+        .filter(c =>
+          c.display_name.toLowerCase().includes(challengeSearch.toLowerCase()) ||
+          c.username.toLowerCase().includes(challengeSearch.toLowerCase())
+        )
+        .forEach(c => {
+          seen.add(c.id);
+          combined.push(c);
+        });
+
+      searchResults.forEach(c => {
+        if (!seen.has(c.id)) {
+          seen.add(c.id);
+          combined.push(c);
+        }
+      });
+
+      return combined;
+    }
+
+    return [...contacts].sort((a, b) => {
+      const aOnline = Boolean(a.is_online || onlineUserIds.has(a.id));
+      const bOnline = Boolean(b.is_online || onlineUserIds.has(b.id));
+      if (aOnline === bOnline) return 0;
+      return aOnline ? -1 : 1;
+    });
+  }, [contacts, searchResults, challengeSearch, onlineUserIds]);
 
   // Connect to active game session WebSocket for Multiplayer
   useEffect(() => {
@@ -1409,7 +1500,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
 
       case 'whack-a-mole':
         return (
-          <div className="w-full flex-1 flex flex-col items-center justify-center p-6 gap-6 animate-zoom">
+          <div className="w-full flex-1 flex flex-col items-center justify-center p-3 sm:p-6 gap-4 sm:gap-6 animate-zoom">
             <div className="text-center space-y-1">
               <h3 className="text-base font-black text-white flex items-center justify-center gap-2">
                 <span>🐹</span> Whack-a-Mole
@@ -1417,39 +1508,74 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
               <p className="text-xs text-slate-400">Whack the mole as fast as possible when it pops up!</p>
             </div>
 
-            <div className="flex justify-between items-center w-full max-w-sm px-5 py-2.5 bg-slate-900/80 border border-teal-500/20 rounded-2xl text-xs font-bold text-slate-300 shadow-md">
+            <div className="flex justify-between items-center w-full max-w-xs sm:max-w-sm px-4 sm:px-5 py-2.5 bg-slate-900/80 border border-teal-500/20 rounded-2xl text-xs font-bold text-slate-300 shadow-md">
               <span>Score: <strong className="text-teal-400 text-sm font-black">{moleScore}</strong></span>
               <span>Best: <strong className="text-amber-400 text-sm font-black">{moleBestScore}</strong></span>
               <span>Time: <strong className="text-rose-400 text-sm font-black">{moleTimeLeft}s</strong></span>
             </div>
 
             {moleIsPlaying ? (
-              <div className="grid grid-cols-3 gap-3.5 bg-slate-950/80 p-5 rounded-3xl border border-white/10 shadow-2xl">
-                {Array(9).fill(null).map((_, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleWhackMole(idx)}
-                    className="h-18 w-18 sm:h-20 sm:w-20 bg-slate-900 border-2 border-slate-750 hover:bg-slate-850 rounded-2xl flex items-center justify-center text-4xl select-none transition-all active:scale-90"
-                  >
-                    {moleActiveIndex === idx ? '🐹' : ''}
-                  </button>
-                ))}
+              <div className="grid grid-cols-3 gap-3 sm:gap-4 bg-slate-950/90 p-3.5 sm:p-5 rounded-3xl border border-teal-500/20 shadow-2xl">
+                {Array(9).fill(null).map((_, idx) => {
+                  const isMole = moleActiveIndex === idx;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleWhackMole(idx)}
+                      className={`w-20 h-20 sm:w-24 sm:h-24 aspect-square rounded-2xl relative flex items-center justify-center select-none transition-all duration-100 active:scale-90 ${
+                        isMole
+                          ? 'bg-gradient-to-b from-amber-500/20 to-slate-900 border-2 border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.3)]'
+                          : 'bg-slate-900/90 border-2 border-slate-800 hover:border-slate-700 shadow-inner'
+                      }`}
+                    >
+                      {/* Hole depth effect */}
+                      <div className="absolute inset-2 rounded-xl bg-slate-950/70 border border-black/40 pointer-events-none" />
+
+                      {/* Mole or empty hole marker */}
+                      {isMole ? (
+                        <span className="relative z-10 text-4xl sm:text-5xl animate-bounce filter drop-shadow select-none">
+                          🐹
+                        </span>
+                      ) : (
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-800/80 pointer-events-none" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <div className="text-center space-y-3 bg-slate-900/60 border border-white/10 p-6 rounded-3xl max-w-sm w-full shadow-xl">
-                {moleScore > 0 ? (
-                  <p className="text-xs text-teal-300 font-extrabold">You whacked {moleScore} moles in 30s!</p>
-                ) : (
-                  <p className="text-xs text-slate-400">Test your reaction time in 30 seconds.</p>
-                )}
-                <button
-                  type="button"
-                  onClick={startWhackAMole}
-                  className="py-3 px-8 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-teal-500/25 active:scale-95"
-                >
-                  {moleScore > 0 ? 'Play Again' : 'Start 30s Game'}
-                </button>
+              <div className="flex flex-col items-center gap-4 w-full max-w-xs sm:max-w-sm">
+                <div className="grid grid-cols-3 gap-3 sm:gap-4 bg-slate-950/90 p-3.5 sm:p-5 rounded-3xl border border-white/10 opacity-75">
+                  {Array(9).fill(null).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="w-20 h-20 sm:w-24 sm:h-24 aspect-square rounded-2xl bg-slate-900/90 border-2 border-slate-800 flex items-center justify-center relative shadow-inner"
+                    >
+                      <div className="absolute inset-2 rounded-xl bg-slate-950/70 border border-black/40" />
+                      {idx === 4 ? (
+                        <span className="relative z-10 text-4xl select-none">🐹</span>
+                      ) : (
+                        <div className="w-2.5 h-2.5 rounded-full bg-slate-800/80" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="text-center space-y-2.5 bg-slate-900/60 border border-teal-500/20 p-4 rounded-2xl w-full shadow-xl">
+                  {moleScore > 0 ? (
+                    <p className="text-xs text-teal-300 font-extrabold">You whacked {moleScore} moles in 30s!</p>
+                  ) : (
+                    <p className="text-xs text-slate-400">Test your reflexes & whack moles before they hide!</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={startWhackAMole}
+                    className="w-full py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-xl shadow-teal-500/25 active:scale-95"
+                  >
+                    {moleScore > 0 ? 'Play Again ⚡' : 'Start 30s Game 🎮'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -3090,14 +3216,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
     <div className="w-full flex-1 flex flex-col items-center bg-[var(--bg)] min-h-[calc(100vh-64px)] p-3 sm:p-6 pb-28 sm:pb-8 animate-fade-in select-none">
 
       {/* Top Header Bar */}
-      <div className="w-full max-w-4xl flex flex-wrap items-center justify-between gap-2.5 mb-3 sm:mb-6">
+      <div className="w-full max-w-4xl flex items-center justify-between gap-2 mb-3 sm:mb-6">
         <button
           type="button"
           onClick={() => onNavigate('feed')}
-          className="flex items-center gap-2 text-xs font-bold text-[var(--muted)] hover:text-[var(--text)] transition-colors px-3 py-2 rounded-xl bg-[var(--input)] border border-[var(--line)] active:scale-95"
+          className="flex items-center gap-1.5 text-xs font-bold text-[var(--muted)] hover:text-[var(--text)] transition-colors p-2 sm:px-3 sm:py-2 rounded-xl bg-[var(--input)] border border-[var(--line)] active:scale-95"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back</span>
+          <span className="hidden sm:inline">Back</span>
         </button>
 
         {/* Tab Switcher: Solo Retro vs Play with Friends */}
@@ -3105,7 +3231,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           <button
             type="button"
             onClick={() => setActiveTab('retro')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${activeTab === 'retro'
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${activeTab === 'retro'
                 ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md'
                 : 'text-[var(--muted)] hover:text-[var(--text)]'
               }`}
@@ -3116,7 +3242,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
           <button
             type="button"
             onClick={() => setActiveTab('multiplayer')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${activeTab === 'multiplayer'
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all ${activeTab === 'multiplayer'
                 ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 shadow-md'
                 : 'text-[var(--muted)] hover:text-[var(--text)]'
               }`}
@@ -3143,7 +3269,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
             type="button"
             onClick={toggleFullscreen}
             title={isFullscreen ? "Exit Fullscreen" : "Fullscreen Arcade"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--input)] border border-[var(--line)] text-xs font-bold text-[var(--text)] hover:border-[var(--accent-2)] transition-all active:scale-95"
+            className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-2 rounded-xl bg-[var(--input)] border border-[var(--line)] text-xs font-bold text-[var(--text)] hover:border-[var(--accent-2)] transition-all active:scale-95"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             <span className="hidden sm:inline">{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
@@ -3197,13 +3323,14 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         {activeTab === 'retro' && (
           <div className="w-full flex-1 flex flex-col bg-[#040b0d]">
             {/* Solo Offline Game Selector Strip */}
-            <div className="flex items-center gap-2 p-3 bg-slate-950/80 border-b border-white/5 overflow-x-auto scrollbar-none">
+            <div className="flex items-center gap-2 px-3 py-2 bg-slate-950/90 border-b border-white/5 overflow-x-auto scrollbar-none scroll-smooth snap-x snap-mandatory touch-pan-x">
               {SOLO_RETRO_GAMES.map(g => (
                 <button
+                  id={`solo-tab-${g.id}`}
                   key={g.id}
                   type="button"
                   onClick={() => setSelectedSoloGame(g.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 ${selectedSoloGame === g.id
+                  className={`shrink-0 snap-start px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 active:scale-95 ${selectedSoloGame === g.id
                       ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-black shadow-md'
                       : 'bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-white border border-white/5'
                     }`}
@@ -3310,41 +3437,162 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         )}
       </div>
 
-      {/* Challenge Modal */}
+      {/* Challenge Modal - Mobile-First Bottom Sheet & Desktop Dialog */}
       {showChallengeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md rounded-3xl bg-[#090d14] border border-teal-500/30 shadow-2xl p-6 flex flex-col gap-5 animate-zoom">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          {/* Backdrop click to dismiss */}
+          <div
+            className="absolute inset-0"
+            onClick={() => {
+              setShowChallengeModal(false);
+              setChallengeSearch('');
+              setShowGameSwitcher(false);
+            }}
+          />
+
+          <div className="relative w-full max-w-lg bg-[#080d12] border-t sm:border border-teal-500/30 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[85vh] overflow-hidden z-10 animate-zoom">
+            {/* Mobile Pull Indicator */}
+            <div className="sm:hidden pt-3 pb-1 flex justify-center">
+              <div className="w-12 h-1 bg-slate-700/60 rounded-full" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30">
                   <Swords className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white">Send 1v1 Battle Challenge</h3>
-                  <p className="text-[10px] text-slate-400">They will get an instant in-app pop-up to play</p>
+                  <h3 className="text-sm font-black text-white">1v1 Battle Challenge</h3>
+                  <p className="text-[10px] text-teal-400 font-medium">Instant real-time match invite</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowChallengeModal(false)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
+                onClick={() => {
+                  setShowChallengeModal(false);
+                  setChallengeSearch('');
+                  setShowGameSwitcher(false);
+                }}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Select Friend */}
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Select Friend from Chats</label>
-              {loadingContacts ? (
-                <div className="flex items-center justify-center py-6 text-slate-500">
-                  <Loader2 className="w-5 h-5 animate-spin text-teal-400" />
+            {/* Compact Game Selection Strip */}
+            <div className="px-4 sm:px-6 py-2.5 bg-slate-950/70 border-b border-white/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-2xl shrink-0">
+                    {MULTIPLAYER_GAMES.find(g => g.id === selectedGameType)?.emoji || '🎮'}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black text-white truncate">
+                        {MULTIPLAYER_GAMES.find(g => g.id === selectedGameType)?.name || 'Game'}
+                      </span>
+                      <span className="shrink-0 text-[9px] px-1.5 py-0.2 rounded bg-teal-500/20 text-teal-300 font-extrabold border border-teal-500/30">
+                        1v1
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 block truncate">
+                      {MULTIPLAYER_GAMES.find(g => g.id === selectedGameType)?.desc || ''}
+                    </span>
+                  </div>
                 </div>
-              ) : contacts.length === 0 ? (
-                <p className="text-xs text-slate-500">No recent chat contacts found.</p>
-              ) : (
-                <div className="max-h-40 overflow-y-auto space-y-1.5 p-1 bg-slate-950/60 rounded-2xl border border-white/5">
-                  {contacts.map(c => {
+
+                <button
+                  type="button"
+                  onClick={() => setShowGameSwitcher(prev => !prev)}
+                  className="shrink-0 ml-3 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-bold text-teal-300 border border-teal-500/30 flex items-center gap-1 active:scale-95 transition-all"
+                >
+                  <span>{showGameSwitcher ? 'Done' : 'Change Game'}</span>
+                  {showGameSwitcher ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+              </div>
+
+              {/* Game Switcher Horizontal Carousel */}
+              {showGameSwitcher && (
+                <div className="mt-2.5 pt-2 border-t border-white/5 animate-fade-in">
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1">
+                    {MULTIPLAYER_GAMES.map(g => {
+                      const isSelected = selectedGameType === g.id;
+                      return (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedGameType(g.id);
+                            setShowGameSwitcher(false);
+                          }}
+                          className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border active:scale-95 ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 border-teal-400 font-black shadow-md'
+                              : 'bg-slate-900 border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <span>{g.emoji}</span>
+                          <span>{g.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Friend Picker Section */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 flex flex-col gap-3 min-h-[220px]">
+              {/* Quick Search Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={challengeSearch}
+                  onChange={e => setChallengeSearch(e.target.value)}
+                  placeholder="Search friends by name or username…"
+                  className="w-full pl-9 pr-8 py-2 bg-slate-950/80 border border-white/10 focus:border-teal-500/60 rounded-xl text-xs text-white placeholder-slate-500 outline-none transition-all"
+                />
+                {challengeSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setChallengeSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Friends list header */}
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  {challengeSearch ? 'Search Results' : 'Select Opponent'}
+                </span>
+                <span className="text-[10px] text-teal-400 font-bold">
+                  {onlineUserIds.size > 0 && `${onlineUserIds.size} online`}
+                </span>
+              </div>
+
+              {/* Friends List Container */}
+              <div className="flex-1 overflow-y-auto space-y-1.5 min-h-[160px]">
+                {loadingContacts || isSearchingUsers ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-slate-500 gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-teal-400" />
+                    <span className="text-xs">Finding friends…</span>
+                  </div>
+                ) : displayContacts.length === 0 ? (
+                  <div className="text-center py-8 px-4 bg-slate-950/40 rounded-2xl border border-white/5 space-y-1">
+                    <p className="text-xs text-slate-300 font-bold">No contacts found</p>
+                    <p className="text-[11px] text-slate-500">
+                      {challengeSearch
+                        ? 'No user matches this search query.'
+                        : 'Start a chat with a user to challenge them here!'}
+                    </p>
+                  </div>
+                ) : (
+                  displayContacts.map(c => {
                     const isSelected = selectedContact?.id === c.id;
                     const isOnline = Boolean(c.is_online || onlineUserIds.has(c.id));
                     return (
@@ -3352,64 +3600,63 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                         key={c.id}
                         type="button"
                         onClick={() => setSelectedContact(c)}
-                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${isSelected
-                            ? 'bg-teal-500/20 border border-teal-500/40 text-white'
-                            : 'hover:bg-white/5 text-slate-300 border border-transparent'
-                          }`}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-2xl text-left transition-all ${
+                          isSelected
+                            ? 'bg-teal-500/15 border-2 border-teal-400 text-white shadow-lg shadow-teal-500/10'
+                            : 'bg-slate-900/40 hover:bg-slate-900/80 border border-white/5 text-slate-300'
+                        }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="relative flex-shrink-0">
-                            <ArcadeAvatar url={c.avatar_url} name={c.display_name || c.username} size="w-8 h-8" rounded="rounded-lg" />
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative shrink-0">
+                            <ArcadeAvatar
+                              url={c.avatar_url}
+                              name={c.display_name || c.username}
+                              size="w-9 h-9"
+                              rounded="rounded-xl"
+                            />
                             {isOnline && (
-                              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-900 shadow-sm" />
+                              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-900 shadow-sm animate-pulse" />
                             )}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold block truncate">{c.display_name}</span>
-                              {isOnline && <span className="text-[9px] text-emerald-400 font-bold">• Online</span>}
+                              <span className="text-xs font-bold block truncate text-white">{c.display_name}</span>
+                              {isOnline && (
+                                <span className="text-[9px] text-emerald-400 font-extrabold px-1.5 py-0.2 bg-emerald-500/10 rounded-full border border-emerald-500/20 shrink-0">
+                                  Online
+                                </span>
+                              )}
                             </div>
-                            <span className="text-[9px] text-slate-400 block truncate">@{c.username}</span>
+                            <span className="text-[10px] text-slate-400 block truncate">@{c.username}</span>
                           </div>
                         </div>
-                        {isSelected && <Check className="w-4 h-4 text-teal-400 stroke-[3]" />}
+
+                        <div className="shrink-0 ml-2">
+                          {isSelected ? (
+                            <div className="w-5 h-5 rounded-full bg-teal-400 text-slate-950 flex items-center justify-center">
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                          ) : (
+                            <div className="w-5 h-5 rounded-full border border-slate-700" />
+                          )}
+                        </div>
                       </button>
                     );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Select Multiplayer Game */}
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-2">Choose 1v1 Battle Game</label>
-              <div className="grid grid-cols-2 gap-2">
-                {MULTIPLAYER_GAMES.map(g => {
-                  const isSelected = selectedGameType === g.id;
-                  return (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => setSelectedGameType(g.id)}
-                      className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all ${isSelected
-                          ? 'bg-teal-500/20 border-teal-500/40 text-teal-300'
-                          : 'bg-slate-900/50 border-white/5 text-slate-400 hover:text-white hover:border-white/10'
-                        }`}
-                    >
-                      <span className="text-lg">{g.emoji}</span>
-                      <span className="text-xs font-bold truncate">{g.name}</span>
-                    </button>
-                  );
-                })}
+                  })
+                )}
               </div>
             </div>
 
-            {/* Submit Challenge */}
-            <div className="flex gap-3 pt-2">
+            {/* Sticky Action Footer */}
+            <div className="p-4 sm:p-5 bg-slate-950 border-t border-white/10 flex gap-2.5">
               <button
                 type="button"
-                onClick={() => setShowChallengeModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 text-xs font-bold hover:bg-white/5 transition-all"
+                onClick={() => {
+                  setShowChallengeModal(false);
+                  setChallengeSearch('');
+                  setShowGameSwitcher(false);
+                }}
+                className="px-4 py-3 rounded-xl border border-white/10 text-slate-400 hover:text-white text-xs font-bold hover:bg-white/5 transition-all"
               >
                 Cancel
               </button>
@@ -3417,14 +3664,21 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
                 type="button"
                 disabled={!selectedContact || isSendingChallenge}
                 onClick={handleSendChallenge}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-teal-500/20 active:scale-95 disabled:opacity-50"
+                className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-xl shadow-teal-500/25 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
               >
                 {isSendingChallenge ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Sending Invite…</span>
+                  </>
                 ) : (
                   <>
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Send Challenge</span>
+                    <Swords className="w-4 h-4" />
+                    <span className="truncate">
+                      {selectedContact
+                        ? `Challenge ${selectedContact.display_name}`
+                        : 'Select a Friend Above'}
+                    </span>
                   </>
                 )}
               </button>
