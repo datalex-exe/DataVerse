@@ -102,6 +102,10 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
   const lastSpeedCheckRef = useRef<{ bytes: number; time: number }>({ bytes: 0, time: Date.now() });
   const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const isAbortedRef = useRef<boolean>(false);
+  const isOfferInitiatedRef = useRef<boolean>(false);
+  const isCompletedRef = useRef<boolean>(false);
+  const isDataChannelBoundRef = useRef<boolean>(false);
+  const processedSignalsRef = useRef<Set<string>>(new Set());
 
   const cleanupP2P = useCallback(() => {
     isAbortedRef.current = true;
@@ -134,7 +138,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        if (status !== 'completed' && !isAbortedRef.current) {
+        if (status !== 'completed' && !isAbortedRef.current && !isCompletedRef.current) {
           setStatus('error');
           setErrorMessage('Peer connection disconnected');
         }
@@ -187,7 +191,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
           try {
             dc.send(reader.result as ArrayBuffer);
             offset += (reader.result as ArrayBuffer).byteLength;
-            setProgressBytes(offset);
+            setProgressBytes(Math.min(offset, totalSize));
 
             // Compute transfer speed every 400ms
             const now = Date.now();
@@ -200,10 +204,23 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
             }
 
             if (offset >= totalSize) {
-              // Signal EOF to receiver
-              dc.send(JSON.stringify({ type: 'p2p_file_complete' }));
-              setStatus('completed');
-              if (session && onCompleted) onCompleted(session, '');
+              // Wait for bufferedAmount to drain completely before sending EOF and marking completed
+              const checkDrainAndComplete = () => {
+                if (dc.bufferedAmount > 0) {
+                  dc.onbufferedamountlow = () => {
+                    dc.onbufferedamountlow = null;
+                    checkDrainAndComplete();
+                  };
+                  return;
+                }
+                try {
+                  dc.send(JSON.stringify({ type: 'p2p_file_complete' }));
+                } catch {}
+                setStatus('completed');
+                setProgressBytes(totalSize);
+                if (session && onCompleted) onCompleted(session, '');
+              };
+              checkDrainAndComplete();
             } else {
               sendNextChunk();
             }
@@ -223,7 +240,8 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
 
   // Sender initial offer dispatch after peer accepts
   const initiateSenderOffer = useCallback(async () => {
-    if (!session || !session.file) return;
+    if (!session || !session.file || isOfferInitiatedRef.current) return;
+    isOfferInitiatedRef.current = true;
     setStatus('connecting');
 
     const pc = initPeerConnection();
@@ -269,7 +287,35 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
 
     const pc = initPeerConnection();
 
+    const finalizeTransfer = () => {
+      if (isCompletedRef.current) return;
+      isCompletedRef.current = true;
+
+      const blob = new Blob(receivedChunksRef.current, { type: session.fileType || 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      setStatus('completed');
+      setProgressBytes(session.fileSize);
+
+      // Auto-trigger browser download to disk
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = session.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (e) {
+        console.warn('Auto-download trigger error:', e);
+      }
+
+      if (onCompleted) onCompleted(session, url);
+    };
+
     pc.ondatachannel = (event) => {
+      if (isDataChannelBoundRef.current) return;
+      isDataChannelBoundRef.current = true;
+
       const dc = event.channel;
       dc.binaryType = 'arraybuffer';
       dataChannelRef.current = dc;
@@ -284,21 +330,8 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
           try {
             const parsed = JSON.parse(e.data);
             if (parsed.type === 'p2p_file_complete') {
-              // Assemble the received file into a Blob
-              const blob = new Blob(receivedChunksRef.current, { type: session.fileType || 'application/octet-stream' });
-              const url = URL.createObjectURL(blob);
-              setDownloadUrl(url);
-              setStatus('completed');
-
-              // Auto-trigger browser download to disk
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = session.fileName;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-
-              if (onCompleted) onCompleted(session, url);
+              finalizeTransfer();
+              return;
             }
           } catch {}
           return;
@@ -308,7 +341,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
         const buffer = e.data as ArrayBuffer;
         receivedChunksRef.current.push(buffer);
         receivedBytesRef.current += buffer.byteLength;
-        setProgressBytes(receivedBytesRef.current);
+        setProgressBytes(Math.min(receivedBytesRef.current, session.fileSize));
 
         const now = Date.now();
         const elapsed = (now - lastSpeedCheckRef.current.time) / 1000;
@@ -317,12 +350,19 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
           setSpeedMBs(diff / (1024 * 1024 * elapsed));
           lastSpeedCheckRef.current = { bytes: receivedBytesRef.current, time: now };
         }
+
+        // Auto-finalize as soon as all expected bytes have arrived!
+        if (session.fileSize > 0 && receivedBytesRef.current >= session.fileSize) {
+          finalizeTransfer();
+        }
       };
 
       dc.onerror = (e) => {
         console.error('P2P Receiver DataChannel error:', e);
-        setStatus('error');
-        setErrorMessage('Data transfer error');
+        if (!isCompletedRef.current) {
+          setStatus('error');
+          setErrorMessage('Data transfer error');
+        }
       };
     };
   }, [initPeerConnection, onCompleted, sendSignaling, session]);
@@ -341,6 +381,13 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
   // Process any incoming signaling packet directly without dropped events
   const processSignal = useCallback(async (sig: any) => {
     if (!sig || !session || sig.transferId !== session.transferId) return;
+
+    // Deduplicate critical signals so they never run twice
+    const sigKey = `${sig.type}_${sig.transferId}`;
+    if (sig.type === 'p2p_file_accept' || sig.type === 'p2p_file_offer' || sig.type === 'p2p_file_answer') {
+      if (processedSignalsRef.current.has(sigKey)) return;
+      processedSignalsRef.current.add(sigKey);
+    }
 
     const pc = pcRef.current || initPeerConnection();
 
@@ -398,12 +445,12 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     return undefined;
   }, [registerSignalHandler, processSignal]);
 
-  // Fallback for incomingSignal prop
+  // Fallback for incomingSignal ONLY if registerSignalHandler is not provided
   useEffect(() => {
-    if (incomingSignal) {
+    if (!registerSignalHandler && incomingSignal) {
       processSignal(incomingSignal);
     }
-  }, [incomingSignal, processSignal]);
+  }, [incomingSignal, processSignal, registerSignalHandler]);
 
   // Auto-accept if session requested autoAccept
   useEffect(() => {
