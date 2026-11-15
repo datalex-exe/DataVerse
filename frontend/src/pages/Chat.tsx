@@ -58,7 +58,6 @@ import {
   Film,
   Music,
   Archive,
-  ShieldCheck,
   Radio,
   CheckCircle2
 } from 'lucide-react';
@@ -5887,93 +5886,42 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                               }
 
                               return (
-                                <div className="relative overflow-hidden rounded-3xl border-2 border-teal-500/40 bg-gradient-to-br from-[#061215] via-[#091b20] to-[#040c0e] p-4 sm:p-5 max-w-sm w-full shadow-[0_0_40px_rgba(20,184,166,0.22)] space-y-3.5 select-none transition-all group hover:border-teal-400/70">
-                                  {/* Radiant Animated Cyber Conduit Line */}
-                                  <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-teal-400 via-cyan-400 to-emerald-400 animate-pulse" />
-                                  
-                                  {/* Ambient mesh glows */}
-                                  <div className="absolute -top-12 -right-12 w-32 h-32 bg-teal-500/15 rounded-full blur-2xl pointer-events-none" />
-                                  <div className="absolute -bottom-10 -left-10 w-28 h-28 bg-emerald-500/15 rounded-full blur-2xl pointer-events-none" />
-
-                                  {/* Header Telemetry */}
-                                  <div className="relative flex items-center justify-between">
-                                    <div className="flex items-center gap-2.5">
-                                      <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500/20 to-emerald-500/30 border border-teal-400/50 flex items-center justify-center text-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.35)]">
-                                        <Zap className="w-4 h-4 fill-current animate-pulse" />
-                                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                                      </div>
-                                      <div>
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-xs font-black text-white tracking-wide uppercase">
-                                            P2P Live Beam
-                                          </span>
-                                          <span className="text-[9px] font-black px-1.5 py-0.2 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/40">
-                                            Direct WebRTC
-                                          </span>
-                                        </div>
-                                        <span className="text-[10px] text-teal-400/80 font-medium block">
-                                          {isMe ? 'Outgoing device stream' : `Incoming from @${msg.username}`}
-                                        </span>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-1 text-[9px] font-mono text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30 shadow-sm">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                      <span>ZERO CLOUD</span>
-                                    </div>
-                                  </div>
-
-                                  {/* File Hero Box */}
-                                  <div className="relative p-3.5 rounded-2xl bg-black/60 border border-white/10 hover:border-teal-500/40 transition-all flex items-center gap-3.5 backdrop-blur-md shadow-inner">
-                                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${meta.color} border flex items-center justify-center shrink-0 shadow-lg group-hover:scale-105 transition-transform`}>
+                                <div className="relative overflow-hidden rounded-2xl border border-teal-500/30 bg-[#071317]/95 p-3.5 max-w-sm w-full shadow-lg space-y-3 select-none">
+                                  {/* File Box */}
+                                  <div className="relative p-3 rounded-xl bg-black/60 border border-white/10 flex items-center gap-3 backdrop-blur-md">
+                                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${meta.color} border flex items-center justify-center shrink-0 shadow-md`}>
                                       {meta.icon}
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-1.5 mb-0.5">
-                                        <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${meta.badgeColor} border`}>
+                                      <p className="text-xs font-bold text-white truncate" title={secureMedia.fileName}>
+                                        {secureMedia.fileName}
+                                      </p>
+                                      <div className="flex items-center gap-1.5 mt-0.5">
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${meta.badgeColor} border`}>
                                           {meta.category}
                                         </span>
-                                        <span className="text-[10px] text-teal-300 font-mono font-bold">
+                                        <span className="text-[10px] text-teal-300 font-mono font-medium">
                                           {meta.sizeFormatted}
                                         </span>
                                       </div>
-                                      <p className="text-xs font-black text-white truncate drop-shadow-sm" title={secureMedia.fileName}>
-                                        {secureMedia.fileName}
-                                      </p>
-                                      <p className="text-[9px] text-slate-400 flex items-center gap-1 mt-0.5 font-medium">
-                                        <ShieldCheck className="w-3 h-3 text-teal-400" />
-                                        <span>End-to-End Encrypted Live Stream</span>
-                                      </p>
                                     </div>
-                                  </div>
-
-                                  {/* Peer-to-Peer Conduit Visualizer */}
-                                  <div className="relative py-1.5 px-3 rounded-xl bg-slate-950/70 border border-white/5 flex items-center justify-between text-[10px] text-slate-300 font-mono">
-                                    <span className="truncate max-w-[90px] text-teal-300 font-bold">{isMe ? 'Your Device' : `@${msg.username}`}</span>
-                                    <div className="flex-1 mx-2 flex items-center justify-center relative">
-                                      <div className="w-full h-[2px] bg-gradient-to-r from-teal-500/40 via-emerald-400 to-teal-500/40" />
-                                      <div className="absolute w-2 h-2 rounded-full bg-teal-300 shadow-[0_0_10px_rgba(45,212,191,1)] animate-ping" />
-                                    </div>
-                                    <span className="truncate max-w-[90px] text-teal-300 font-bold">{isMe ? `@${activeConvo?.members?.find(m => m.id !== user?.id)?.username || 'Peer'}` : 'Your Device'}</span>
                                   </div>
 
                                   {/* Action Controls */}
                                   {isMe ? (
-                                    <div className="pt-0.5 flex items-center justify-between text-[11px] text-slate-300 px-1">
-                                      <span className="flex items-center gap-2 text-teal-400 font-bold">
-                                        <Radio className="w-3.5 h-3.5 animate-pulse text-teal-400" />
-                                        <span>Ready • Waiting for recipient to accept</span>
-                                      </span>
+                                    <div className="pt-0.5 flex items-center gap-2 text-[11px] text-teal-400 font-medium px-1">
+                                      <Radio className="w-3.5 h-3.5 animate-pulse text-teal-400" />
+                                      <span>Waiting for recipient to accept...</span>
                                     </div>
                                   ) : (
-                                    <div className="pt-1 flex gap-2">
+                                    <div className="pt-0.5">
                                       <button
                                         type="button"
                                         onClick={() => handleAcceptP2PFromChat(secureMedia)}
-                                        className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:via-emerald-300 hover:to-cyan-300 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition-all shadow-[0_0_30px_rgba(45,212,191,0.5)] hover:shadow-[0_0_40px_rgba(45,212,191,0.7)] active:scale-95 cursor-pointer"
+                                        className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:via-emerald-300 hover:to-cyan-300 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(45,212,191,0.4)] active:scale-95 cursor-pointer"
                                       >
                                         <Download className="w-4 h-4 stroke-[2.5]" />
-                                        <span>Accept & Download ({meta.sizeFormatted})</span>
+                                        <span>Download ({meta.sizeFormatted})</span>
                                       </button>
                                     </div>
                                   )}

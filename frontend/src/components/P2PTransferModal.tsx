@@ -12,9 +12,6 @@ import {
   Image as ImageIcon, 
   Music, 
   Archive,
-  ArrowUpRight,
-  ArrowDownLeft,
-  ShieldCheck,
   Minus,
   Maximize2
 } from 'lucide-react';
@@ -452,18 +449,13 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
         onClick={() => setIsMinimized(false)}
         className="fixed bottom-24 right-4 z-[999999] bg-[#061215]/95 border-2 border-teal-500/50 shadow-[0_0_35px_rgba(20,184,166,0.5)] rounded-2xl p-3 flex items-center gap-3 backdrop-blur-md cursor-pointer animate-slide-up text-white max-w-xs hover:border-teal-400 transition-all active:scale-95 select-none"
       >
-        <div className="relative w-9 h-9 rounded-xl bg-teal-500/20 border border-teal-400/50 flex items-center justify-center text-teal-300 shrink-0">
+        <div className="w-9 h-9 rounded-xl bg-teal-500/20 border border-teal-400/50 flex items-center justify-center text-teal-300 shrink-0">
           <Zap className="w-4 h-4 fill-current animate-pulse" />
-          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-black uppercase tracking-wider text-teal-300">P2P Beam</span>
-            <span className="text-[9px] text-slate-400 font-mono">({percent}%)</span>
-          </div>
           <p className="text-xs font-bold text-white truncate">{session.fileName}</p>
           <p className="text-[10px] text-teal-400/80 font-medium truncate">
-            {status === 'transferring' ? `${formatBytes(progressBytes)} / ${formatBytes(session.fileSize)} • ${speedMBs.toFixed(1)} MB/s` : status === 'waiting_accept' ? 'Live Beam Ready • Waiting peer' : status === 'completed' ? 'Completed' : 'Connecting...'}
+            {status === 'transferring' ? `${percent}% • ${speedMBs.toFixed(1)} MB/s` : status === 'waiting_accept' ? 'Waiting for peer...' : status === 'completed' ? 'Completed' : 'Connecting...'}
           </p>
         </div>
         <button
@@ -486,34 +478,21 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
       className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-lg animate-fade-in"
     >
       <div 
-        className="relative bg-gradient-to-br from-[#061215] via-[#091b22] to-[#040c0e] border-2 border-teal-500/40 rounded-3xl max-w-md w-full shadow-[0_0_50px_rgba(20,184,166,0.3)] overflow-hidden p-6 space-y-5 animate-scale-up text-white"
+        className="relative bg-gradient-to-br from-[#061215] via-[#091b22] to-[#040c0e] border border-teal-500/30 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden p-6 space-y-5 animate-scale-up text-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Glowing Top Cyber Conduit Line */}
-        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-teal-400 via-cyan-400 to-emerald-400 animate-pulse" />
-        
-        {/* Ambient mesh glows */}
-        <div className="absolute -top-12 -right-12 w-32 h-32 bg-teal-500/15 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute -bottom-10 -left-10 w-28 h-28 bg-emerald-500/15 rounded-full blur-2xl pointer-events-none" />
-
         {/* Header */}
         <div className="relative flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-500/20 to-emerald-500/30 border border-teal-400/50 flex items-center justify-center text-teal-300 shadow-[0_0_20px_rgba(45,212,191,0.35)]">
-              <Zap className="w-5 h-5 fill-current animate-pulse" />
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+            <div className="w-10 h-10 rounded-2xl bg-teal-500/15 border border-teal-400/30 flex items-center justify-center text-teal-300">
+              <Zap className="w-5 h-5 fill-current" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-black text-base text-white tracking-wide uppercase">
-                  P2P Direct Beam
-                </h3>
-                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-300 border border-teal-500/40">
-                  100% Serverless
-                </span>
-              </div>
-              <p className="text-xs text-teal-400/80 font-medium">
-                {session.role === 'sender' ? `Beaming live to @${session.partnerName}` : `Receiving stream from @${session.partnerName}`}
+              <h3 className="font-bold text-sm text-white">
+                {session.role === 'sender' ? 'Sending File' : 'Receiving File'}
+              </h3>
+              <p className="text-xs text-slate-400">
+                @{session.partnerName}
               </p>
             </div>
           </div>
@@ -522,15 +501,15 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
               type="button"
               onClick={() => setIsMinimized(true)}
               className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer border border-white/10"
-              title="Minimize to background (keep transfer running)"
+              title="Minimize"
             >
               <Minus className="w-4 h-4" />
             </button>
             <button
               type="button"
               onClick={() => {
-                if (status === 'transferring' || (status === 'waiting_accept' && session.role === 'sender')) {
-                  if (window.confirm('Cancelling will abort this direct transfer. Minimize instead if you want to keep chatting while waiting for peer. Cancel anyway?')) {
+                if (status === 'transferring') {
+                  if (window.confirm('Cancel file transfer?')) {
                     declineTransfer();
                   }
                 } else {
@@ -539,7 +518,7 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
               }}
               className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer border border-white/10"
               aria-label="Close"
-              title="Cancel Transfer"
+              title="Cancel"
             >
               <X className="w-4 h-4" />
             </button>
@@ -547,60 +526,32 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
         </div>
 
         {/* File Card Preview */}
-        <div className="relative p-4 rounded-2xl border border-white/10 bg-black/60 flex items-center gap-3.5 backdrop-blur-md shadow-inner">
-          <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-teal-500/20 to-cyan-500/20 border border-teal-400/30 flex items-center justify-center shrink-0 shadow-lg">
+        <div className="relative p-4 rounded-2xl border border-white/10 bg-black/60 flex items-center gap-3.5 backdrop-blur-md">
+          <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-400/30 flex items-center justify-center shrink-0">
             {getFileIcon(session.fileType, session.fileName)}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-black text-white truncate" title={session.fileName}>
+            <p className="text-sm font-bold text-white truncate" title={session.fileName}>
               {session.fileName}
             </p>
-            <p className="text-xs text-teal-300 font-mono font-bold mt-0.5">
+            <p className="text-xs text-teal-300 font-mono font-medium mt-0.5">
               {formatBytes(session.fileSize)}
             </p>
-            <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-teal-400" />
-              <span>WebRTC Direct Encrypted Pipe</span>
-            </p>
-          </div>
-          <div className="shrink-0 text-right">
-            {session.role === 'sender' ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-black text-teal-300 px-2 py-1 rounded-lg bg-teal-500/15 border border-teal-500/30">
-                <ArrowUpRight className="w-3.5 h-3.5" /> Outgoing
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] font-black text-cyan-300 px-2 py-1 rounded-lg bg-cyan-500/15 border border-cyan-500/30">
-                <ArrowDownLeft className="w-3.5 h-3.5" /> Incoming
-              </span>
-            )}
           </div>
         </div>
 
         {/* Body Status Content */}
         {status === 'waiting_accept' && session.role === 'sender' && (
-          <div className="py-5 text-center space-y-3 bg-black/40 rounded-2xl border border-white/5">
-            <div className="relative w-12 h-12 mx-auto flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-2 border-teal-400/40 animate-ping" />
-              <Loader2 className="w-8 h-8 text-teal-400 animate-spin" />
-            </div>
-            <p className="text-xs text-slate-200 font-bold">
-              Waiting for <span className="text-teal-400 font-black">@{session.partnerName}</span> to accept the live beam...
-            </p>
-            <p className="text-[11px] text-slate-400 leading-relaxed max-w-xs mx-auto">
-              Keep this tab open while the peer connects. File data streams directly between devices with zero cloud limits.
+          <div className="py-5 text-center space-y-2.5 bg-black/40 rounded-2xl border border-white/5">
+            <Loader2 className="w-8 h-8 text-teal-400 animate-spin mx-auto" />
+            <p className="text-xs text-slate-200 font-medium">
+              Waiting for @{session.partnerName} to accept...
             </p>
           </div>
         )}
 
         {status === 'waiting_accept' && session.role === 'receiver' && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-2xl border border-teal-500/30 bg-teal-950/30 text-xs text-teal-200/90 leading-relaxed flex items-start gap-3 shadow-inner">
-              <ShieldCheck className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-black text-white block mb-0.5">High-Speed Peer Stream:</span>
-                This file will transfer directly from <span className="font-bold text-teal-300">@{session.partnerName}</span>'s device to yours via WebRTC at your full internet speed without passing through cloud storage.
-              </div>
-            </div>
+          <div className="space-y-3">
             <div className="flex gap-2.5">
               <button
                 type="button"
@@ -612,23 +563,20 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
               <button
                 type="button"
                 onClick={acceptIncomingTransfer}
-                className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:to-cyan-300 text-slate-950 text-xs font-black transition-all shadow-[0_0_30px_rgba(45,212,191,0.5)] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-400 hover:from-teal-300 hover:to-cyan-300 text-slate-950 text-xs font-bold transition-all shadow-[0_0_20px_rgba(45,212,191,0.4)] active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Download className="w-4 h-4 stroke-[2.5]" />
-                <span>Accept & Download</span>
+                <span>Download</span>
               </button>
             </div>
           </div>
         )}
 
         {status === 'connecting' && (
-          <div className="py-6 text-center space-y-3 bg-black/40 rounded-2xl border border-white/5">
-            <Loader2 className="w-9 h-9 text-teal-400 animate-spin mx-auto" />
-            <p className="text-xs text-white font-bold">
-              Establishing encrypted peer-to-peer live pipe...
-            </p>
-            <p className="text-[11px] text-slate-400 font-mono">
-              Negotiating WebRTC ICE candidates & DTLS socket.
+          <div className="py-6 text-center space-y-2.5 bg-black/40 rounded-2xl border border-white/5">
+            <Loader2 className="w-8 h-8 text-teal-400 animate-spin mx-auto" />
+            <p className="text-xs text-slate-200 font-medium">
+              Connecting...
             </p>
           </div>
         )}
@@ -636,25 +584,25 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
         {status === 'transferring' && (
           <div className="space-y-3.5 p-4 rounded-2xl bg-black/50 border border-teal-500/20">
             <div className="flex justify-between items-center text-xs">
-              <span className="font-bold text-white flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,1)]" />
-                Live DataChannel Streaming...
+              <span className="font-medium text-white flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {session.role === 'sender' ? 'Sending...' : 'Downloading...'}
               </span>
-              <span className="font-mono font-black text-teal-300 text-sm">{percent}%</span>
+              <span className="font-mono font-bold text-teal-300 text-sm">{percent}%</span>
             </div>
 
             {/* Glowing Progress Bar */}
-            <div className="w-full h-3 rounded-full bg-slate-950 overflow-hidden border border-teal-500/30 p-0.5 shadow-inner">
+            <div className="w-full h-2.5 rounded-full bg-slate-950 overflow-hidden border border-teal-500/30 p-0.5">
               <div 
-                className="h-full bg-gradient-to-r from-teal-400 via-cyan-400 to-emerald-400 transition-all duration-150 ease-out rounded-full shadow-[0_0_12px_rgba(45,212,191,0.8)]"
+                className="h-full bg-gradient-to-r from-teal-400 via-cyan-400 to-emerald-400 transition-all duration-150 ease-out rounded-full shadow-[0_0_10px_rgba(45,212,191,0.8)]"
                 style={{ width: `${percent}%` }}
               />
             </div>
 
             <div className="flex justify-between items-center text-[11px] text-slate-400 font-mono">
               <span className="text-slate-300">{formatBytes(progressBytes)} / {formatBytes(session.fileSize)}</span>
-              <span className="text-teal-300 font-bold bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
-                ⚡ {speedMBs.toFixed(1)} MB/s
+              <span className="text-teal-300 font-medium bg-teal-500/10 px-2 py-0.5 rounded border border-teal-500/20">
+                {speedMBs.toFixed(1)} MB/s
               </span>
             </div>
           </div>
@@ -666,11 +614,11 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h4 className="text-sm font-bold text-emerald-400">Transfer Completed Successfully!</h4>
-              <p className="text-xs text-[var(--muted)]">
-                {session.role === 'sender'
-                  ? `Successfully sent ${session.fileName} directly to @${session.partnerName}.`
-                  : `Successfully downloaded ${session.fileName} to your device.`}
+              <h4 className="text-sm font-bold text-emerald-400">
+                {session.role === 'sender' ? 'File Sent!' : 'File Downloaded!'}
+              </h4>
+              <p className="text-xs text-slate-300 truncate max-w-xs mx-auto">
+                {session.fileName}
               </p>
             </div>
             {downloadUrl && (
@@ -680,14 +628,14 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-bold hover:bg-emerald-400 transition-all active:scale-95 shadow-md shadow-emerald-950/30"
               >
                 <Download className="w-4 h-4" />
-                <span>Save File Again</span>
+                <span>Save to Device</span>
               </a>
             )}
             <div>
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-2 rounded-xl text-xs font-semibold text-[var(--muted)] hover:bg-[var(--hover)] transition-colors cursor-pointer"
+                className="w-full py-2 rounded-xl text-xs font-semibold text-slate-400 hover:bg-white/10 transition-colors cursor-pointer"
               >
                 Close
               </button>
@@ -717,12 +665,6 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
             </button>
           </div>
         )}
-
-        {/* Footer Note */}
-        <div className="text-[10px] text-[var(--muted)] border-t border-[var(--line)]/50 pt-3 flex items-center justify-between">
-          <span>End-to-End Encrypted (DTLS/SCTP)</span>
-          <span className="text-amber-400 font-semibold">WebRTC DataChannel</span>
-        </div>
       </div>
     </div>,
     document.body
