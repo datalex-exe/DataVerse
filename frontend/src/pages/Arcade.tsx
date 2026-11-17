@@ -754,10 +754,13 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         turn
       };
 
+      // 0ms instant optimistic move update
+      setGameState(updatedGame);
+      setSelectedChessSquare(null);
+
       if (wsRef.current) {
         wsRef.current.send(JSON.stringify({ type: 'game_update', game: updatedGame }));
       }
-      setSelectedChessSquare(null);
     }
   };
 
@@ -1881,7 +1884,7 @@ export const Arcade: React.FC<ArcadeProps> = ({ onNavigate, initialParam }) => {
         }
 
         return (
-          <div className="w-full flex flex-col items-center gap-3 animate-zoom">
+          <div className="w-full flex flex-col items-center gap-3">
             {/* PROBLEM 2 FIX: Reserved fixed height status header prevents layout shifts */}
             <div className="w-full max-w-[480px] text-center flex flex-col items-center">
               <h4 className="text-sm font-black text-white flex items-center justify-center gap-1.5 h-6">

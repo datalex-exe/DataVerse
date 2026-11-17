@@ -2859,6 +2859,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
   };
 
   const sendGameUpdate = (updatedGame: any) => {
+    // 0ms instant optimistic local update
+    setGameState(updatedGame);
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({ type: 'game_update', game: updatedGame }));
   };
@@ -4081,8 +4083,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
     const board = gameState.chessBoard || Array(64).fill(null);
     const isDarkSquare = (row: number, col: number) => (row + col) % 2 === 1;
     
-    // Flip the board when it is the Black player's (playerO) turn
-    const shouldFlip = gameState.turn === gameState.playerO;
+    // Fixed orientation: White at bottom, Black at bottom for playerO
+    const shouldFlip = user?.id === gameState.playerO;
 
     const squares = [];
     for (let row = 0; row < 8; row++) {

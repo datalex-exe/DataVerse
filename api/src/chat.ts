@@ -1322,8 +1322,11 @@ export class ChatRoom {
       if (data.type === 'game_update') {
         const updatedGame = data.game;
 
-        await this.putGame(updatedGame);
+        // Broadcast to all peers IMMEDIATELY (0ms latency for opponent)
         this.broadcastGame(sockets, updatedGame);
+
+        // Persist to storage in background
+        await this.putGame(updatedGame);
 
         // System notification on custom game wins
         if (updatedGame.status === 'won' && updatedGame.winner) {

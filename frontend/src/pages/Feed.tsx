@@ -173,6 +173,17 @@ export const Feed: React.FC<FeedProps> = ({ onNavigate, onToggleBottomNav, targe
     }
   };
 
+  // Pause all media when navigating away from feed tab to conserve CPU, GPU & memory
+  useEffect(() => {
+    if (!isActive) {
+      document.querySelectorAll('video').forEach(v => {
+        try {
+          if (!v.paused) v.pause();
+        } catch (_) {}
+      });
+    }
+  }, [isActive]);
+
   const handleMuteUser = async (targetUserId: string, targetUsername: string) => {
     try {
       const res = await fetch(`/api/users/${targetUserId}/mute-user`, {

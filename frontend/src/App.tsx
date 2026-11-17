@@ -38,17 +38,20 @@ const NotFound = React.lazy(() => import('./pages/NotFound').then(m => ({ defaul
 const Legal = React.lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
 const Contact = React.lazy(() => import('./pages/Contact').then(m => ({ default: m.Contact })));
 
-// Prefetch route modules on navigation hover
+// Prefetch route modules on navigation hover, touch, or idle time
 const prefetchRoute = (view: string) => {
   try {
     switch (view) {
       case 'feed': import('./pages/Feed'); break;
       case 'auth': import('./pages/Auth'); break;
-      case 'search': import('./pages/Explore'); break;
+      case 'search':
+      case 'explore': import('./pages/Explore'); break;
       case 'profile': import('./pages/Profile'); break;
-      case 'messages': import('./pages/Chat'); break;
+      case 'messages':
+      case 'direct': import('./pages/Chat'); break;
       case 'create': import('./pages/Create'); break;
-      case 'activity': import('./pages/Activity'); break;
+      case 'activity':
+      case 'notifications': import('./pages/Activity'); break;
       case 'arcade': import('./pages/Arcade'); break;
       case 'admin': import('./pages/Admin'); break;
     }
@@ -91,13 +94,19 @@ const AppContent: React.FC = () => {
     sendPushHeartbeat().catch(() => {});
     autoSyncPushSubscription(token).catch(() => {});
     if (user) {
-      const preloadCamera = () => {
+      const preloadTabs = () => {
+        import('./pages/Chat').catch(() => {});
+        import('./pages/Explore').catch(() => {});
+        import('./pages/Arcade').catch(() => {});
+        import('./pages/Activity').catch(() => {});
+        import('./pages/Profile').catch(() => {});
+        import('./pages/Create').catch(() => {});
         import('./camera/SocialCameraModal').catch(() => {});
       };
       if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(preloadCamera);
+        (window as any).requestIdleCallback(preloadTabs, { timeout: 2500 });
       } else {
-        setTimeout(preloadCamera, 200);
+        setTimeout(preloadTabs, 500);
       }
     }
   }, [user]);
@@ -1083,10 +1092,15 @@ const AppContent: React.FC = () => {
               </div>
             )}
 
+            {visitedTabs.has('arcade') && (
+              <div className={activeView === 'arcade' ? 'block w-full flex-1 animate-fade-in' : 'hidden'}>
+                <Arcade onNavigate={navigate} initialParam={arcadeParam} />
+              </div>
+            )}
+
             {/* Dynamic / Parameter-based Views */}
             {activeView === 'settings' && <div className="w-full flex-1 animate-fade-in"><Profile initialShowSettings={true} onNavigate={navigate} /></div>}
             {activeView === 'profile' && !!profileParam && <div className="w-full flex-1 animate-fade-in"><Profile targetUsername={profileParam} onNavigate={navigate} /></div>}
-            {activeView === 'arcade' && <div className="w-full flex-1 animate-fade-in"><Arcade onNavigate={navigate} initialParam={arcadeParam} /></div>}
             {activeView === 'admin' && <div className="w-full flex-1 animate-fade-in"><Admin onNavigate={navigate} /></div>}
             {(activeView === 'terms' || activeView === 'privacy' || activeView === 'cookies' || activeView === 'refund') && (
               <div className="w-full flex-1 animate-fade-in"><Legal type={activeView as any} onNavigate={navigate} /></div>
@@ -1105,6 +1119,7 @@ const AppContent: React.FC = () => {
         {/* Home */}
         <button
           onClick={() => navigate('feed')}
+          onPointerDown={() => prefetchRoute('feed')}
           className={`min-w-[44px] flex flex-col items-center justify-center p-1 transition-all ${
             activeView === 'feed'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
@@ -1119,6 +1134,7 @@ const AppContent: React.FC = () => {
         {/* Search */}
         <button
           onClick={() => navigate('search')}
+          onPointerDown={() => prefetchRoute('search')}
           className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all ${
             activeView === 'search'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
@@ -1133,6 +1149,7 @@ const AppContent: React.FC = () => {
         {/* Arcade */}
         <button
           onClick={() => navigate('arcade')}
+          onPointerDown={() => prefetchRoute('arcade')}
           className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all relative ${
             activeView === 'arcade'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
@@ -1150,6 +1167,7 @@ const AppContent: React.FC = () => {
         {/* Messages */}
         <button
           onClick={() => navigate('messages')}
+          onPointerDown={() => prefetchRoute('messages')}
           className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all relative ${
             activeView === 'messages'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
@@ -1172,6 +1190,7 @@ const AppContent: React.FC = () => {
         <div className="relative -top-4 flex flex-col items-center">
           <button
             onClick={() => navigate('create')}
+            onPointerDown={() => prefetchRoute('create')}
             aria-label="Create Post"
             className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-[var(--accent)] to-[var(--accent-2)] text-[var(--on-accent)] flex items-center justify-center shadow-lg shadow-[var(--shadow-accent)] border-4 border-[var(--bg)] active:scale-95 hover:scale-105 transition-all flex-shrink-0 cursor-pointer"
           >
@@ -1182,6 +1201,7 @@ const AppContent: React.FC = () => {
         {/* Notifications */}
         <button
           onClick={() => navigate('notifications')}
+          onPointerDown={() => prefetchRoute('notifications')}
           className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all relative ${
             activeView === 'notifications'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
@@ -1201,6 +1221,7 @@ const AppContent: React.FC = () => {
         {/* Profile */}
         <button
           onClick={() => navigate('profile')}
+          onPointerDown={() => prefetchRoute('profile')}
           className={`min-w-[40px] flex flex-col items-center justify-center p-1 transition-all ${
             activeView === 'profile'
               ? 'text-[var(--accent-2)] font-semibold drop-shadow-[0_0_8px_var(--shadow-accent)]'
