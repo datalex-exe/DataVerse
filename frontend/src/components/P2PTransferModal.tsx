@@ -173,7 +173,9 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
       a.download = session.fileName;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      setTimeout(() => {
+        try { document.body.removeChild(a); } catch {}
+      }, 1000);
     } catch (e) {
       console.warn('Auto-download trigger error:', e);
     }
@@ -185,6 +187,14 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
   const startWebSocketRelayStreaming = useCallback((file: File) => {
     if (isAbortedRef.current || isCompletedRef.current || isRelayActiveRef.current || !session) return;
     isRelayActiveRef.current = true;
+    clearAllTimers();
+
+    // Close any pending or open DataChannel so chunks never mix
+    if (dataChannelRef.current) {
+      try { dataChannelRef.current.close(); } catch {}
+      dataChannelRef.current = null;
+    }
+
     console.log('[P2P] WebRTC direct path bypassed; activating high-speed WebSocket relay stream');
     setStatus('transferring');
 
@@ -210,9 +220,10 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
           transferId: session.transferId,
           partnerId: session.partnerId
         });
+        const localUrl = session?.file ? URL.createObjectURL(session.file) : '';
         setStatus('completed');
         setProgressBytes(totalSize);
-        if (onCompleted) onCompleted(session, '');
+        if (session && onCompleted) onCompleted(session, localUrl);
         return;
       }
 
@@ -253,9 +264,10 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
         });
 
         if (isLast) {
+          const localUrl = session?.file ? URL.createObjectURL(session.file) : '';
           setStatus('completed');
           setProgressBytes(totalSize);
-          if (onCompleted) onCompleted(session, '');
+          if (session && onCompleted) onCompleted(session, localUrl);
         } else {
           // Pace transmissions slightly (6ms) so WebSocket message buffer stays lean
           setTimeout(readAndSendChunk, 6);
@@ -265,10 +277,11 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     };
 
     readAndSendChunk();
-  }, [onCompleted, sendSignaling, session]);
+  }, [clearAllTimers, onCompleted, sendSignaling, session]);
 
   // Sender file streaming routine over direct RTCDataChannel
   const startFileStreaming = useCallback((dc: RTCDataChannel, file: File) => {
+    if (isAbortedRef.current || isCompletedRef.current || isRelayActiveRef.current) return;
     setStatus('transferring');
     clearAllTimers();
     let offset = 0;
@@ -316,6 +329,8 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
                     dc.onbufferedamountlow = null;
                     checkDrainAndComplete();
                   };
+                  // Safety timer in case onbufferedamountlow does not trigger
+                  setTimeout(checkDrainAndComplete, 150);
                   return;
                 }
                 try {
@@ -323,7 +338,8 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
                 } catch {}
                 setStatus('completed');
                 setProgressBytes(totalSize);
-                if (session && onCompleted) onCompleted(session, '');
+                const localUrl = session?.file ? URL.createObjectURL(session.file) : '';
+                if (session && onCompleted) onCompleted(session, localUrl);
               };
               checkDrainAndComplete();
             } else {
@@ -418,6 +434,9 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
     dataChannelRef.current = dc;
 
     dc.onopen = () => {
+      if (isAbortedRef.current || isCompletedRef.current || isRelayActiveRef.current) {
+        return;
+      }
       console.log('[P2P] WebRTC DataChannel OPEN! Streaming direct P2P...');
       isDataChannelOpenRef.current = true;
       clearAllTimers();
@@ -528,6 +547,8 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
       lastSpeedCheckRef.current = { bytes: 0, time: Date.now() };
 
       dc.onmessage = (e) => {
+        if (isRelayActiveRef.current || isCompletedRef.current || isAbortedRef.current) return;
+
         if (typeof e.data === 'string') {
           try {
             const parsed = JSON.parse(e.data);
@@ -640,9 +661,13 @@ export const P2PTransferModal: React.FC<P2PTransferModalProps> = ({
         pendingCandidatesRef.current.push(sig.candidate);
       }
     } else if (sig.type === 'p2p_file_relay_start' && session.role === 'receiver') {
-      // Sender activated relay mode
+      // Sender activated relay mode; disconnect data channel to prevent chunk collision
       isRelayActiveRef.current = true;
       clearAllTimers();
+      if (dataChannelRef.current) {
+        try { dataChannelRef.current.close(); } catch {}
+        dataChannelRef.current = null;
+      }
       setStatus('transferring');
       receivedChunksRef.current = [];
       receivedBytesRef.current = 0;

@@ -49,6 +49,7 @@ import {
   WifiOff,
   Sparkles,
   Phone,
+  Video,
   Info,
   AlertCircle,
   ArrowDown,
@@ -691,7 +692,23 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
       partnerId: partner.id,
       partnerName: partner.display_name || partner.username,
       partnerAvatar: partner.avatar_url,
-      isCaller: true
+      isCaller: true,
+      callType: 'audio'
+    });
+  }, [activeConvo, user]);
+
+  const handleStartVideoCall = useCallback(() => {
+    if (!activeConvo || activeConvo.is_group || !user) return;
+    const partner = getChatPartner(activeConvo);
+    const callId = `call_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    setActiveCall({
+      status: 'outgoing',
+      callId,
+      partnerId: partner.id,
+      partnerName: partner.display_name || partner.username,
+      partnerAvatar: partner.avatar_url,
+      isCaller: true,
+      callType: 'video'
     });
   }, [activeConvo, user]);
 
@@ -1403,7 +1420,8 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                 partnerId: data.fromUserId,
                 partnerName: partner.display_name || partner.username,
                 partnerAvatar: partner.avatar_url,
-                isCaller: false
+                isCaller: false,
+                callType: data.callType === 'video' ? 'video' : 'audio'
               });
               setIncomingSignal(data);
             }
@@ -5474,15 +5492,26 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
 
 
                 {!activeConvo.is_group && (
-                  <button
-                    type="button"
-                    onClick={handleStartAudioCall}
-                    className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--accent-2)] hover:text-white active:scale-95 shadow-sm"
-                    title="Start Audio Call"
-                    aria-label="Start Audio Call"
-                  >
-                    <Phone className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleStartAudioCall}
+                      className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--accent-2)] hover:text-white active:scale-95 shadow-sm"
+                      title="Start Audio Call"
+                      aria-label="Start Audio Call"
+                    >
+                      <Phone className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStartVideoCall}
+                      className="w-10 h-10 min-w-[40px] min-h-[40px] rounded-full flex items-center justify-center transition-all border border-[var(--line)] bg-[var(--input)] hover:bg-[var(--hover)] hover:border-[var(--accent-2)]/40 text-[var(--accent-2)] hover:text-white active:scale-95 shadow-sm"
+                      title="Start Video Call"
+                      aria-label="Start Video Call"
+                    >
+                      <Video className="w-4 h-4" />
+                    </button>
+                  </>
                 )}
 
                 <button
@@ -5817,7 +5846,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                           {secureMedia ? (
                             secureMedia.type === 'p2p_transfer_invite' ? (() => {
                               const meta = getP2PFileMeta(secureMedia.fileName, secureMedia.fileSize, secureMedia.fileType);
-                              const completed = completedP2PFiles[secureMedia.transferId];
+                              const completed = completedP2PFiles[secureMedia.transferId] || (window as any).__p2pBlobCache?.[secureMedia.transferId];
 
                               if (completed) {
                                 const ext = (completed.fileName || '').split('.').pop()?.toLowerCase() || '';
@@ -5834,7 +5863,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                                         </div>
                                         <div>
                                           <span className="text-xs font-black text-white uppercase tracking-wide block">
-                                            Downloaded & Ready
+                                            {isMe ? 'Transferred & Available' : 'Downloaded & Ready'}
                                           </span>
                                           <span className="text-[10px] text-emerald-300 font-mono">
                                             {meta.sizeFormatted} • P2P Direct
@@ -7188,6 +7217,15 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
                   isDownloaded: true
                 }
               }));
+              try {
+                (window as any).__p2pBlobCache = (window as any).__p2pBlobCache || {};
+                (window as any).__p2pBlobCache[sess.transferId] = {
+                  url: blobUrl,
+                  fileName: sess.fileName,
+                  fileType: sess.fileType,
+                  isDownloaded: true
+                };
+              } catch {}
             }
           }}
         />
@@ -7204,6 +7242,7 @@ export const Chat: React.FC<ChatProps> = ({ onToggleBottomNav, onNavigate, targe
           messages={messages}
           isOnline={!activeConvo.is_group ? (onlineUsers.has(getChatPartner(activeConvo).id) || Boolean(getChatPartner(activeConvo).is_online)) : false}
           onStartCall={handleStartAudioCall}
+          onStartVideoCall={handleStartVideoCall}
           onNavigate={onNavigate}
           onOpenFullscreenVideo={(url, allowSave) => {
             setActiveFullscreenVideo({ url, allowSave });

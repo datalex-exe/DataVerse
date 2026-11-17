@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   X, 
   Phone, 
+  Video,
   User as UserIcon, 
   ExternalLink, 
   Copy, 
@@ -104,6 +105,7 @@ interface ChatProfileModalProps {
   messages?: any[];
   isOnline?: boolean;
   onStartCall?: () => void;
+  onStartVideoCall?: () => void;
   onNavigate?: (tab: string, username?: string) => void;
   onOpenFullscreenVideo?: (url: string, allowSave: boolean) => void;
 }
@@ -293,6 +295,7 @@ const ChatProfileModalComponent: React.FC<ChatProfileModalProps> = ({
   messages,
   isOnline = false,
   onStartCall,
+  onStartVideoCall,
   onNavigate,
   onOpenFullscreenVideo
 }) => {
@@ -537,7 +540,7 @@ const ChatProfileModalComponent: React.FC<ChatProfileModalProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-center gap-3 mt-4 w-full max-w-xs">
+              <div className="flex items-center justify-center gap-2 mt-4 w-full max-w-sm">
                 {!conversation.is_group && onStartCall && (
                   <button
                     type="button"
@@ -549,6 +552,20 @@ const ChatProfileModalComponent: React.FC<ChatProfileModalProps> = ({
                   >
                     <Phone className="w-3.5 h-3.5" />
                     <span>Call</span>
+                  </button>
+                )}
+
+                {!conversation.is_group && onStartVideoCall && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onStartVideoCall();
+                    }}
+                    className="flex-1 py-2 px-3 rounded-xl bg-teal-600/15 hover:bg-teal-600/25 border border-teal-500/30 text-teal-400 hover:text-teal-300 text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-sm"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Video</span>
                   </button>
                 )}
 
