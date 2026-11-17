@@ -1815,6 +1815,27 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
     });
   };
 
+  const formatMessage = (raw?: string | null): string => {
+    if (!raw) return '';
+    const str = String(raw).trim();
+    if (str.startsWith('{') && str.endsWith('}')) {
+      try {
+        const obj = JSON.parse(str);
+        if (obj && typeof obj === 'object') {
+          if (obj.type === 'p2p_transfer_invite') {
+            return `⚡ P2P transfer invite from ${obj.senderName || 'Someone'}`;
+          }
+          if (typeof obj.type === 'string' && obj.type) {
+            return `[${obj.type}]`;
+          }
+        }
+      } catch {
+        // Fallback to raw text
+      }
+    }
+    return String(raw);
+  };
+
   const getCleanLabel = (convo: SystemConvo) => {
     if (convo.is_group) return `Group Chat (ID: ${convo.id.substring(0, 8)})`;
     if (convo.members.length === 0) return 'Empty Chat';
@@ -2481,20 +2502,23 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                     key={c.id}
                     className="glass-card p-5 rounded-3xl border border-white/5 bg-[#060608]/40 hover:border-white/10 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest bg-slate-950 border border-slate-900 px-2 py-0.5 rounded-full select-none">
                           {c.is_group ? 'Group' : 'DM'}
                         </span>
-                        <h4 className="text-xs font-extrabold text-white">{getCleanLabel(c)}</h4>
+                        <h4 className="text-xs font-extrabold text-white truncate">{getCleanLabel(c)}</h4>
                         {c.is_deleted && (
                           <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/10 select-none">
                             Deleted by User
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-500 truncate max-w-md">
-                        {c.last_message ? `Last message: "${c.last_message.body}"` : 'No messages yet.'}
+                      <p 
+                        className="text-[10px] text-slate-500 truncate max-w-md min-w-0"
+                        style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}
+                      >
+                        {c.last_message ? `Last message: "${formatMessage(c.last_message.body)}"` : 'No messages yet.'}
                       </p>
                     </div>
 
@@ -4509,36 +4533,40 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
       )}
 
       {/* READ-ONLY AUDIT CHAT MODAL DIALOG */}
-      {auditingConvo && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in select-none">
+      {auditingConvo && createPortal(
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 pb-20 sm:pb-4 animate-fade-in select-none">
           <div 
             role="dialog"
             aria-modal="true"
             aria-labelledby="admin-audit-title"
-            className="w-full max-w-2xl bg-[#030303] border border-white/5 rounded-3xl overflow-hidden flex flex-col h-[90vh] sm:h-[80vh] max-h-[92vh] sm:max-h-[580px] shadow-2xl"
+            className="w-full max-w-2xl bg-[#030303] border border-white/5 rounded-3xl overflow-hidden flex flex-col h-[90vh] sm:h-[80vh] shadow-2xl min-w-0"
+            style={{ maxHeight: 'calc(100dvh - 2rem)' }}
           >
             
             {/* Modal Header */}
-            <div className="p-4 border-b border-white/[0.04] flex items-center justify-between bg-slate-950/40">
-              <div>
-                <h3 id="admin-audit-title" className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <Shield className="w-4 h-4 text-brand-400" />
-                  Audit: {getCleanLabel(auditingConvo)}
+            <div className="p-4 border-b border-white/[0.04] flex items-center justify-between bg-slate-950/40 shrink-0">
+              <div className="min-w-0 flex-1 mr-2">
+                <h3 id="admin-audit-title" className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5 truncate">
+                  <Shield className="w-4 h-4 text-brand-400 shrink-0" />
+                  <span className="truncate">Audit: {getCleanLabel(auditingConvo)}</span>
                 </h3>
-                <p className="text-[9px] text-[var(--muted)] mt-0.5">Audit log view. Read-only monitor mode.</p>
+                <p className="text-[9px] text-[var(--muted)] mt-0.5 truncate">Audit log view. Read-only monitor mode.</p>
               </div>
               <button 
                 type="button"
                 onClick={() => setAuditingConvo(null)}
                 aria-label="Close audit log"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Message bubble stream log */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/10">
+            <div 
+              className="flex-1 overflow-x-hidden overflow-y-auto p-4 space-y-4 bg-slate-950/10 min-w-0 max-w-full"
+              style={{ overflowX: 'hidden', overflowY: 'auto' }}
+            >
               {loadingAudit ? (
                 <div className="h-full flex items-center justify-center text-slate-500 gap-2">
                   <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
@@ -4561,7 +4589,7 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                         const obj = JSON.parse(raw);
                         if (obj && obj.type === 'secure_media') {
                           return (
-                            <div className="space-y-1.5 mt-1">
+                            <div className="space-y-1.5 mt-1 min-w-0 max-w-full">
                               {obj.media_type === 'image' && (
                                 <div className="relative rounded-xl overflow-hidden border border-white/[0.04] bg-[#020202] max-w-xs shadow-md">
                                   <img 
@@ -4581,26 +4609,36 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                                 </div>
                               )}
                               {obj.media_type === 'voice' && (
-                                <div className="text-[10px] text-brand-300 font-mono bg-slate-900/60 border border-white/[0.04] px-3 py-1.5 rounded-xl inline-flex items-center gap-2">
-                                  <span>🎤 Voice note file:</span>
-                                  <span className="text-slate-400">{obj.url.substring(0, 20)}...</span>
+                                <div className="text-[10px] text-brand-300 font-mono bg-slate-900/60 border border-white/[0.04] px-3 py-1.5 rounded-xl inline-flex items-center gap-2 max-w-full min-w-0 truncate">
+                                  <span className="shrink-0">🎤 Voice note file:</span>
+                                  <span className="text-slate-400 truncate">{obj.url.substring(0, 20)}...</span>
                                 </div>
                               )}
                               {obj.caption && (
-                                <p className="text-xs text-slate-200 mt-1 font-medium">{obj.caption}</p>
+                                <p 
+                                  className="text-xs text-slate-200 mt-1 font-medium min-w-0 max-w-full whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]"
+                                  style={{ minWidth: 0, maxWidth: '100%', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                                >
+                                  {obj.caption}
+                                </p>
                               )}
                             </div>
                           );
                         } else if (obj && (obj.type === 'reply' || obj.reply_to)) {
                           return (
-                            <div className="space-y-1 mt-1">
+                            <div className="space-y-1 mt-1 min-w-0 max-w-full">
                               {obj.reply_to && (
-                                <div className="bg-white/[0.03] border-l-2 border-brand-500 rounded-r-lg px-2.5 py-1 text-[10px] text-slate-400">
-                                  <span className="font-extrabold text-brand-400 block">Replying to @{obj.reply_to.username}</span>
-                                  <span className="truncate block text-[9px] text-slate-400">{obj.reply_to.body}</span>
+                                <div className="bg-white/[0.03] border-l-2 border-brand-500 rounded-r-lg px-2.5 py-1 text-[10px] text-slate-400 min-w-0 max-w-full">
+                                  <span className="font-extrabold text-brand-400 block truncate">Replying to @{obj.reply_to.username}</span>
+                                  <span className="truncate block text-[9px] text-slate-400">{formatMessage(obj.reply_to.body)}</span>
                                 </div>
                               )}
-                              <p className="text-xs text-slate-200 leading-relaxed break-words font-normal">{obj.text || raw}</p>
+                              <p 
+                                className="text-xs text-slate-200 leading-relaxed font-normal min-w-0 max-w-full whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]"
+                                style={{ minWidth: 0, maxWidth: '100%', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                              >
+                                {obj.text ? formatMessage(obj.text) : formatMessage(raw)}
+                              </p>
                             </div>
                           );
                         }
@@ -4614,48 +4652,67 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
                       const caption = textPart.substring(textPart.indexOf(':') + 1).trim();
 
                       return (
-                        <div className="bg-slate-900/80 border border-white/[0.04] p-2.5 rounded-xl max-w-xs text-left space-y-1 mt-1">
-                          <span className="text-[9px] font-black text-brand-400 uppercase tracking-wide block">Shared Post (@{username})</span>
-                          <p className="text-[11px] text-slate-300 italic">"{caption || 'Photo/Video'}"</p>
+                        <div className="bg-slate-900/80 border border-white/[0.04] p-2.5 rounded-xl max-w-xs text-left space-y-1 mt-1 min-w-0 max-w-full">
+                          <span className="text-[9px] font-black text-brand-400 uppercase tracking-wide block truncate">Shared Post (@{username})</span>
+                          <p 
+                            className="text-[11px] text-slate-300 italic min-w-0 max-w-full whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]"
+                            style={{ minWidth: 0, maxWidth: '100%', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                          >
+                            "{caption || 'Photo/Video'}"
+                          </p>
                         </div>
                       );
                     }
 
-                    return <p className="text-xs text-slate-200 leading-relaxed break-words font-normal">{raw}</p>;
+                    const formatted = formatMessage(raw);
+
+                    return (
+                      <p 
+                        className="text-xs text-slate-200 leading-relaxed font-normal min-w-0 max-w-full whitespace-pre-wrap [overflow-wrap:anywhere] [word-break:break-word]"
+                        style={{ minWidth: 0, maxWidth: '100%', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                      >
+                        {formatted}
+                      </p>
+                    );
                   };
 
                   const isMedia = m.body && m.body.startsWith('{"type":"secure_media"');
 
                   return (
-                    <div key={m.id} className="flex gap-3">
+                    <div key={m.id} className="flex gap-3 min-w-0 max-w-full">
                       
                       {/* AVATAR FIX START */}
-                      <AdminAvatar avatarUrl={isSystem ? null : m.avatar_url} name={m.username} fallbackText={isSystem ? 'S' : undefined} size={32} />
+                      <div className="shrink-0">
+                        <AdminAvatar avatarUrl={isSystem ? null : m.avatar_url} name={m.username} fallbackText={isSystem ? 'S' : undefined} size={32} />
+                      </div>
                       {/* AVATAR FIX END */}
 
                       {/* Msg text bubble */}
-                      <div className={`p-3 rounded-2xl flex-1 transition-all ${
-                        m.is_deleted === 1
-                          ? 'bg-red-950/10 border border-red-500/20 shadow-md shadow-red-500/[0.01]'
-                          : 'bg-slate-950/50 border border-white/[0.02]'
-                      }`}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-extrabold text-white flex items-center gap-1.5">
-                            {isSystem ? 'System Broadcast' : m.display_name || m.username}
+                      <div 
+                        className={`p-3 rounded-2xl flex-1 min-w-0 max-w-full transition-all ${
+                          m.is_deleted === 1
+                            ? 'bg-red-950/10 border border-red-500/20 shadow-md shadow-red-500/[0.01]'
+                            : 'bg-slate-950/50 border border-white/[0.02]'
+                        }`}
+                        style={{ minWidth: 0, maxWidth: '100%' }}
+                      >
+                        <div className="flex items-center justify-between mb-1 gap-2 min-w-0 max-w-full">
+                          <span className="text-[10px] font-extrabold text-white flex items-center gap-1.5 min-w-0 truncate">
+                            <span className="truncate">{isSystem ? 'System Broadcast' : m.display_name || m.username}</span>
                             {m.is_deleted === 1 && (
-                              <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/10">
+                              <span className="text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/10 shrink-0">
                                 Deleted
                               </span>
                             )}
                           </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[8px] text-slate-550 font-bold">
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[8px] text-slate-550 font-bold shrink-0">
                               {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                             {!isMedia && m.body !== '[Redacted Text]' && (
                               <button
                                 onClick={() => handleRedactMessageText(m.id)}
-                                className="text-[8px] font-bold text-amber-500/60 hover:text-amber-400 hover:bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/20 transition-all select-none uppercase tracking-wide"
+                                className="text-[8px] font-bold text-amber-500/60 hover:text-amber-400 hover:bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/20 transition-all select-none uppercase tracking-wide shrink-0"
                                 title="Clear text for this admin view"
                               >
                                 Clear Text
@@ -4674,14 +4731,15 @@ export const Admin: React.FC<AdminProps> = ({ onNavigate }) => {
             </div>
 
             {/* Modal Bottom Alert */}
-            <div className="p-4 bg-slate-950/40 border-t border-white/[0.04] text-center select-none">
+            <div className="p-4 bg-slate-950/40 border-t border-white/[0.04] text-center select-none shrink-0">
               <span className="text-[9px] font-extrabold text-amber-500 uppercase tracking-widest bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">
                 Audit Active: Logs Recorded
               </span>
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Device Push Notification Diagnostic Modal */}
